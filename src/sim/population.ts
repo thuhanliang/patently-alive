@@ -3,7 +3,9 @@ import {
   CROWDING_BLOCK_CELLS,
   FED_SUFFICIENT,
   JUVENILE_SIZE_FACTOR,
+  JUVENILE_STAGES,
   MAX_GRAZE_FRACTION,
+  NEST_STAGES,
   PREDATION_HALF_SATURATION_DAYS,
   type DerivedSpecies,
 } from './physiology';
@@ -11,12 +13,25 @@ import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
 
 /**
- * 按格子的种群：每个物种每格存幼体、成体两个整数计数。
+ * 按格子的种群：每个物种每格存幼体（分 JUVENILE_STAGES 个年龄段）和成体的整数计数。
  * 整数计数让"守恒"可以精确断言：每只动物的增减都有一笔账。
  */
 export interface Population {
-  juveniles: Int32Array;
+  /** juveniles[k][c]：第 k 个年龄段（0 = 刚出生）在第 c 格的数量。 */
+  juveniles: Int32Array[];
   adults: Int32Array;
+}
+
+/** 一格里的幼体总数。 */
+export function juvenilesAt(p: Population, c: number): number {
+  let n = 0;
+  for (const stage of p.juveniles) n += stage[c]!;
+  return n;
+}
+
+/** 一格里的总数（幼体 + 成体）。 */
+export function countAt(p: Population, c: number): number {
+  return p.adults[c]! + juvenilesAt(p, c);
 }
 
 /** 一个物种一天的账目。 */
@@ -34,12 +49,31 @@ export function emptyDayStats(total = 0): DayStats {
 
 /** 按体型折算的数量：幼体算半只（食量、作为猎物的体重都按这个算）。 */
 function sizeWeighted(p: Population, c: number): number {
-  return p.adults[c]! + JUVENILE_SIZE_FACTOR * p.juveniles[c]!;
+  return p.adults[c]! + JUVENILE_SIZE_FACTOR * juvenilesAt(p, c);
+}
+
+/** 一个和 like 同样大小、全为 0 的种群计数。 */
+export function emptyPopulation(like: Population): Population {
+  return {
+    juveniles: like.juveniles.map((st) => new Int32Array(st.length)),
+    adults: new Int32Array(like.adults.length),
+  };
+}
+
+/** 把 from 的计数加进 into，然后清零 from。 */
+export function mergeInto(into: Population, from: Population): void {
+  for (let i = 0; i < into.adults.length; i++) into.adults[i] = into.adults[i]! + from.adults[i]!;
+  from.adults.fill(0);
+  into.juveniles.forEach((st, k) => {
+    const src = from.juveniles[k]!;
+    for (let i = 0; i < st.length; i++) st[i] = st[i]! + src[i]!;
+    src.fill(0);
+  });
 }
 
 export function populationTotal(p: Population): number {
   let t = 0;
-  for (let i = 0; i < p.adults.length; i++) t += p.adults[i]! + p.juveniles[i]!;
+  for (let i = 0; i < p.adults.length; i++) t += countAt(p, i);
   return t;
 }
 
@@ -57,7 +91,7 @@ export function createPopulation(
     const trials = Math.max(1, Math.ceil(mean * 2));
     adults[i] = mean >= 1 ? binomial(rng, trials, mean / trials) : stochasticRound(rng, mean);
   }
-  return { juveniles: new Int32Array(n), adults };
+  return { juveniles: Array.from({ length: JUVENILE_STAGES }, () => new Int32Array(n)), adults };
 }
 
 export interface DailyContext {
@@ -73,6 +107,8 @@ export interface DailyContext {
   rng: Rng;
   /** 扩散用的暂存数组，不进状态。 */
   scratch: Int32Array;
+  /** 各物种各区块的拥挤程度（见 crowdingByBlock），当天开始时算好。 */
+  crowding: Float64Array[];
 }
 
 /**
@@ -85,7 +121,7 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   const stats = species.map(() => emptyDayStats());
   const cells = grid.width * grid.height;
   const fed = new Float64Array(species.length);
-  const crowding = crowdingByBlock(ctx);
+  const crowding = ctx.crowding;
   const bw = Math.ceil(grid.width / CROWDING_BLOCK_CELLS);
 
   for (let c = 0; c < cells; c++) {
@@ -95,7 +131,7 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
       Math.floor(Math.floor(c / grid.width) / CROWDING_BLOCK_CELLS) * bw +
       Math.floor((c % grid.width) / CROWDING_BLOCK_CELLS);
     for (let s = 0; s < species.length; s++) {
-      if (populations[s]!.adults[c]! + populations[s]!.juveniles[c]! > 0) {
+      if (countAt(populations[s]!, c) > 0) {
         lifeCycle(ctx, s, c, fed[s]!, crowding[s]![block]!, stats[s]!);
       }
     }
@@ -103,17 +139,34 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
 
   for (let s = 0; s < species.length; s++) {
     disperse(ctx, s, populations[s]!.adults);
-    disperse(ctx, s, populations[s]!.juveniles);
+    // 窝里的幼崽不扩散。
+    const stages = populations[s]!.juveniles;
+    for (let k = NEST_STAGES; k < stages.length; k++) disperse(ctx, s, stages[k]!);
     stats[s]!.total = populationTotal(populations[s]!);
   }
   return stats;
+}
+
+/** 某格所在拥挤区块的下标。 */
+export function crowdingBlockOf(width: number, x: number, y: number): number {
+  const bw = Math.ceil(width / CROWDING_BLOCK_CELLS);
+  return Math.floor(y / CROWDING_BLOCK_CELLS) * bw + Math.floor(x / CROWDING_BLOCK_CELLS);
+}
+
+/** 格子计数之外、也要算进拥挤度的动物：展开的个体（按位置）和待合并的计数。 */
+export interface CrowdingExtras {
+  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array };
+  pending?: readonly Population[];
 }
 
 /**
  * 各物种在每个区块里的拥挤程度：区块平均每格只数 / 拥挤上限。
  * 当天开始时统计一次（区块边缘不满 8×8 时按实际格数算）。
  */
-function crowdingByBlock(ctx: DailyContext): Float64Array[] {
+export function crowdingByBlock(
+  ctx: Pick<DailyContext, 'grid' | 'species' | 'populations'>,
+  extras: CrowdingExtras = {},
+): Float64Array[] {
   const { width, height } = ctx.grid;
   const B = CROWDING_BLOCK_CELLS;
   const bw = Math.ceil(width / B);
@@ -126,7 +179,13 @@ function crowdingByBlock(ctx: DailyContext): Float64Array[] {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const c = y * width + x;
-        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += pop.adults[c]! + pop.juveniles[c]!;
+        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += countAt(pop, c) + (extras.pending ? countAt(extras.pending[s]!, c) : 0);
+      }
+    }
+    const ind = extras.individuals;
+    if (ind) {
+      for (let i = 0; i < ind.count; i++) {
+        if (ind.species[i] === s) out[Math.floor(ind.y[i]! / B) * bw + Math.floor(ind.x[i]! / B)]! += 1;
       }
     }
     for (let b = 0; b < out.length; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;
@@ -193,10 +252,13 @@ function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]
       const p = Math.min(1, (captured * w) / available);
       const pop = populations[j]!;
       const ka = binomial(rng, pop.adults[c]!, p);
-      const kj = binomial(rng, pop.juveniles[c]!, p);
       pop.adults[c] = pop.adults[c]! - ka;
-      pop.juveniles[c] = pop.juveniles[c]! - kj;
-      stats[j]!.deathsPredation += ka + kj;
+      stats[j]!.deathsPredation += ka;
+      for (const stage of pop.juveniles) {
+        const kj = binomial(rng, stage[c]!, p);
+        stage[c] = stage[c]! - kj;
+        stats[j]!.deathsPredation += kj;
+      }
     }
     fed[s] = captured / demand;
   }
@@ -211,37 +273,41 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
   const pop = ctx.populations[s]!;
   const rng = ctx.rng;
   let adults = pop.adults[c]!;
-  let juveniles = pop.juveniles[c]!;
 
-  // 出生：约一半成体是雌性；繁殖期内、按吃饱程度打折，越拥挤生得越少。
+  // 出生：约一半成体是雌性；繁殖期内、按吃饱程度打折，越拥挤生得越少。新生的进第 0 段。
   const breeding = ctx.breeding[s]!;
   const room = 1 - crowding;
+  let born = 0;
   if (breeding > 0 && adults > 0 && room > 0) {
     const pLitter = 0.5 * breeding * sp.litterRate * Math.min(1, fedRatio / FED_SUFFICIENT) * room;
     const litters = binomial(rng, adults, Math.min(1, pLitter));
     if (litters > 0) {
       const size = sp.params.reproduction.litterSize;
       const whole = Math.floor(size);
-      const born = litters * whole + binomial(rng, litters, size - whole);
-      juveniles += born;
+      born = litters * whole + binomial(rng, litters, size - whole);
       st.births += born;
     }
   }
 
   // 死亡：基础死亡（衰老、疾病、意外）+ 饥饿。先抽总数，再按比例分死因。
   const starve = sp.starvationRate * Math.max(0, 1 - fedRatio / FED_SUFFICIENT);
-  const deathsA = dieOff(rng, adults, sp.adultDailyMortality, starve, st);
-  const deathsJ = dieOff(rng, juveniles, sp.juvenileDailyMortality, starve, st);
-  adults -= deathsA;
-  juveniles -= deathsJ;
+  adults -= dieOff(rng, adults, sp.adultDailyMortality, starve, st);
+  const stages = pop.juveniles;
+  for (const stage of stages) {
+    stage[c] = stage[c]! - dieOff(rng, stage[c]!, sp.juvenileDailyMortality, starve, st);
+  }
 
-  // 长大。
-  const grown = binomial(rng, juveniles, sp.maturationRate);
-  juveniles -= grown;
-  adults += grown;
+  // 长大：从最后一段往前推，每只一天最多走一段；最后一段长成成体。
+  for (let k = stages.length - 1; k >= 0; k--) {
+    const moved = binomial(rng, stages[k]![c]!, sp.maturationRate);
+    if (moved === 0) continue;
+    stages[k]![c] = stages[k]![c]! - moved;
+    if (k === stages.length - 1) adults += moved;
+    else stages[k + 1]![c] = stages[k + 1]![c]! + moved;
+  }
+  stages[0]![c] = stages[0]![c]! + born;
 
   pop.adults[c] = adults;
-  pop.juveniles[c] = juveniles;
 }
 
 function dieOff(rng: Rng, n: number, base: number, starve: number, st: DayStats): number {

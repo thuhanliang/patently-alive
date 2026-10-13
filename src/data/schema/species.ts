@@ -26,8 +26,8 @@ export const SpeciesSchema = z
       gestationDays: z.number().positive(),
       /** 两窝之间的最短间隔（天），不短于妊娠期。 */
       litterIntervalDays: z.number().positive(),
-      /** 性成熟年龄（天）。 */
-      ageAtMaturityDays: z.number().positive(),
+      /** 性成熟年龄（天，整数）。引擎把幼体分成 8 个年龄段，至少要 8 天。 */
+      ageAtMaturityDays: z.number().int().min(8),
       /** 各月处于繁殖期的比例（月份从春季第一个月算起）。 */
       breedingByMonth: monthlyFraction,
     }),
