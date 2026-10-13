@@ -45,7 +45,7 @@ export class IndividualLayer {
       const s = ind.species[i]!;
       const sp = this.species[s]!;
       const p = this.pool[i]!;
-      const juvenile = isJuvenileAt(sp, ind.age[i]!, day);
+      const juvenile = isJuvenileAt(sp, ind.born[i]!, day);
       // 按贴图的实际宽度换算成世界坐标里的边长。
       const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / Texture.WHITE.width;
       p.x = ind.x[i]! * CELL_PX;

@@ -43,7 +43,8 @@ export type LogEntry = z.infer<typeof LogEntrySchema>;
 export const OpLogSchema = z
   .object({
     format: z.literal('patently-alive/oplog'),
-    version: z.literal(1),
+    /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
+    version: z.literal(2),
     config: SimConfigSchema,
     entries: z.array(LogEntrySchema),
     /** 导出时推演走到的 tick；回放默认推进到这里（最后一条操作之后的时间也不丢）。 */

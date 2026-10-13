@@ -72,7 +72,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: 'patently-alive/oplog',
-      version: 1,
+      version: 2,
       config: cloneData(this.config),
       entries: cloneData(this.log),
       endTick: this.simulation.tick,

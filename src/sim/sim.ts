@@ -186,12 +186,17 @@ export class Sim {
     return this.s.populations.map((p, i) => populationTotal(p) + populationTotal(this.s.emigrants[i]!) + ind[i]!);
   }
 
-  /** 今天是第几天（tick / 24 向下取整）。 */
+  /**
+   * 传送带的当前日：最近一次每日结算所在的天（tick / 24 向下取整）。
+   * 一天里的 24 个小时都属于这一天，直到下一次每日结算；判断幼体、成体统一用它。
+   */
   get day(): number {
     return Math.floor(this.s.tick / TICKS_PER_DAY);
   }
 
   step(): void {
+    // 这一小时属于"推进之前"的那一天：第 24 个小时也还没到下一次每日结算。
+    const hourDay = this.day;
     if (!sameFocus(this.s.focus, this.s.requestedFocus)) {
       // 今天已经过去的小时数。刚换天（还没有任何个体行动过）时收拢的直接回格子计数，
       // 一天中途收拢的进待合并计数；中途展开的当作已经按时吃过。
@@ -218,7 +223,7 @@ export class Sim {
         grid: this.s.grid,
         focus: this.s.focus,
         hour: calendar(this.s.tick).hour,
-        day: this.day,
+        day: hourDay,
         cellAreaM2: cellArea(this.s.config),
         floorBiomass: this.s.config.world.vegetation.floorBiomass,
         rng: this.rng,
@@ -261,7 +266,7 @@ export class Sim {
     const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
     const crowding = crowdingByBlock(
       { species: this.derived, populations: this.s.populations, ...this.blocks },
-      { individuals: this.s.individuals, width: this.s.grid.width, pending: this.s.emigrants },
+      { individuals: { ...this.s.individuals, width: this.s.grid.width }, pending: this.s.emigrants },
     );
 
     const cellStats = dailyPopulation({
@@ -284,6 +289,7 @@ export class Sim {
       day,
       breeding,
       crowding,
+      blockOf: this.blocks.blockOf,
       rng: this.rng,
       stats: acc,
     });

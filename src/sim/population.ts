@@ -186,9 +186,8 @@ export function shiftStages(pop: Population): void {
 
 /** 格子计数之外、也要算进拥挤度的动物：展开的个体（按位置）和待合并的计数。 */
 export interface CrowdingExtras {
-  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array };
-  /** 个体坐标换算格子下标用的地图宽度。 */
-  width?: number;
+  /** 展开的个体，带地图宽度（个体坐标换算格子下标用）。 */
+  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array; width: number };
   pending?: readonly Population[];
 }
 
@@ -218,10 +217,10 @@ export function crowdingByBlock(
       for (const st of pending.juveniles) add(st);
     }
     const ind = extras.individuals;
-    if (ind && extras.width) {
+    if (ind) {
       for (let i = 0; i < ind.count; i++) {
         if (ind.species[i] !== s) continue;
-        const b = blockOf[Math.floor(ind.y[i]!) * extras.width + Math.floor(ind.x[i]!)]!;
+        const b = blockOf[Math.floor(ind.y[i]!) * ind.width + Math.floor(ind.x[i]!)]!;
         out[b] = out[b]! + 1;
       }
     }

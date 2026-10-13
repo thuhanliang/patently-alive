@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Sim, TICKS_PER_DAY, checksum, countAt, deserialize, serialize, type FocusRect, type SimState } from '../src/sim';
 import { applyFocus } from '../src/sim/individuals';
-import { deriveAll } from '../src/sim/physiology';
+import { JUVENILE_STAGES, deriveAll, juvenileStageAt } from '../src/sim/physiology';
 import { Rng } from '../src/sim/rng';
-import { makeSim } from './helpers';
+import { makeConfig, makeSim } from './helpers';
 
 const FOCUS: FocusRect = { x0: 8, y0: 8, x1: 24, y1: 24 };
 
@@ -47,7 +47,7 @@ describe('展开与收拢守恒', () => {
       const out: string[] = [];
       const ind = s.individuals;
       for (let i = 0; i < ind.count; i++) {
-        if (ind.x[i]! >= 16 && ind.x[i]! < 24) out.push([ind.species[i], ind.x[i], ind.y[i], ind.age[i], ind.reserve[i]].join('/'));
+        if (ind.x[i]! >= 16 && ind.x[i]! < 24) out.push([ind.species[i], ind.x[i], ind.y[i], ind.born[i], ind.reserve[i]].join('/'));
       }
       return out.sort();
     };
@@ -169,5 +169,61 @@ describe('关注区的校验和时机', () => {
     sim.setFocus(FOCUS);
     sim.stepN(TICKS_PER_DAY - 20); // 到换天
     expect(sim.state.lastDay.reduce((a, d) => a + d.deathsStarvation, 0)).toBe(0);
+  });
+});
+
+describe('幼体传送带：个体和格子的年龄段始终对齐', () => {
+  /**
+   * 关掉一切生死（存活率 1、不繁殖、没有捕食者），总数和年龄结构只受传送带支配，结果是确定的：
+   * 展开成个体的那部分，每个年龄段的数量必须和全部按格子算时逐一相同——
+   * 跨过挪段日、个体在第 24 个小时走出关注区、一天中途换关注区都一样。
+   */
+  const immortal = (id: string) => {
+    const base = makeConfig(1).species.find((s) => s.id === id)!;
+    return {
+      ...base,
+      survival: { adultAnnual: 1 },
+      reproduction: { ...base.reproduction, breedingByMonth: new Array<number>(12).fill(0) },
+    };
+  };
+
+  function stageTotals(sim: Sim): number[][] {
+    const st = sim.state;
+    const day = sim.day;
+    return sim.species.map((sp, s) => {
+      const out = new Array<number>(JUVENILE_STAGES + 1).fill(0);
+      for (const pops of [st.populations, st.emigrants]) {
+        const p = pops[s]!;
+        p.juveniles.forEach((stage, k) => (out[k]! += stage.reduce((a, b) => a + b, 0)));
+        out[JUVENILE_STAGES]! += p.adults.reduce((a, b) => a + b, 0);
+      }
+      const ind = st.individuals;
+      for (let i = 0; i < ind.count; i++) if (ind.species[i] === s) out[juvenileStageAt(sp, ind.born[i]!, day)]! += 1;
+      return out;
+    });
+  }
+
+  it('部分展开、来回移动关注区，各年龄段总数与纯格子推演逐一相同', () => {
+    const base = makeConfig(3);
+    const world = { ...base.world, width: 24, height: 24, species: ['vole', 'rabbit'] };
+    const config = { ...base, world, species: [immortal('vole'), immortal('rabbit')] };
+    // 开局先让纯格子推演跑一段，产生各年龄段的幼体（出生期间开着繁殖）。
+    const seeded = { ...config, species: config.species.map((s) => ({ ...s, reproduction: { ...s.reproduction, breedingByMonth: new Array<number>(12).fill(1) } })) };
+    const warm = Sim.create(seeded);
+    warm.stepN(TICKS_PER_DAY * 25);
+    // 从同一个快照出发，换成"不生不死"的物种参数，一份全部按格子，一份部分展开。
+    const snap = { ...warm.snapshot(), config };
+    const cells = new Sim(snap);
+    const mixed = new Sim(snap);
+    mixed.setFocus({ x0: 0, y0: 0, x1: 16, y1: 16 });
+
+    for (let t = 1; t <= TICKS_PER_DAY * 70; t++) {
+      cells.step();
+      mixed.step();
+      if (t % 97 === 0) mixed.setFocus(t % 2 === 0 ? { x0: 8, y0: 8, x1: 24, y1: 24 } : { x0: 0, y0: 8, x1: 16, y1: 24 });
+      if (t % 13 === 0 || t % TICKS_PER_DAY === 0 || t % TICKS_PER_DAY === TICKS_PER_DAY - 1) {
+        expect(stageTotals(mixed), `第 ${t} 个 tick`).toEqual(stageTotals(cells));
+      }
+    }
   });
 });
