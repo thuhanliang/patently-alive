@@ -21,5 +21,6 @@
       "希望你们查明原因，让鸟的数量回升。预算有限，人手更少；另外，岛民不太愿意看到大规模扑杀。"
     ]
   },
-  "resources": { "budget": 200000, "staff": 3 }
+  "sentiment": { "cat": 0.5, "rabbit": 0.02, "rat": 0, "dotterel": 5 },
+  "resources": { "budget": 200000, "staff": 3, "satisfaction": 70 }
 }

@@ -1,5 +1,5 @@
-import { grassland, scenarioLibrary, speciesFor, worldFor, type WorldParams } from './data';
-import { FixedStepClock, OpLogSchema, Session, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { grassland, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
+import { FixedStepClock, OpLogSchema, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { worldToCell } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
@@ -8,6 +8,8 @@ import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
 import { DeathPanel } from './ui/deathPanel';
+import { CapturePanel } from './ui/capturePanel';
+import { bindFieldTools } from './ui/fieldTools';
 import { bindLayerControls } from './ui/layerControls';
 import { bindTimeControls } from './ui/timeControls';
 import { bindToolControls } from './ui/toolControls';
@@ -30,23 +32,30 @@ document.addEventListener('click', (e) => {
   if (e.target instanceof HTMLButtonElement) e.target.blur();
 });
 
-/** 默认情景：野猫与鸟岛。地址栏 ?scenario=… 换情景，?world=grassland 打开阶段 0 的草原。 */
+/**
+ * 默认情景：野猫与鸟岛。地址栏 ?scenario=… 换情景，?world=grassland 打开阶段 0 的草原（沙盒），
+ * ?sandbox=1 把情景的世界当沙盒玩（资源不限、可以投放），做实验用。
+ */
 const DEFAULT_SCENARIO = 'bird-island';
 
-function chosenWorld(): { world: WorldParams; seed: number; problem: string } {
+function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; problem: string } {
   const params = new URLSearchParams(location.search);
-  if (params.get('world') === 'grassland') return { world: grassland, seed: 1, problem: '' };
+  if (params.get('world') === 'grassland') return { world: grassland, seed: 1, rules: SANDBOX_RULES, problem: '' };
   const id = params.get('scenario') ?? DEFAULT_SCENARIO;
   const scenario = scenarioLibrary.get(id) ?? scenarioLibrary.get(DEFAULT_SCENARIO)!;
   const known = [...scenarioLibrary.keys()].join('、');
   const problem = scenario.id === id ? '' : `没有情景「${id}」，载入了「${scenario.name}」（现有：${known}）`;
-  return { world: worldFor(scenario), seed: scenario.seed, problem };
+  const rules: Rules =
+    params.get('sandbox') === '1'
+      ? { ...SANDBOX_RULES, scenario: scenario.id }
+      : { scenario: scenario.id, ...scenario.resources, allowRelease: false, sentiment: scenario.sentiment };
+  return { world: worldFor(scenario), seed: scenario.seed, rules, problem };
 }
 
 async function main(): Promise<void> {
-  const { world, seed: defaultSeed, problem } = chosenWorld();
+  const { world, seed: defaultSeed, rules, problem } = chosenWorld();
   const species = speciesFor(world);
-  const newSession = (seed: number): Session => new Session({ seed, world, species });
+  const newSession = (seed: number): Session => new Session({ seed, world, species, tools: toolData }, rules);
   let session = newSession(intParam('seed', defaultSeed, 0xffff_ffff));
 
   // 一帧最多推进两天：推演每天要算整张地图，再多画面就卡了。倍速太高时实际速度会低于设定。
@@ -54,6 +63,7 @@ async function main(): Promise<void> {
   const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
   const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
+  const captures = new CapturePanel(el('captures'), session.sim.species.map((s) => s.params.name), toolData);
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
@@ -81,6 +91,7 @@ async function main(): Promise<void> {
     clock.reset();
     hud.reset();
     deaths.reset();
+    captures.reset();
     history.clear();
     history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
@@ -109,9 +120,11 @@ async function main(): Promise<void> {
           const cur = session.exportLog().config;
           const same =
             JSON.stringify(parsed.data.config.world) === JSON.stringify(cur.world) &&
-            JSON.stringify(parsed.data.config.species) === JSON.stringify(cur.species);
+            JSON.stringify(parsed.data.config.species) === JSON.stringify(cur.species) &&
+            JSON.stringify(parsed.data.rules) === JSON.stringify(session.rules) &&
+            JSON.stringify(parsed.data.config.tools) === JSON.stringify(cur.tools);
           if (!same) {
-            status.textContent = '这份日志的世界或物种数据和当前不同，暂不支持载入';
+            status.textContent = '这份日志的世界、物种、工具数据或开局规则和当前不同，暂不支持载入';
             return;
           }
           const next = Session.replay(parsed.data);
@@ -122,11 +135,27 @@ async function main(): Promise<void> {
         }
       },
     },
+    rules.allowRelease,
+    () => field.stop(),
+  );
+  const field = bindFieldTools(
+    el('field-tools'),
+    toolData,
+    session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    () => tools.stopReleasing(),
   );
 
   const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'), (screen) => {
-    if (!tools.isReleasing()) return;
     const cell = worldToCell(view.camera.screenToWorld(screen));
+    if (field.isPlacing()) {
+      const op = field.opAt(cell.x, cell.y);
+      if (submit(op)) {
+        status.textContent = op.type === 'trap' ? `在 (${cell.x}, ${cell.y}) 布了陷阱，${op.nights} 晚` : `今晚在 (${cell.x}, ${cell.y}) 一带搜捕`;
+        field.stop();
+      }
+      return;
+    }
+    if (!tools.isReleasing()) return;
     const { id, count } = tools.releaseChoice();
     if (submit({ type: 'release', species: id, x: cell.x, y: cell.y, count })) {
       status.textContent = `在 (${cell.x}, ${cell.y}) 投放了 ${count} 只`;
@@ -169,8 +198,9 @@ async function main(): Promise<void> {
     }
     advance(clock.advance(ticker.deltaMS));
     view.draw(session.sim.state);
-    hud.update(session.sim.state, session.speed, session.entries.length);
+    hud.update(session);
     deaths.update(session.sim.state);
+    captures.update(session.sim.state);
     chart.draw();
     syncCamera();
     syncTime();

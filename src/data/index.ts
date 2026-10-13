@@ -1,8 +1,13 @@
 import { WorldParamsSchema, type WorldParams } from './schema/world';
 import { SpeciesSchema, type SpeciesParams } from './schema/species';
 import { ScenarioSchema, type Scenario } from './schema/scenario';
+import { ToolsSchema, type Tools } from './schema/tools';
+import toolsJson from './tools/tools.json';
 
-export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario };
+export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, ToolsSchema, type Tools };
+
+/** 兽医工具的参数。 */
+export const tools: Tools = ToolsSchema.parse(toolsJson);
 
 const speciesFiles = import.meta.glob('./species/*.json', { eager: true, import: 'default' });
 const worldFiles = import.meta.glob('./world/*.json', { eager: true, import: 'default' });

@@ -87,7 +87,7 @@ describe('统一操作接口与操作日志', () => {
     const rabbit = s.sim.species.findIndex((d) => d.params.id === 'rabbit');
     expect(day[rabbit]!.released).toBe(40);
     day.forEach((d, i) => {
-      expect(d.total).toBe(before[i]! + d.births + d.released - d.deathsPredation - d.deathsStarvation - d.deathsOther);
+      expect(d.total).toBe(before[i]! + d.births + d.released - d.deathsPredation - d.deathsStarvation - d.deathsOther - d.removed);
     });
   });
 

@@ -21,7 +21,9 @@ import {
   type Population,
 } from './population';
 import { FOCUS_BLOCK, FOCUS_MAX_CELLS, inFocus, sameFocus, type FocusRect } from './focus';
+import { runJobs, type Capture, type Job } from './jobs';
 import {
+  compact,
   absorbImmigrants,
   applyFocus,
   expandCell,
@@ -61,6 +63,12 @@ export interface SimState {
   dayAccum: DayStats[];
   /** 死因账本（见 ledger.ts）。 */
   deaths: DeathLedger;
+  /** 进行中的兽医队野外工作（陷阱线、搜捕），每晚执行一次。 */
+  jobs: Job[];
+  /** 下一个工作的编号。 */
+  nextJobId: number;
+  /** 最近的捕获记录。 */
+  captures: Capture[];
 }
 
 function cellArea(config: SimConfig): number {
@@ -88,6 +96,9 @@ export function createInitialState(config: SimConfig): SimState {
     emigrants: populations.map(emptyPopulation),
     dayAccum: populations.map(() => emptyDayStats()),
     deaths: createLedger(derived.length, crowdingBlockCount(grid.width, grid.height)),
+    jobs: [],
+    nextJobId: 1,
+    captures: [],
   };
 }
 
@@ -197,6 +208,38 @@ export class Sim {
     }
   }
 
+  /**
+   * 布一组陷阱：在 (x, y) 放 nights 晚，抓到 remove 名单里的物种就移除，其余放生。
+   * 当晚（下一次每日结算）开始生效。只该由统一操作接口调用。
+   */
+  placeTrap(trap: number, x: number, y: number, nights: number, remove: readonly number[]): number {
+    const tools = this.s.config.tools;
+    if (!tools || !tools.traps[trap]) throw new RangeError(`没有这种陷阱：${trap}`);
+    this.checkLand(x, y);
+    if (!Number.isInteger(nights) || nights < 1) throw new RangeError(`晚数不合法：${nights}`);
+    if (remove.some((s) => !this.derived[s])) throw new RangeError(`移除名单里有不存在的物种：${remove.join(',')}`);
+    const id = this.s.nextJobId++;
+    this.s.jobs.push({ kind: 'trap', id, trap, x, y, nightsLeft: nights, remove: [...remove] });
+    return id;
+  }
+
+  /** 夜间搜捕：在 (x, y) 附近移除物种 species，当晚生效。只该由统一操作接口调用。 */
+  cull(species: number, x: number, y: number): number {
+    if (!this.s.config.tools) throw new RangeError('这片世界没有兽医工具');
+    if (!this.derived[species]) throw new RangeError(`没有这个物种：${species}`);
+    this.checkLand(x, y);
+    const id = this.s.nextJobId++;
+    this.s.jobs.push({ kind: 'cull', id, x, y, nightsLeft: 1, species });
+    return id;
+  }
+
+  private checkLand(x: number, y: number): void {
+    const { width, height, terrain } = this.s.grid;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height || !isLand(terrain[y * width + x]!)) {
+      throw new RangeError(`位置不在陆地上：(${x}, ${y})`);
+    }
+  }
+
   /** 每个物种的总数：格子计数 + 待合并计数 + 展开的个体。 */
   totals(): number[] {
     const ind = countBySpecies(this.s.individuals, this.derived.length);
@@ -263,6 +306,28 @@ export class Sim {
     return cloneData(this.s);
   }
 
+  private runJobs(): void {
+    const tools = this.s.config.tools;
+    const removedIndividuals = new Uint8Array(this.s.individuals.count);
+    this.s.jobs = runJobs(this.s.jobs, {
+      species: this.derived,
+      traps: tools?.traps ?? [],
+      cull: tools?.cull,
+      populations: this.s.populations,
+      individuals: this.s.individuals,
+      grid: this.s.grid,
+      cellSizeM: this.s.config.world.cellSizeM,
+      day: this.day,
+      rng: this.rng,
+      stats: this.s.dayAccum,
+      ledger: this.s.deaths,
+      blockOf: this.blocks.blockOf,
+      captures: this.s.captures,
+      removedIndividuals,
+    });
+    compact(this.s.individuals, removedIndividuals);
+  }
+
   private daily(): void {
     const { world } = this.s.config;
     const w = world.weather;
@@ -320,6 +385,8 @@ export class Sim {
     // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
     this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
     absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng, day);
+    // 夜里兽医队的活（陷阱、搜捕）：在当天的计数都并回来之后做，哪些动物在格子里、哪些展开成个体都抓得到。
+    if (this.s.jobs.length > 0) this.runJobs();
 
     const totals = this.totals();
     this.s.lastDay = cellStats.map((c, s) => ({
@@ -329,6 +396,7 @@ export class Sim {
       deathsStarvation: c.deathsStarvation + acc[s]!.deathsStarvation,
       deathsOther: c.deathsOther + acc[s]!.deathsOther,
       released: acc[s]!.released,
+      removed: acc[s]!.removed,
     }));
     this.s.dayAccum = this.derived.map(() => emptyDayStats());
     // 死因账本：今天的合计存进 lastDay，旧账（含今天的）衰减一天。

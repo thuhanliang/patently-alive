@@ -24,10 +24,16 @@ export const ScenarioSchema = z.object({
     name: z.string(),
     letter: z.array(z.string()).min(1),
   }),
-  /** 开局资源：预算（元）和人手（兽医队数量）。第 4 步起生效。 */
+  /**
+   * 委托人对扑杀的在意程度：每移除一只该物种，满意度降多少。没列出的物种不扣。
+   * 这只是引擎定义的"满意度"指标里的权重，不是新的计分方式（铁律 4）。
+   */
+  sentiment: z.record(z.string(), z.number().min(0)),
+  /** 开局资源：预算（元）、人手（兽医队数量）、客户满意度（0–100）。 */
   resources: z.object({
     budget: z.number().int().min(0),
     staff: z.number().int().min(0),
+    satisfaction: z.number().min(0).max(100),
   }),
 });
 

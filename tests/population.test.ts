@@ -137,7 +137,7 @@ describe('按格子的种群推演', () => {
       sim.state.lastDay.forEach((d, s) => {
         const after = populationTotal(sim.state.populations[s]!);
         expect(d.total).toBe(after);
-        expect(after).toBe(before[s]! + d.births - d.deathsPredation - d.deathsStarvation - d.deathsOther);
+        expect(after).toBe(before[s]! + d.births - d.deathsPredation - d.deathsStarvation - d.deathsOther - d.removed);
       });
     }
   });
