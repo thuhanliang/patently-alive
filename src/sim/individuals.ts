@@ -1,5 +1,6 @@
 import type { Grid } from './grid';
 import { crossesWater } from './terrain';
+import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
 import { inFocus, type FocusRect } from './focus';
 import {
   BURROW_EXPOSURE,
@@ -290,6 +291,9 @@ export interface HourlyContext {
   rng: Rng;
   /** 当天累计的账目（被捕食的计入这里）。 */
   stats: DayStats[];
+  /** 死因账本，以及每格属于哪个区块（账本按区块记）。 */
+  ledger: DeathLedger;
+  blockOf: Int32Array;
 }
 
 /**
@@ -449,9 +453,9 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           const prey = species[qs]!;
           const preyMass = prey.bodyMassG * sizeOf(prey, ind.born[q]!, ctx.day);
           let chance = catchSuitability(pred, prey, preyMass / predMass) * CATCH_SUCCESS;
+          const qc = Math.floor(ind.y[q]!) * grid.width + Math.floor(ind.x[q]!);
           if (nested[q]) {
-            const c = Math.floor(ind.y[q]!) * grid.width + Math.floor(ind.x[q]!);
-            chance *= NEST_DISCOVERY * (prey.nest === 'burrow' ? BURROW_EXPOSURE : nestExposure(grid.cover[c]!));
+            chance *= NEST_DISCOVERY * (prey.nest === 'burrow' ? BURROW_EXPOSURE : nestExposure(grid.cover[qc]!));
           } else {
             if (!pred.carnivore) continue;
             if (prey.flies) chance *= FLIGHT_ESCAPE;
@@ -459,7 +463,8 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
           ctx.stats[qs]!.deathsPredation += 1;
-          // 吃不完的浪费掉，按个体自己的需求折算；只吃肉的比例为 1，和阶段 0 一样。
+          recordDeaths(ctx.ledger, qs, nested[q] ? CAUSE.nest(ps) : CAUSE.predation(ps), ctx.blockOf[qc]!, 1);
+          // 吃不完的浪费掉，按个体自己的需求折算，再乘食谱里肉的比例。
           const meal = usableMeal(pred, need, preyMass) / need;
           ind.fed[p] = ind.fed[p]! + share * meal;
           ind.meat[p] = ind.meat[p]! + share * meal;
@@ -484,6 +489,7 @@ export interface IndividualDailyContext {
   blockOf: Int32Array;
   rng: Rng;
   stats: DayStats[];
+  ledger: DeathLedger;
 }
 
 /**
@@ -500,6 +506,7 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     const s = ind.species[i]!;
     const sp = species[s]!;
     const juvenile = isJuvenileAt(sp, ind.born[i]!, ctx.day);
+    const block = ctx.blockOf[Math.floor(ind.y[i]!) * ctx.width + Math.floor(ind.x[i]!)]!;
 
     // 和格子模型一样，吃到需求的 FED_SUFFICIENT 就算吃够（杂食的少了一类食物不至于挨饿）。
     const enough = Math.min(1, ind.fed[i]! / FED_SUFFICIENT);
@@ -513,15 +520,19 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     if (rng.nextFloat() < base + starve) {
       removed[i] = 1;
       // 和格子模型一样按两种死因的比重拆分。
-      if (starve > 0 && rng.nextFloat() < starve / (base + starve)) stats[s]!.deathsStarvation += 1;
-      else stats[s]!.deathsOther += 1;
+      if (starve > 0 && rng.nextFloat() < starve / (base + starve)) {
+        stats[s]!.deathsStarvation += 1;
+        recordDeaths(ctx.ledger, s, CAUSE.starvation, block, 1);
+      } else {
+        stats[s]!.deathsOther += 1;
+        recordDeaths(ctx.ledger, s, CAUSE.other, block, 1);
+      }
       continue;
     }
 
     // 出生：繁殖期内的成年雌性；越拥挤、越饿生得越少。
     const breeding = ctx.breeding[s]!;
     if (!juvenile && ind.female[i] && breeding > 0) {
-      const block = ctx.blockOf[Math.floor(ind.y[i]!) * ctx.width + Math.floor(ind.x[i]!)]!;
       const room = breedingRoom(sp, ctx.crowding[s]![block]!);
       const condition = reserve >= 0 ? 1 : 0.5;
       if (room > 0 && rng.nextFloat() < breeding * sp.litterRate * room * condition) {
