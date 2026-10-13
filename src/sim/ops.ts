@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SimConfigSchema } from './config';
 import type { Tools } from '../data/schema/tools';
+import { GoalSchema, type Scenario } from '../data/schema/scenario';
 import { fenceLengthCells } from './fence';
 
 /**
@@ -79,8 +80,21 @@ export const RulesSchema = z.object({
   allowRelease: z.boolean(),
   /** 每移除一只某物种，满意度降多少（情景的 sentiment）。没列出的不扣。 */
   sentiment: z.record(z.string(), z.number().min(0)),
+  /** 委托目标（情景的 goal）：有了它才按季度结算、评分；沙盒为 null。 */
+  goal: GoalSchema.nullable().default(null),
 });
 export type Rules = z.infer<typeof RulesSchema>;
+
+/** 情景的开局规则：管理员身份（不能投放），资源、扑杀的在意程度、委托目标都来自情景数据。 */
+export function scenarioRules(scenario: Scenario): Rules {
+  return {
+    scenario: scenario.id,
+    ...scenario.resources,
+    allowRelease: false,
+    sentiment: scenario.sentiment,
+    goal: scenario.goal,
+  };
+}
 
 export const SANDBOX_RULES: Rules = {
   scenario: null,
@@ -89,6 +103,7 @@ export const SANDBOX_RULES: Rules = {
   satisfaction: 100,
   allowRelease: true,
   sentiment: {},
+  goal: null,
 };
 
 /**
@@ -99,7 +114,7 @@ export const OpLogSchema = z
   .object({
     format: z.literal('patently-alive/oplog'),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(5),
+    version: z.literal(6),
     config: SimConfigSchema,
     rules: RulesSchema,
     entries: z.array(LogEntrySchema),

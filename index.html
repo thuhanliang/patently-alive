@@ -45,6 +45,18 @@
       .alert-banner { pointer-events: auto; font: inherit; font-weight: 600; color: var(--paper); background: var(--vermilion); border: none; border-radius: 3px; padding: 4px 12px; box-shadow: 0 1px 0 rgba(31, 29, 26, 0.35); }
       .alert-log { padding: 2px 8px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.25); white-space: pre; font-size: 11px; color: var(--ink-soft); }
       @media (max-width: 760px) { .alert-log { display: none !important; } }
+      #modal { position: fixed; inset: 0; background: rgba(31, 29, 26, 0.25); display: flex; align-items: center; justify-content: center; z-index: 10; }
+      .modal-card { max-width: 640px; max-height: calc(100vh - 48px); overflow-y: auto; margin: 16px; padding: 14px 18px; background: var(--paper); border: 1.5px solid var(--blueprint); box-shadow: 0 2px 0 rgba(31, 29, 26, 0.3); }
+      .modal-card p { margin: 4px 0; }
+      .modal-card .bar { margin-top: 10px; }
+      .modal-title { font-size: 16px; font-weight: 600; color: var(--blueprint); margin-bottom: 6px; }
+      .score-table { display: grid; grid-template-columns: auto 120px 2.5em 1fr; gap: 3px 8px; align-items: center; margin: 6px 0; }
+      .score-bar { height: 8px; border: 1px solid var(--ink-soft); background: var(--paper-deep); }
+      .score-bar span { display: block; height: 100%; background: var(--blueprint); }
+      .score-value { text-align: right; font-variant-numeric: tabular-nums; }
+      .quarter-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+      .quarter-table th, .quarter-table td { padding: 1px 8px; text-align: right; border-bottom: 1px dotted rgba(31, 29, 26, 0.25); }
+      @media (max-width: 760px) { .score-table { grid-template-columns: auto 60px 2.5em; } .score-table .note { grid-column: 1 / -1; } }
       #chart { cursor: pointer; position: fixed; left: 8px; right: 8px; bottom: 8px; height: 180px; width: calc(100% - 16px); }
     </style>
   </head>
@@ -57,6 +69,7 @@
     </div>
     <div id="exam-card" style="display: none"></div>
     <div id="alert"></div>
+    <div id="modal" style="display: none"></div>
     <div id="toolbar">
       <div class="bar" id="time-bar"></div>
       <div class="bar" id="camera-bar"></div>

@@ -5,7 +5,28 @@ import { Sim } from './sim';
 import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
-import { TICKS_PER_DAY } from './time';
+import { baselineOf, QUARTER_DAYS, QUARTERS_PER_YEAR, satisfactionChange, score, type ScoreBaseline, type ScoreDetail, type ScoreGoal, type Scores } from './score';
+import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
+
+/** 一次季度结算。 */
+export interface Quarter {
+  /** 第几季（从 1 起）。 */
+  index: number;
+  day: number;
+  scores: Scores;
+  detail: ScoreDetail;
+  /** 结算时满意度的变化（已计入）。 */
+  satisfactionDelta: number;
+  /** 委托人这一季拨的经费（已计入预算）。 */
+  grant: number;
+  /** 目标物种在结算这天的数量（之后几年和它比同季）。 */
+  targetCount: number;
+  /** 结算后的预算和满意度。 */
+  budget: number;
+  satisfaction: number;
+  /** 委托期的最后一季。 */
+  final: boolean;
+}
 
 export type SubmitResult = { ok: true } | { ok: false; reason: string };
 
@@ -32,6 +53,13 @@ export class Session {
   private readonly log: LogEntry[] = [];
   private currentSpeed = 1;
   private readonly res: Resources;
+  /** 有委托目标时的评分设置和开局基准。 */
+  private readonly scoring: { goal: ScoreGoal; base: ScoreBaseline } | null;
+  /** 一共花了多少、拿到多少（开局预算 + 各季拨款）。 */
+  private spent = 0;
+  private received: number;
+  private readonly settled: Quarter[] = [];
+  private readonly removedBySpecies: number[];
 
   constructor(config: SimConfig, rules: Rules = SANDBOX_RULES) {
     this.config = SimConfigSchema.parse(config);
@@ -42,6 +70,58 @@ export class Session {
       busyUntil: new Array<number>(this.rules.staff).fill(0),
       satisfaction: this.rules.satisfaction,
     };
+    this.received = this.rules.budget;
+    this.removedBySpecies = this.config.species.map(() => 0);
+    const goal = this.rules.goal;
+    if (goal) {
+      const ids = this.config.species.map((s) => s.id);
+      const target = ids.indexOf(goal.target);
+      if (target < 0) throw new Error(`委托目标「${goal.target}」不是这片世界的物种`);
+      const unknown = goal.native.find((id) => !ids.includes(id));
+      if (unknown !== undefined) throw new Error(`本地物种「${unknown}」不是这片世界的物种`);
+      this.scoring = {
+        goal: { target, recovery: goal.recovery, native: ids.map((id) => goal.native.includes(id)) },
+        base: baselineOf(this.simulation.state),
+      };
+    } else {
+      this.scoring = null;
+    }
+  }
+
+  /** 已经做过的季度结算（最早的在前）。 */
+  get quarters(): readonly Quarter[] {
+    return this.settled;
+  }
+
+  /** 一共花了多少、拿到多少（开局预算 + 各季拨款）。 */
+  get money(): { spent: number; received: number } {
+    return { spent: this.spent, received: this.received };
+  }
+
+  /** 开局以来各物种被人为移除（扑杀、陷阱里处死）的只数。 */
+  get removed(): readonly number[] {
+    return this.removedBySpecies;
+  }
+
+  /** 委托期一共几季；没有委托目标为 0。 */
+  get totalQuarters(): number {
+    return this.rules.goal ? (this.rules.goal.years * DAYS_PER_YEAR) / QUARTER_DAYS : 0;
+  }
+
+  /** 委托期结束了没有（结束后还能看，但不能再动手）。 */
+  get ended(): boolean {
+    return this.settled.at(-1)?.final === true;
+  }
+
+  /** 按现在的状态算一次评分（不结算，界面随时看用）；没有委托目标为 null。 */
+  currentScore(): { scores: Scores; detail: ScoreDetail } | null {
+    if (!this.scoring) return null;
+    // 和第一年同一季的结算比（季节起伏大）；还在第一年时没有可比的。
+    const day = Math.floor(this.simulation.tick / TICKS_PER_DAY);
+    const index = Math.ceil(day / QUARTER_DAYS);
+    const ref = index > QUARTERS_PER_YEAR ? this.settled[(index - 1) % QUARTERS_PER_YEAR] : undefined;
+    const sameSeason = ref ? ref.targetCount : null;
+    return score(this.simulation.state, this.scoring.goal, this.scoring.base, { spent: this.spent, received: this.received }, sameSeason);
   }
 
   /** 推演的只读入口（状态、物种参数、总数）。不要直接调用它的修改方法。 */
@@ -62,7 +142,7 @@ export class Session {
     return this.res;
   }
 
-  /** 当前的警报，最响的在前（含资源类：满意度低、预算不够布最便宜的工具）。 */
+  /** 当前的警报，最响的在前（含资源类：满意度低、预算不够布最便宜的工具）。有委托时数量类警报只看本地物种。 */
   alerts(): Alert[] {
     const tools = this.config.tools;
     const resources = tools
@@ -79,7 +159,7 @@ export class Session {
           ),
         }
       : undefined;
-    return this.simulation.alerts(resources);
+    return this.simulation.alerts(resources, this.scoring?.goal.native);
   }
 
   /** 现在空闲的兽医队数量。 */
@@ -103,9 +183,40 @@ export class Session {
     const { sentiment } = this.rules;
     let loss = 0;
     this.simulation.state.lastDay.forEach((d, s) => {
+      this.removedBySpecies[s] = this.removedBySpecies[s]! + d.removed;
       if (d.removed > 0) loss += d.removed * (sentiment[this.config.species[s]!.id] ?? 0);
     });
     if (loss > 0) this.res.satisfaction = Math.max(0, this.res.satisfaction - loss);
+    const day = this.simulation.tick / TICKS_PER_DAY;
+    if (this.scoring && !this.ended && day % QUARTER_DAYS === 0) this.settle(day);
+  }
+
+  /**
+   * 季度结算：评分；满意度按恢复分变化；委托人按满意度拨下一季的经费。
+   */
+  private settle(day: number): void {
+    const { scores, detail } = this.currentScore()!;
+    const before = this.res.satisfaction;
+    this.res.satisfaction = Math.min(100, Math.max(0, before + satisfactionChange(scores)));
+    // 记实际变了多少（夹在 0–100 之后）。
+    const delta = this.res.satisfaction - before;
+    const index = this.settled.length + 1;
+    const final = index >= this.totalQuarters;
+    const grant = final ? 0 : Math.round((this.rules.goal!.quarterlyBudget * this.res.satisfaction) / 100);
+    this.res.budget += grant;
+    this.received += grant;
+    this.settled.push({
+      index,
+      day,
+      scores,
+      detail,
+      targetCount: this.simulation.state.lastDay[this.scoring!.goal.target]!.total,
+      satisfactionDelta: delta,
+      grant,
+      budget: this.res.budget,
+      satisfaction: this.res.satisfaction,
+      final,
+    });
   }
 
   /** 统一操作接口。 */
@@ -131,7 +242,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: 'patently-alive/oplog',
-      version: 5,
+      version: 6,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
@@ -160,6 +271,7 @@ export class Session {
   /** 扣除花费：预算、满意度（夹在 0–100），占用最早空出来的几支兽医队若干天。 */
   private pay(cost: Cost): void {
     this.res.budget -= cost.budget;
+    this.spent += cost.budget;
     this.res.satisfaction = Math.min(100, Math.max(0, this.res.satisfaction + cost.satisfaction));
     if (cost.staff > 0) {
       const now = this.simulation.tick;
@@ -177,6 +289,7 @@ export class Session {
 
   /** 语义检查：返回问题描述，没问题返回 null。 */
   private check(op: Op): string | null {
+    if (this.ended && op.type !== 'setSpeed' && op.type !== 'setFocus') return '委托期已经结束，不能再动手了（还可以继续观察）';
     switch (op.type) {
       case 'setSpeed':
         return null;

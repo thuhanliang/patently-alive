@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { grassland, scenarioLibrary, speciesFor, speciesLibrary, tools, worldFor, type WorldParams } from '../src/data';
-import { CAUSE, SANDBOX_RULES, Session, Sim, TICKS_PER_DAY, type Rules } from '../src/sim';
+import { CAUSE, SANDBOX_RULES, Session, Sim, TICKS_PER_DAY, scenarioRules, type Rules } from '../src/sim';
 import { buildBarriers, fenceStops, markFence, pathBlocked, type Barrier } from '../src/sim/fence';
 import { createLedger, closeLedgerDay, FRESH_DAYS, freshIndex, recordDeaths } from '../src/sim/ledger';
 import { deriveSpecies } from '../src/sim/physiology';
@@ -9,7 +9,7 @@ import { TERRAIN } from '../src/sim/terrain';
 const scenario = scenarioLibrary.get('bird-island')!;
 const island = worldFor(scenario);
 const small: WorldParams = { ...island, width: 64, height: 64 };
-const rules: Rules = { scenario: scenario.id, ...scenario.resources, allowRelease: false, sentiment: scenario.sentiment };
+const rules: Rules = scenarioRules(scenario);
 const rabbitFence = tools.fences.find((f) => f.id === 'rabbit-fence')!;
 const predatorFence = tools.fences.find((f) => f.id === 'predator-fence')!;
 const sp = (id: string) => deriveSpecies(speciesLibrary.get(id)!, island.cellSizeM);

@@ -1,4 +1,4 @@
-import { SEASON_NAMES, TICKS_PER_DAY, calendar, checksum, meanLandVegetation, type Session } from '../sim';
+import { QUARTER_DAYS, SEASON_NAMES, TICKS_PER_DAY, calendar, checksum, meanLandVegetation, type Session } from '../sim';
 
 /** 左上角的状态读数：资源（情景里）、日期、植被、倍速、个体、日志、状态校验和。 */
 export class Hud {
@@ -31,6 +31,13 @@ export class Hud {
           `预算   ${res.budget.toLocaleString('zh-CN')} 元`,
           `兽医队 空闲 ${session.freeStaff()} / ${res.busyUntil.length} 支`,
           `满意度 ${Math.round(res.satisfaction)} / 100`,
+          ...(session.totalQuarters > 0
+            ? [
+                session.ended
+                  ? `委托   已结束（${session.totalQuarters} 季）`
+                  : `委托   第 ${session.quarters.length + 1} / ${session.totalQuarters} 季，第 ${(session.quarters.length + 1) * QUARTER_DAYS} 天结算`,
+              ]
+            : []),
         ]
       : ['沙盒   资源不限，可以投放'];
     this.el.textContent = [

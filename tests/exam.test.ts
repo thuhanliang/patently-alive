@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { scenarioLibrary, speciesFor, tools, worldFor, type WorldParams } from '../src/data';
-import { CAUSE, Rng, Session, Sim, TICKS_PER_DAY, type Rules } from '../src/sim';
+import { CAUSE, Rng, Session, Sim, TICKS_PER_DAY, scenarioRules, type Rules } from '../src/sim';
 import { blockCounter, EMPTY_STOMACH, examine, type ExamContext } from '../src/sim/exam';
 import { meanCi, summarize, wilson } from '../src/sim/inference';
 import { crowdingBlocks } from '../src/sim/population';
@@ -9,7 +9,7 @@ import { TERRAIN } from '../src/sim/terrain';
 const scenario = scenarioLibrary.get('bird-island')!;
 const island = worldFor(scenario);
 const small: WorldParams = { ...island, width: 64, height: 64 };
-const rules: Rules = { scenario: scenario.id, ...scenario.resources, allowRelease: false, sentiment: scenario.sentiment };
+const rules: Rules = scenarioRules(scenario);
 
 describe('置信区间', () => {
   it('Wilson：0/10 的上限约 28%，5/10 约 24%–76%，不越出 0–1', () => {
