@@ -4,19 +4,32 @@ import type { Camera, ZoomPreset } from '../render/camera';
  * 镜头操作：拖拽平移、滚轮缩放、按键或按钮切换"全图 / 地块"两档。
  * 镜头只影响画面，不进操作日志。
  */
-export function bindCameraControls(canvas: HTMLCanvasElement, camera: Camera, toolbar: HTMLElement): () => void {
+export function bindCameraControls(
+  canvas: HTMLCanvasElement,
+  camera: Camera,
+  toolbar: HTMLElement,
+  /** 按下又松开、几乎没拖动时算一次点击，传回屏幕坐标（相对画布）。 */
+  onClick?: (screen: { x: number; y: number }) => void,
+): () => void {
   let dragging: { x: number; y: number } | null = null;
+  let moved = 0;
 
   canvas.addEventListener('pointerdown', (e) => {
     dragging = { x: e.clientX, y: e.clientY };
+    moved = 0;
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!dragging) return;
+    moved += Math.abs(e.clientX - dragging.x) + Math.abs(e.clientY - dragging.y);
     camera.panBy(e.clientX - dragging.x, e.clientY - dragging.y);
     dragging = { x: e.clientX, y: e.clientY };
   });
   const endDrag = (e: PointerEvent): void => {
+    if (dragging && e.type === 'pointerup' && moved < 4 && onClick) {
+      const rect = canvas.getBoundingClientRect();
+      onClick({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }
     dragging = null;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
@@ -54,6 +67,7 @@ export function bindCameraControls(canvas: HTMLCanvasElement, camera: Camera, to
   }
 
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (e.key === '1') goTo('map');
     if (e.key === '2') goTo('plot');
   });

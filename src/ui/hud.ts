@@ -8,7 +8,12 @@ export class Hud {
 
   constructor(private readonly el: HTMLElement) {}
 
-  update(state: Readonly<SimState>, speed: number): void {
+  /** 换了一局时清掉按天缓存的数值。 */
+  reset(): void {
+    this.lastDay = -1;
+  }
+
+  update(state: Readonly<SimState>, speed: number, logLength: number): void {
     // 校验和与平均植被都要遍历整张地图，每天算一次（取当天开始时的状态）。
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (day !== this.lastDay) {
@@ -27,6 +32,7 @@ export class Hud {
       `植被   平均 ${this.meanVeg.toFixed(0)} g/m²`,
       `倍速   ${speed}x`,
       `个体   ${state.focus ? `展开 ${state.individuals.count} 只（${state.focus.x1 - state.focus.x0}×${state.focus.y1 - state.focus.y0} 格）` : '未展开（放大到地块档）'}`,
+      `日志   ${logLength} 条操作`,
       `校验和 ${this.sum.toString(16).padStart(8, '0')}（当天开始时）`,
     ].join('\n');
   }
