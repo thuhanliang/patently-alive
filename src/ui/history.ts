@@ -24,14 +24,19 @@ export class PopulationHistory {
 
   /** 每天最多记一次；同一天重复调用会被忽略。 */
   record(day: number, state: Readonly<SimState>): void {
+    this.recordValues(day, state.lastDay.map((d) => d.total), meanLandVegetation(state.grid));
+  }
+
+  /** 同 record，直接给数值（推演在 Worker 里，每天的数值随视图送来）。 */
+  recordValues(day: number, totals: readonly number[], veg: number): void {
     if (day === this.lastDay) return;
     this.lastDay = day;
     const i = (this.start + this.count) % this.capacity;
     if (this.count < this.capacity) this.count += 1;
     else this.start = (this.start + 1) % this.capacity;
     this.days[i] = day;
-    state.lastDay.forEach((d, s) => (this.buf[s]![i] = d.total));
-    this.buf[this.buf.length - 1]![i] = meanLandVegetation(state.grid);
+    totals.forEach((n, s) => (this.buf[s]![i] = n));
+    this.buf[this.buf.length - 1]![i] = veg;
   }
 
   get length(): number {

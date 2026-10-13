@@ -1,9 +1,9 @@
 export interface ToolCallbacks {
   reseed(seed: number): void;
   /** 导出存档文件：文件名和内容。 */
-  exportFile(): { name: string; text: string };
+  exportFile(): Promise<{ name: string; text: string }>;
   /** 只导出操作日志（小，可以从头回放；交流、报 bug 用）。 */
-  exportLog(): { name: string; text: string };
+  exportLog(): Promise<{ name: string; text: string }>;
   /** 载入的文件原文（存档或操作日志）；解析和校验由回调负责，出错时在状态栏说明。 */
   importFile(text: string): void;
   /** 快速存档 / 读档（浏览器里的一个存档位）。 */
@@ -69,10 +69,10 @@ export function bindToolControls(
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
   };
   exportBtn.textContent = '导出存档';
-  exportBtn.addEventListener('click', () => download(cb.exportFile()));
+  exportBtn.addEventListener('click', () => void cb.exportFile().then(download));
   const exportLogBtn = document.createElement('button');
   exportLogBtn.textContent = '导出日志';
-  exportLogBtn.addEventListener('click', () => download(cb.exportLog()));
+  exportLogBtn.addEventListener('click', () => void cb.exportLog().then(download));
 
   const file = document.createElement('input');
   file.type = 'file';

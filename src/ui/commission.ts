@@ -1,5 +1,6 @@
 import type { Scenario } from '../data';
-import { QUARTERS_PER_YEAR, SCORE_KEYS, SEASON_NAMES, type Quarter, type Session } from '../sim';
+import { QUARTERS_PER_YEAR, SCORE_KEYS, SEASON_NAMES, type Quarter } from '../sim';
+import type { SessionReadout } from '../runtime/remote';
 import { SCORE_LABELS, scoreRows } from './scoreText';
 
 /**
@@ -52,7 +53,7 @@ export class CommissionCards {
   }
 
   /** 季度结算单。 */
-  quarter(q: Quarter, session: Session, names: readonly string[]): void {
+  quarter(q: Quarter, session: SessionReadout, names: readonly string[]): void {
     if (q.final) {
       this.summary(session, names);
       return;
@@ -74,7 +75,7 @@ export class CommissionCards {
   }
 
   /** 委托结束：最后一季的评分、每季的走势、花了多少、移除了多少。 */
-  summary(session: Session, names: readonly string[]): void {
+  summary(session: SessionReadout, names: readonly string[]): void {
     const goal = this.scenario.goal;
     const target = this.nameOf(goal.target, names);
     const last = session.quarters.at(-1)!;
@@ -92,7 +93,7 @@ export class CommissionCards {
       quarterTable(session.quarters),
       para(
         `一共拿到经费 ${money.received.toLocaleString('zh-CN')} 元，花掉 ${money.spent.toLocaleString('zh-CN')} 元；` +
-          `操作 ${session.entries.length} 条；人为移除：${removed || '没有'}。最后的满意度 ${Math.round(last.satisfaction)}。`,
+          `操作 ${session.entryCount} 条；人为移除：${removed || '没有'}。最后的满意度 ${Math.round(last.satisfaction)}。`,
       ),
       para('委托期结束后还可以继续观察（不能再动手）。导出日志就是这一局的完整记录，可以原样回放。', 'note'),
     ];
