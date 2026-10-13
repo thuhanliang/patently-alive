@@ -1,4 +1,4 @@
-import { ageClass, EMPTY_STOMACH, THIN_BCS, type AgeClass, type DerivedSpecies, type Exam } from '../sim';
+import { ageClass, EMPTY_STOMACH, GOOD_BCS, THIN_BCS, type AgeClass, type DerivedSpecies, type Exam } from '../sim';
 
 /**
  * 检查卡上的措辞：把引擎量出来的数（src/sim/exam.ts）写成兽医的说法。只管措辞，不算任何指标。
@@ -17,7 +17,7 @@ export function massText(kg: number): string {
 
 export function bcsText(bcs: number): string {
   // 偏瘦的界线用引擎的 THIN_BCS（抽样推断按它数"偏瘦"）；其余几档只是措辞。
-  const word = bcs <= THIN_BCS - 0.5 ? '极瘦' : bcs <= THIN_BCS ? '偏瘦' : bcs <= 3.5 ? '正常' : bcs <= 4 ? '偏胖' : '肥胖';
+  const word = bcs <= THIN_BCS - 0.5 ? '极瘦' : bcs <= THIN_BCS ? '偏瘦' : bcs <= GOOD_BCS ? '正常' : bcs <= 4 ? '偏胖' : '肥胖';
   return `${bcs.toFixed(1)} / 5（${word}）`;
 }
 

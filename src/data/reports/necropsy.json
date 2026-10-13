@@ -1,0 +1,59 @@
+{
+  "title": "尸检报告",
+  "headings": {
+    "intro": "送检",
+    "appearance": "外观",
+    "findings": "所见",
+    "conclusion": "结论"
+  },
+  "intro": "{subject}，发现于 ({x}, {y}) 一带，估计{days}。",
+  "days": {
+    "today": "当天死亡",
+    "ago": "死后约 {n} 天"
+  },
+  "subject": {
+    "carcass": "{species}尸体一具",
+    "nestEgg": "{species}的蛋壳与残巢",
+    "nestYoung": "{species}的幼崽残骸"
+  },
+  "decomposition": {
+    "fresh": "尸体新鲜，尸僵尚存，未见腐败。",
+    "early": "尸僵已缓解，腹部轻度膨胀，组织尚可判读。",
+    "advanced": "已开始腐败，部分软组织难以判读，以下所见仅供参考。"
+  },
+  "decompositionNest": {
+    "fresh": "蛋壳断面新鲜，残留内容物尚湿。",
+    "early": "蛋壳内残留物已干，巢材尚完整。",
+    "advanced": "巢材散乱，蛋壳褪色，以下所见仅供参考。"
+  },
+  "condition": {
+    "thin": "体况评分 {bcs}/5：皮下及腹腔脂肪耗尽，胸肌萎缩，龙骨或脊突明显。",
+    "normal": "体况评分 {bcs}/5：皮下脂肪适量，肌肉丰满度正常。",
+    "good": "体况评分 {bcs}/5：皮下及腹腔脂肪充足。"
+  },
+  "findings": {
+    "starvation": "胃肠空虚，肝脏偏小、色深；未见外伤或出血。",
+    "other": "体表完整，未见外伤；内脏未见特异性病变。",
+    "predation_canine": "颈背部见成对穿刺伤，两孔间距约 {size} 毫米，周围皮下出血，提示生前受伤；尸体部分被食。",
+    "predation_incisor": "体表多处细小成对齿痕，宽约 {size} 毫米，创缘不齐；尸体被啃食。",
+    "nest_canine": "巢被扒散，{remains}上见成对穿刺孔，间距约 {size} 毫米。",
+    "nest_incisor": "{remains}边缘不规则，见细小成对齿痕，宽约 {size} 毫米，内容物被吃空。"
+  },
+  "remains": {
+    "egg": "蛋壳碎片",
+    "young": "幼崽残骸"
+  },
+  "conclusion": {
+    "starvation": "饥饿致死（营养不良）。",
+    "other": "死因未明，衰老、疾病或意外均有可能。",
+    "predation": "被捕食。{teeth}；{size_match}。",
+    "nest": "巢被捕食。{teeth}；{size_match}。"
+  },
+  "teeth": {
+    "canine": "咬痕符合食肉动物的犬齿",
+    "incisor": "齿痕符合啃食动物的切齿"
+  },
+  "sizeMatch": "按齿距估计，体型与{matches}相符",
+  "sizeMatchNone": "这片地方没有已知物种和这个齿距相符",
+  "listSeparator": "、"
+}

@@ -14,4 +14,5 @@ export { Session, type SubmitResult, type Resources } from './session';
 export { type Capture, type Job, type Carcass, type NecropsySearch } from './jobs';
 export { CAUSE, causeName, recentByCause, type DeathLedger } from './ledger';
 export { ageClass, EMPTY_STOMACH, type AgeClass, type Exam, type Stomach } from './exam';
-export { summarize, wilson, meanCi, THIN_BCS, type SampleSummary, type Proportion, type MeanEstimate } from './inference';
+export { summarize, wilson, meanCi, THIN_BCS, GOOD_BCS, type SampleSummary, type Proportion, type MeanEstimate } from './inference';
+export { necropsyFindings, biteSizeMm, type NecropsyFindings, type Bite, type Decomposition } from './necropsy';

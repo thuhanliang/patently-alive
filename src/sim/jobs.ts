@@ -1,5 +1,5 @@
 import type { CullParams, NecropsyParams, SampleParams, TrapType } from '../data/schema/tools';
-import { blockCounter, examine, type Exam, type ExamContext, type Subject } from './exam';
+import { blockCounter, cellNutrition, examine, scoreBcs, type Exam, type ExamContext, type Subject } from './exam';
 import type { Fence } from './fence';
 import type { Grid } from './grid';
 import type { Individuals } from './individuals';
@@ -95,6 +95,8 @@ export interface Carcass {
   y: number;
   /** 0 = 当天死的。 */
   daysDead: number;
+  /** 尸体的体况评分（1–5）。 */
+  bcs: number;
 }
 
 /** 一次找尸体的结果（可能一具也没找到）。 */
@@ -406,7 +408,9 @@ function necropsyDay(job: NecropsyJob, ctx: JobContext): void {
     ledger.fresh[i] = ledger.fresh[i]! - 1;
     const cells = byBlock.get(v.block)!;
     const c = cells[rng.nextInt(cells.length)]!;
-    found.push({ species: v.s, cause: v.cause, x: c % grid.width, y: Math.floor(c / grid.width), daysDead: v.ago });
+    // 尸体的体况：饿死的按营养 0 评分；其他的按发现的那一格现在的食物（账本没记死时的体况，见 MODEL.md 已知问题）。
+    const nutrition = v.cause === CAUSE.starvation ? 0 : cellNutrition(ctx.fedLast, v.s, c);
+    found.push({ species: v.s, cause: v.cause, x: c % grid.width, y: Math.floor(c / grid.width), daysDead: v.ago, bcs: scoreBcs(nutrition, rng) });
   }
   ctx.necropsies.push({ day: ctx.day, job: job.id, x: job.x, y: job.y, species: job.species, found });
   if (ctx.necropsies.length > NECROPSY_LOG) ctx.necropsies.splice(0, ctx.necropsies.length - NECROPSY_LOG);

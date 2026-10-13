@@ -1,23 +1,25 @@
-import type { Tools } from '../data';
+import type { NecropsyTemplates, Tools } from '../data';
 import {
   calendar,
-  causeName,
+  necropsyFindings,
   summarize,
   TICKS_PER_DAY,
   THIN_BCS,
   type Capture,
+  type Carcass,
   type DerivedSpecies,
   type Proportion,
   type SimState,
 } from '../sim';
 import { ageText, bcsText, massText, stomachText } from './examText';
+import { necropsyReport } from './necropsyReport';
 
 /** 抽样推断看最近多少天的记录。 */
 const INFERENCE_WINDOW_DAYS = 90;
 
 /**
  * 左侧的"野外记录"：
- * - 找尸体带回了什么（死因由引擎记账；临床口吻的报告在下一步）；
+ * - 找尸体带回了什么，点一具打开尸检报告（临床口吻，按模板拼）；
  * - 最近抓到、检查过的动物，点一条打开检查卡；
  * - 抽样推断：选一个物种，最近 90 天的检查记录汇总成比例和 95% 置信区间。
  */
@@ -27,7 +29,7 @@ export class FieldLog {
   private lastDay = -1;
   private drawn = false;
   private state: Readonly<SimState> | null = null;
-  private selected: Capture | null = null;
+  private selected: Capture | Carcass | null = null;
   /** 玩家没选过推断哪个物种时，跟着最近一条检查记录走。 */
   private userChose = false;
   private readonly log = document.createElement('div');
@@ -39,6 +41,7 @@ export class FieldLog {
     private readonly card: HTMLElement,
     private readonly species: readonly DerivedSpecies[],
     private readonly tools: Tools | undefined,
+    private readonly templates: NecropsyTemplates,
   ) {
     for (const [s, sp] of species.entries()) this.inferSpecies.add(new Option(sp.params.name, String(s)));
     this.inferSpecies.addEventListener('change', () => {
@@ -92,14 +95,21 @@ export class FieldLog {
     const names = this.names;
     const rows: HTMLElement[] = [];
     if (state.necropsies.length > 0) {
-      rows.push(heading('找尸体'));
+      rows.push(heading('找尸体（点一具看尸检报告）'));
       for (const n of state.necropsies.slice(-3).reverse()) {
-        const want = n.species >= 0 ? `${names[n.species]}的` : '';
-        const text =
-          n.found.length === 0
-            ? `没找到${want}新鲜尸体`
-            : n.found.map((c) => `${names[c.species]}（${causeName(c.cause, names)}，死后约 ${c.daysDead + 1} 天）`).join('；');
-        rows.push(line(`${date(n.day)} #${n.job}：${text}`));
+        if (n.found.length === 0) {
+          const want = n.species >= 0 ? `${names[n.species]}的` : '';
+          rows.push(line(`${date(n.day)} #${n.job}：没找到${want}新鲜尸体`));
+          continue;
+        }
+        n.found.forEach((c, k) => {
+          const b = document.createElement('button');
+          b.className = 'log-row';
+          b.textContent = `${date(n.day)} #${n.job}-${k + 1}：${names[c.species]}，${c.daysDead === 0 ? '当天死亡' : `死后约 ${c.daysDead} 天`}`;
+          b.classList.toggle('active', c === this.selected);
+          b.addEventListener('click', () => this.openReport(c));
+          rows.push(b);
+        });
       }
     }
     if (state.captures.length > 0) {
@@ -118,13 +128,42 @@ export class FieldLog {
     this.log.replaceChildren(...rows);
   }
 
-  private open(c: Capture): void {
-    this.selected = this.selected === c ? null : c;
+  /** 点同一条再点一次就关掉；返回是不是打开了。 */
+  private toggle(item: Capture | Carcass): boolean {
+    this.selected = this.selected === item ? null : item;
     this.renderLog();
-    if (!this.selected) {
-      this.card.style.display = 'none';
-      return;
+    if (!this.selected) this.card.style.display = 'none';
+    return this.selected !== null;
+  }
+
+  private cardFrame(titleText: string, item: Capture | Carcass): HTMLElement[] {
+    const title = document.createElement('div');
+    title.className = 'panel-title';
+    title.textContent = titleText;
+    const close = document.createElement('button');
+    close.className = 'card-close';
+    close.textContent = '×';
+    close.addEventListener('click', () => this.toggle(item));
+    return [close, title];
+  }
+
+  private openReport(c: Carcass): void {
+    if (!this.toggle(c)) return;
+    const sections = necropsyReport(this.templates, c, necropsyFindings(c, this.species), this.species);
+    const table = document.createElement('dl');
+    for (const sec of sections) {
+      const dt = document.createElement('dt');
+      dt.textContent = sec.heading;
+      const dd = document.createElement('dd');
+      dd.textContent = sec.text;
+      table.append(dt, dd);
     }
+    this.card.replaceChildren(...this.cardFrame(this.templates.title, c), table);
+    this.card.style.display = '';
+  }
+
+  private open(c: Capture): void {
+    if (!this.toggle(c)) return;
     const sp = this.species[c.species]!;
     const how = c.trap >= 0 ? `${this.tools?.traps[c.trap]?.name ?? '陷阱'}（#${c.job}）` : `体检采样（#${c.job}）`;
     const rows: [string, string][] = [
@@ -139,13 +178,6 @@ export class FieldLog {
       ['日期', date(c.day)],
       ['处理', c.removed ? '移除' : '检查后原地放生'],
     ];
-    const title = document.createElement('div');
-    title.className = 'panel-title';
-    title.textContent = '检查卡';
-    const close = document.createElement('button');
-    close.className = 'card-close';
-    close.textContent = '×';
-    close.addEventListener('click', () => this.open(c));
     const table = document.createElement('dl');
     for (const [k, v] of rows) {
       const dt = document.createElement('dt');
@@ -154,7 +186,7 @@ export class FieldLog {
       dd.textContent = v;
       table.append(dt, dd);
     }
-    this.card.replaceChildren(close, title, table);
+    this.card.replaceChildren(...this.cardFrame('检查卡', c), table);
     this.card.style.display = '';
   }
 

@@ -41,11 +41,11 @@
   },
   "necropsy": {
     "name": "找尸体做尸检",
-    "radiusCells": 5,
-    "detection": 0.25,
+    "radiusCells": 12,
+    "detection": 0.6,
     "maxCarcasses": 3,
     "cost": 600,
-    "source": "一支队伍白天在约 500 米范围内沿样线搜寻新鲜尸体、蛋壳和残巢，带回剖检。找到的概率、价格为假设值（见 docs/MODEL.md）。"
+    "source": "一支队伍白天在约 600 米范围内沿样线和已知的巢位搜寻新鲜尸体、蛋壳和残巢，带回剖检。找到的概率、价格为假设值（见 docs/MODEL.md）。"
   },
   "fences": [
     {

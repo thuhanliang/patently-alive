@@ -1,4 +1,4 @@
-import { grassland, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
+import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
 import { FixedStepClock, OpLogSchema, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
   const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
-  const captures = new FieldLog(el('captures'), el('exam-card'), session.sim.species, toolData);
+  const captures = new FieldLog(el('captures'), el('exam-card'), session.sim.species, toolData, necropsyTemplates);
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
