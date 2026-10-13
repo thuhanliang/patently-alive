@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "data:fetch": "node scripts/data/fetch.mjs",
-    "data:check": "node scripts/data/check-traits.mjs"
+    "data:check": "node scripts/data/check-traits.mjs",
+    "sweep": "vitest run --config vitest.sweep.config.ts --silent=false"
   },
   "dependencies": {
     "pixi.js": "^8.22.0",
