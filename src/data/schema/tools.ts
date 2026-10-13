@@ -42,6 +42,22 @@ export const CullSchema = z.object({
 });
 
 /**
+ * 体检采样：兽医队在一处抓一种动物，称重、评体况、估年龄、看胃内容物，检查完放生。
+ * 量出来的数由引擎按动物的真实状态加测量误差算出（src/sim/exam.ts）。
+ */
+export const SampleSchema = z.object({
+  name: z.string(),
+  /** 搜捕半径（格）。 */
+  radiusCells: z.number().int().min(1),
+  /** 范围里每只目标动物被抓到的概率。 */
+  success: z.number().min(0).max(1),
+  /** 一天最多检查几只。 */
+  maxAnimals: z.number().int().min(1),
+  cost: z.number().int().min(0),
+  source: z.string(),
+});
+
+/**
  * 尸检：兽医队在一处搜一天，找新鲜尸体（死了不到几天、还没腐烂的，见 ledger.ts 的 FRESH_DAYS）带回来剖检。
  * 能找到多少看那一带最近死了多少；死因由引擎记账给出，报告的措辞在第 6 步。
  */
@@ -78,12 +94,14 @@ export const FenceTypeSchema = z.object({
 export const ToolsSchema = z.object({
   traps: z.array(TrapTypeSchema).min(1),
   cull: CullSchema,
+  sample: SampleSchema,
   necropsy: NecropsySchema,
   fences: z.array(FenceTypeSchema).min(1),
 });
 
 export type TrapType = z.infer<typeof TrapTypeSchema>;
 export type CullParams = z.infer<typeof CullSchema>;
+export type SampleParams = z.infer<typeof SampleSchema>;
 export type NecropsyParams = z.infer<typeof NecropsySchema>;
 export type FenceType = z.infer<typeof FenceTypeSchema>;
 export type Tools = z.infer<typeof ToolsSchema>;

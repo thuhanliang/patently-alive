@@ -31,6 +31,14 @@
     "satisfaction": -2,
     "source": "一支队伍一晚在约 600 米范围内用灯光搜寻、移除指定物种，只针对认得出的目标。成功率、价格为假设值（见 docs/MODEL.md）。"
   },
+  "sample": {
+    "name": "体检采样",
+    "radiusCells": 4,
+    "success": 0.15,
+    "maxAnimals": 10,
+    "cost": 1500,
+    "source": "一支队伍一天在约 400 米范围内用网、手捕或短时活捕笼抓指定物种，现场称重、评体况、估年龄，用催吐或粪便看胃内容物，检查完原地放生。抓到的概率、价格为假设值（见 docs/MODEL.md）。"
+  },
   "necropsy": {
     "name": "找尸体做尸检",
     "radiusCells": 5,

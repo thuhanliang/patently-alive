@@ -2,7 +2,7 @@ import type { Tools } from '../data';
 import { costOf, type Op } from '../sim';
 
 /**
- * 兽医箱：选工具（各种陷阱、夜间搜捕、找尸体、围栏），设好参数，打开"放置"后在地图上点。
+ * 兽医箱：选工具（各种陷阱、夜间搜捕、体检采样、找尸体、围栏），设好参数，打开"放置"后在地图上点。
  * 围栏要点两下（起点、终点，吸附到最近的格角）；其余点一下。
  * 生成的操作交给统一操作接口；花费按工具数据预先显示，接口那边再校验一遍。
  */
@@ -39,6 +39,7 @@ export function bindFieldTools(
   const tool = document.createElement('select');
   for (const t of tools.traps) tool.add(new Option(t.name, `trap:${t.id}`));
   tool.add(new Option(tools.cull.name, 'cull'));
+  tool.add(new Option(tools.sample.name, 'sample'));
   tool.add(new Option(tools.necropsy.name, 'necropsy'));
   for (const f of tools.fences) tool.add(new Option(f.name, `fence:${f.id}`));
 
@@ -66,6 +67,13 @@ export function bindFieldTools(
   const targetRow = document.createElement('div');
   targetRow.className = 'bar';
   targetRow.append(text('移除：'), target);
+
+  // 体检采样：抓哪一种（检查完放生）。
+  const sampleTarget = document.createElement('select');
+  for (const s of species) sampleTarget.add(new Option(s.name, s.id));
+  const sampleRow = document.createElement('div');
+  sampleRow.className = 'bar';
+  sampleRow.append(text('抓：'), sampleTarget, text('检查后放生'));
 
   // 找尸体：要哪个物种的（默认不限）。
   const carcass = document.createElement('select');
@@ -106,6 +114,7 @@ export function bindFieldTools(
       const remove = removeBoxes.filter((b) => b.box.checked).map((b) => b.box.value);
       return { type: 'trap', trap: id!, x, y, nights: n, remove };
     }
+    if (kind === 'sample') return { type: 'sample', species: sampleTarget.value, x, y };
     if (kind === 'necropsy') return { type: 'necropsy', species: carcass.value === '' ? null : carcass.value, x, y };
     return { type: 'cull', species: target.value, x, y };
   };
@@ -116,6 +125,7 @@ export function bindFieldTools(
     removeRow.style.display = kind === 'trap' ? '' : 'none';
     targetRow.style.display = kind === 'cull' ? '' : 'none';
     carcassRow.style.display = kind === 'necropsy' ? '' : 'none';
+    sampleRow.style.display = kind === 'sample' ? '' : 'none';
     if (kind === 'fence') {
       // 围栏按长度计价，画之前只能报单价。
       const f = tools.fences.find((t) => `fence:${t.id}` === tool.value)!;
@@ -127,7 +137,7 @@ export function bindFieldTools(
     cost.textContent = `${c.budget.toLocaleString('zh-CN')} 元，${c.staff} 支队伍 ${c.days} 天${extra}`;
   };
   tool.addEventListener('change', () => setPlacing(false));
-  for (const elm of [tool, nights, target, carcass, ...removeBoxes.map((b) => b.box)]) elm.addEventListener('change', refresh);
+  for (const elm of [tool, nights, target, carcass, sampleTarget, ...removeBoxes.map((b) => b.box)]) elm.addEventListener('change', refresh);
   nights.addEventListener('input', refresh);
   // 默认：猫笼抓到猫就移除，搜捕也默认找猫（默认值不该是本地鸟）。
   removeBoxes.find((b) => b.box.value === 'cat')?.box.setAttribute('checked', '');
@@ -136,7 +146,7 @@ export function bindFieldTools(
 
   const panel = document.createElement('div');
   panel.className = 'panel';
-  panel.append(title, row1, removeRow, targetRow, carcassRow, cost);
+  panel.append(title, row1, removeRow, targetRow, sampleRow, carcassRow, cost);
   host.appendChild(panel);
 
   return {

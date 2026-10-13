@@ -74,6 +74,8 @@ export interface SimState {
   necropsies: NecropsySearch[];
   /** 已经完工的围栏。 */
   fences: Fence[];
+  /** 各物种各格最近一次每日结算吃饱的程度（占日需求的比例）；体检看体况用。开局当作吃饱。 */
+  fedLast: Float64Array[];
 }
 
 function cellArea(config: SimConfig): number {
@@ -106,6 +108,7 @@ export function createInitialState(config: SimConfig): SimState {
     captures: [],
     necropsies: [],
     fences: [],
+    fedLast: populations.map(() => new Float64Array(grid.width * grid.height).fill(1)),
   };
 }
 
@@ -254,6 +257,16 @@ export class Sim {
     return id;
   }
 
+  /** 体检采样：在 (x, y) 一带抓物种 species 检查后放生。只该由统一操作接口调用。 */
+  sample(species: number, x: number, y: number): number {
+    if (!this.s.config.tools) throw new RangeError('这片世界没有兽医工具');
+    if (!this.derived[species]) throw new RangeError(`没有这个物种：${species}`);
+    this.checkLand(x, y);
+    const id = this.s.nextJobId++;
+    this.s.jobs.push({ kind: 'sample', id, x, y, nightsLeft: 1, species });
+    return id;
+  }
+
   /** 找尸体：在 (x, y) 一带搜一天，species 为 −1 时不限物种。只该由统一操作接口调用。 */
   necropsy(species: number, x: number, y: number): number {
     if (!this.s.config.tools) throw new RangeError('这片世界没有兽医工具');
@@ -361,6 +374,7 @@ export class Sim {
       species: this.derived,
       traps: tools?.traps ?? [],
       cull: tools?.cull,
+      sample: tools?.sample,
       necropsy: tools?.necropsy,
       populations: this.s.populations,
       individuals: this.s.individuals,
@@ -373,6 +387,7 @@ export class Sim {
       blockOf: this.blocks.blockOf,
       captures: this.s.captures,
       necropsies: this.s.necropsies,
+      fedLast: this.s.fedLast,
       blockCells: this.blocks.cellsIn,
       fences: this.s.fences,
       removedIndividuals,
@@ -423,6 +438,7 @@ export class Sim {
       land: this.land,
       ledger: this.s.deaths,
       barriers: this.barriers,
+      fedLast: this.s.fedLast,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {

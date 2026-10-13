@@ -134,6 +134,8 @@ export interface DailyContext {
   land: Int32Array;
   /** 死因账本：每笔死亡记在这里（见 ledger.ts）。 */
   ledger: DeathLedger;
+  /** 各物种各格当天吃饱的程度（占日需求的比例；空格子是"一只动物在这里能吃饱多少"），体检看体况用（见 exam.ts）。 */
+  fedLast?: Float64Array[] | undefined;
   /** 围栏挡住的格边（见 fence.ts），按物种；成体和出了窝的幼体各一套。没有围栏时可以不给。 */
   barriers?: { adult: readonly (Barrier | null)[]; juvenile: readonly (Barrier | null)[] } | undefined;
 }
@@ -165,9 +167,10 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
     forage(ctx, c, fed.invertebrate);
     const block = blockOf[c]!;
     for (let s = 0; s < species.length; s++) {
-      if (countAt(populations[s]!, c) > 0) {
-        lifeCycle(ctx, s, c, combineFed(species[s]!, fed, s), crowding[s]![block]!, stats[s]!);
-      }
+      // 空格子也记：今天扩散进来的动物明天被抓到时，体况按这一格的食物算。
+      const f = combineFed(species[s]!, fed, s);
+      if (ctx.fedLast) ctx.fedLast[s]![c] = f;
+      if (countAt(populations[s]!, c) > 0) lifeCycle(ctx, s, c, f, crowding[s]![block]!, stats[s]!);
     }
   }
 

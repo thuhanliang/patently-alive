@@ -1,4 +1,5 @@
-import type { CullParams, NecropsyParams, TrapType } from '../data/schema/tools';
+import type { CullParams, NecropsyParams, SampleParams, TrapType } from '../data/schema/tools';
+import { blockCounter, examine, type Exam, type ExamContext, type Subject } from './exam';
 import type { Fence } from './fence';
 import type { Grid } from './grid';
 import type { Individuals } from './individuals';
@@ -27,8 +28,8 @@ import { TERRAIN } from './terrain';
 export const TRAP_ENCOUNTER = 1;
 /** 陷阱的吸引范围最大多少格（限制计算量）。 */
 export const MAX_CATCHMENT_CELLS = 25;
-/** 捕获记录最多留多少条（最近的）。 */
-export const CAPTURE_LOG = 300;
+/** 捕获记录（含采样）最多留多少条（最近的）。 */
+export const CAPTURE_LOG = 500;
 /** 尸检记录最多留多少次搜寻（最近的）。 */
 export const NECROPSY_LOG = 50;
 
@@ -46,6 +47,16 @@ export interface TrapJob {
 
 export interface CullJob {
   kind: 'cull';
+  id: number;
+  x: number;
+  y: number;
+  nightsLeft: number;
+  species: number;
+}
+
+/** 体检采样：在 (x, y) 一带抓一种动物，检查完放生。 */
+export interface SampleJob {
+  kind: 'sample';
   id: number;
   x: number;
   y: number;
@@ -74,7 +85,7 @@ export interface FenceJob {
   fence: Fence;
 }
 
-export type Job = TrapJob | CullJob | NecropsyJob | FenceJob;
+export type Job = TrapJob | CullJob | SampleJob | NecropsyJob | FenceJob;
 
 /** 找到的一具尸体：哪个物种、死因（引擎记账，见 ledger.ts）、在哪一格、死了几天。 */
 export interface Carcass {
@@ -97,17 +108,12 @@ export interface NecropsySearch {
   found: Carcass[];
 }
 
-/** 一条捕获记录：哪天、哪组陷阱、抓到什么、怎么处理的。 */
-export interface Capture {
+/** 一条捕获记录：哪天、哪组陷阱（或采样）、抓到的这只的体检结果、怎么处理的。 */
+export interface Capture extends Exam {
   day: number;
   job: number;
-  /** 陷阱类型（tools.traps 的下标）。 */
+  /** 陷阱类型（tools.traps 的下标）；−1 是体检采样。 */
   trap: number;
-  species: number;
-  x: number;
-  y: number;
-  juvenile: boolean;
-  female: boolean;
   removed: boolean;
 }
 
@@ -115,6 +121,7 @@ export interface JobContext {
   species: readonly DerivedSpecies[];
   traps: readonly TrapType[];
   cull: CullParams | undefined;
+  sample: SampleParams | undefined;
   necropsy: NecropsyParams | undefined;
   populations: Population[];
   individuals: Individuals;
@@ -127,6 +134,8 @@ export interface JobContext {
   blockOf: Int32Array;
   captures: Capture[];
   necropsies: NecropsySearch[];
+  /** 各物种各格最近一次吃饱的程度（体检看体况）。 */
+  fedLast: Float64Array[];
   /** 每个区块有几格陆地。 */
   blockCells: Float64Array;
   /** 完工的围栏加进这里。 */
@@ -179,6 +188,7 @@ export function runJobs(jobs: Job[], ctx: JobContext): Job[] {
   for (const job of jobs) {
     if (job.kind === 'trap') trapNight(job, ctx);
     else if (job.kind === 'cull') cullNight(job, ctx);
+    else if (job.kind === 'sample') sampleDay(job, ctx);
     else if (job.kind === 'necropsy') necropsyDay(job, ctx);
     else if (job.nightsLeft === 1) ctx.fences.push({ ...job.fence });
     job.nightsLeft -= 1;
@@ -226,27 +236,16 @@ function trapNight(job: TrapJob, ctx: JobContext): void {
   // 笼子比进笼的少时，随机挑哪些被关住。
   let total = visitors.reduce((a, v) => a + v.n, 0);
   for (let cage = 0; cage < trap.cages && total > 0; cage++) {
-    let pick = rng.nextInt(total);
-    let v = visitors[0]!;
-    for (const cand of visitors) {
-      if (pick < cand.n) {
-        v = cand;
-        break;
-      }
-      pick -= cand.n;
-    }
-    v.n -= 1;
+    const v = takeOne(rng, visitors, total);
     total -= 1;
     catchOne(job, v, ctx);
   }
 }
 
 function catchOne(job: TrapJob, v: Visitor, ctx: JobContext): void {
-  const { species, populations, rng, grid } = ctx;
+  const { populations } = ctx;
   const remove = job.remove.includes(v.s);
-  const sp = species[v.s]!;
-  const juvenile = v.stage >= 0 || (v.stage === -2 && juvenileStageAt(sp, ctx.individuals.born[v.ind]!, ctx.day) < sp.juvenileStages);
-  const female = v.stage === -2 ? ctx.individuals.female[v.ind] === 1 : rng.nextInt(2) === 1;
+  const exam = examine(subjectOf(v), examContext(ctx));
   if (remove) {
     const pop = populations[v.s]!;
     if (v.stage === -1) pop.adults[v.c] = pop.adults[v.c]! - 1;
@@ -255,8 +254,78 @@ function catchOne(job: TrapJob, v: Visitor, ctx: JobContext): void {
     ctx.stats[v.s]!.removed += 1;
     recordDeaths(ctx.ledger, v.s, CAUSE.removed, ctx.blockOf[v.c]!, 1);
   }
-  ctx.captures.push({ day: ctx.day, job: job.id, trap: job.trap, species: v.s, x: v.c % grid.width, y: Math.floor(v.c / grid.width), juvenile, female, removed: remove });
+  logCapture(ctx, { ...exam, day: ctx.day, job: job.id, trap: job.trap, removed: remove });
+}
+
+function subjectOf(v: Visitor): Subject {
+  return v.stage === -2 ? { kind: 'individual', i: v.ind } : { kind: 'cohort', s: v.s, c: v.c, stage: v.stage };
+}
+
+/** 一晚的体检共用一个上下文（区块只数的缓存也共用）。 */
+const examContexts = new WeakMap<JobContext, ExamContext>();
+
+function examContext(ctx: JobContext): ExamContext {
+  const cached = examContexts.get(ctx);
+  if (cached) return cached;
+  const ec: ExamContext = {
+    species: ctx.species,
+    populations: ctx.populations,
+    individuals: ctx.individuals,
+    fedLast: ctx.fedLast,
+    ledger: ctx.ledger,
+    blockOf: ctx.blockOf,
+    width: ctx.grid.width,
+    day: ctx.day,
+    rng: ctx.rng,
+    countInBlock: blockCounter(ctx.populations, ctx.individuals, ctx.blockOf, ctx.grid.width),
+  };
+  examContexts.set(ctx, ec);
+  return ec;
+}
+
+function logCapture(ctx: JobContext, cap: Capture): void {
+  ctx.captures.push(cap);
   if (ctx.captures.length > CAPTURE_LOG) ctx.captures.splice(0, ctx.captures.length - CAPTURE_LOG);
+}
+
+/**
+ * 体检采样：范围里目标物种的成体和出了窝的幼体，每只以 success 的概率被抓到；最多检查 maxAnimals 只（多了随机挑），
+ * 检查完当场放生，结果记进捕获记录（trap = −1）。
+ */
+function sampleDay(job: SampleJob, ctx: JobContext): void {
+  const params = ctx.sample;
+  if (!params) return;
+  const { populations, individuals: ind, grid, rng } = ctx;
+  const s = job.species;
+  const sp = ctx.species[s]!;
+  const pop = populations[s]!;
+  const caught: Visitor[] = [];
+  for (const c of landWithin(grid, job.x, job.y, params.radiusCells)) {
+    const na = binomial(rng, pop.adults[c]!, params.success);
+    if (na > 0) caught.push({ s, c, stage: -1, ind: -1, n: na });
+    for (let k = sp.nestStages; k < pop.juveniles.length; k++) {
+      const nj = binomial(rng, pop.juveniles[k]![c]!, params.success);
+      if (nj > 0) caught.push({ s, c, stage: k, ind: -1, n: nj });
+    }
+  }
+  const r2 = params.radiusCells * params.radiusCells;
+  for (let i = 0; i < ind.count; i++) {
+    if (ind.species[i] !== s || ctx.removedIndividuals[i]) continue;
+    const dx = ind.x[i]! - (job.x + 0.5);
+    const dy = ind.y[i]! - (job.y + 0.5);
+    if (dx * dx + dy * dy > r2) continue;
+    if (juvenileStageAt(sp, ind.born[i]!, ctx.day) < sp.nestStages) continue;
+    if (rng.nextFloat() < params.success) {
+      caught.push({ s, c: Math.floor(ind.y[i]!) * grid.width + Math.floor(ind.x[i]!), stage: -2, ind: i, n: 1 });
+    }
+  }
+  let total = caught.reduce((a, v) => a + v.n, 0);
+  for (let k = 0; k < params.maxAnimals && total > 0; k++) {
+    const v = takeOne(rng, caught, total);
+    total -= 1;
+    const exam = examine(subjectOf(v), examContext(ctx));
+    logCapture(ctx, { ...exam, day: ctx.day, job: job.id, trap: -1, removed: false });
+  }
 }
 
 /** 夜间搜捕：范围里目标物种的成体和出了窝的幼体，每只以 success 的概率被找到、移除。 */
@@ -331,16 +400,7 @@ function necropsyDay(job: NecropsyJob, ctx: JobContext): void {
   const found: Carcass[] = [];
   let total = seen.reduce((a, v) => a + v.n, 0);
   while (found.length < params.maxCarcasses && total > 0) {
-    let pick = rng.nextInt(total);
-    let v = seen[0]!;
-    for (const cand of seen) {
-      if (pick < cand.n) {
-        v = cand;
-        break;
-      }
-      pick -= cand.n;
-    }
-    v.n -= 1;
+    const v = takeOne(rng, seen, total);
     total -= 1;
     const i = freshIndex(ledger, freshSlotAgo(ledger, v.ago), v.s, v.cause, v.block);
     ledger.fresh[i] = ledger.fresh[i]! - 1;
@@ -350,4 +410,17 @@ function necropsyDay(job: NecropsyJob, ctx: JobContext): void {
   }
   ctx.necropsies.push({ day: ctx.day, job: job.id, x: job.x, y: job.y, species: job.species, found });
   if (ctx.necropsies.length > NECROPSY_LOG) ctx.necropsies.splice(0, ctx.necropsies.length - NECROPSY_LOG);
+}
+
+/** 从按只数加权的候选里随机取一只（候选的 n 减一）。total 是所有候选 n 的和，必须大于 0。 */
+function takeOne<T extends { n: number }>(rng: Rng, list: T[], total: number): T {
+  let pick = rng.nextInt(total);
+  for (const cand of list) {
+    if (pick < cand.n) {
+      cand.n -= 1;
+      return cand;
+    }
+    pick -= cand.n;
+  }
+  throw new Error('takeOne：total 和候选的只数对不上');
 }

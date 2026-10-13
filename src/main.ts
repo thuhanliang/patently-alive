@@ -8,7 +8,7 @@ import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
 import { DeathPanel } from './ui/deathPanel';
-import { CapturePanel } from './ui/capturePanel';
+import { FieldLog } from './ui/fieldLog';
 import { bindFieldTools } from './ui/fieldTools';
 import { bindLayerControls } from './ui/layerControls';
 import { bindTimeControls } from './ui/timeControls';
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
   const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
-  const captures = new CapturePanel(el('captures'), session.sim.species.map((s) => s.params.name), toolData);
+  const captures = new FieldLog(el('captures'), el('exam-card'), session.sim.species, toolData);
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
         return;
       }
       if (submit(op)) {
-        status.textContent = placedText(op);
+        status.textContent = placedText(op, (id) => session.sim.species.find((x) => x.params.id === id)?.params.name ?? id);
         field.stop();
       }
       return;
@@ -215,12 +215,14 @@ async function main(): Promise<void> {
 }
 
 /** 放置成功后状态栏的说明。 */
-function placedText(op: Op): string {
+function placedText(op: Op, nameOf: (id: string) => string): string {
   switch (op.type) {
     case 'trap':
       return `在 (${op.x}, ${op.y}) 布了陷阱，${op.nights} 晚`;
     case 'cull':
       return `今晚在 (${op.x}, ${op.y}) 一带搜捕`;
+    case 'sample':
+      return `今天在 (${op.x}, ${op.y}) 一带抓${nameOf(op.species)}做体检，傍晚有结果`;
     case 'necropsy':
       return `今天在 (${op.x}, ${op.y}) 一带找尸体，傍晚带回来`;
     case 'fence':
