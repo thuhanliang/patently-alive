@@ -1,4 +1,5 @@
 import type { Grid } from './grid';
+import { TERRAIN, crossesWater } from './terrain';
 import {
   CROWDING_BLOCK_CELLS,
   FED_SUFFICIENT,
@@ -92,6 +93,7 @@ export function createPopulation(
   const adults = new Int32Array(n);
   const mean = (species.params.initialDensityPerHa * cellAreaM2) / 10_000;
   for (let i = 0; i < n; i++) {
+    if (grid.terrain[i] === TERRAIN.water) continue;
     // 开局分布有起伏：均值附近的二项抽样，均值很小时退化成按概率放一只。
     const trials = Math.max(1, Math.ceil(mean * 2));
     adults[i] = mean >= 1 ? binomial(rng, trials, mean / trials) : stochasticRound(rng, mean);
@@ -159,8 +161,15 @@ export function crowdingBlockOf(width: number, x: number, y: number): number {
   return Math.floor(y / CROWDING_BLOCK_CELLS) * bw + Math.floor(x / CROWDING_BLOCK_CELLS);
 }
 
-/** 每格属于哪个区块，以及每个区块有几格（边缘区块不满）。地图建好后算一次。 */
-export function crowdingBlocks(width: number, height: number): { blockOf: Int32Array; cellsIn: Float64Array } {
+/**
+ * 每格属于哪个区块，以及每个区块有几格陆地（边缘区块不满，海岸区块有水）。地图建好后算一次。
+ * 拥挤程度按陆地格数算：动物只住在陆地上。全是水的区块记 1 格，免得除以 0（里面也不会有动物）。
+ */
+export function crowdingBlocks(
+  width: number,
+  height: number,
+  terrain?: Uint8Array,
+): { blockOf: Int32Array; cellsIn: Float64Array } {
   const bw = Math.ceil(width / CROWDING_BLOCK_CELLS);
   const bh = Math.ceil(height / CROWDING_BLOCK_CELLS);
   const blockOf = new Int32Array(width * height);
@@ -169,9 +178,10 @@ export function crowdingBlocks(width: number, height: number): { blockOf: Int32A
     for (let x = 0; x < width; x++) {
       const b = crowdingBlockOf(width, x, y);
       blockOf[y * width + x] = b;
-      cellsIn[b] = cellsIn[b]! + 1;
+      if (!terrain || terrain[y * width + x] !== TERRAIN.water) cellsIn[b] = cellsIn[b]! + 1;
     }
   }
+  for (let b = 0; b < cellsIn.length; b++) if (cellsIn[b] === 0) cellsIn[b] = 1;
   return { blockOf, cellsIn };
 }
 
@@ -429,12 +439,13 @@ function dieOff(rng: Rng, n: number, base: number, starve: number, st: DayStats)
 }
 
 /**
- * 扩散：每格有一部分个体离开，落到半径 r 内的随机一格；落到地图外就留在原地。
+ * 扩散：每格有一部分个体离开，落到半径 r 内的随机一格；落到地图外、水里，或者路上要过水，就留在原地。
+ * 所以离岸小岛和主岛之间，靠扩散是过不去的（以后要做"会游泳"的性状再改）。
  * 先把移动量写进暂存数组，最后一起加回去，结果与遍历顺序无关。
  */
 function disperse(ctx: DailyContext, s: number, counts: Int32Array): void {
   const sp = ctx.species[s]!;
-  const { width, height } = ctx.grid;
+  const { width, height, terrain } = ctx.grid;
   const rng = ctx.rng;
   const incoming = ctx.scratch;
   incoming.fill(0);
@@ -450,6 +461,7 @@ function disperse(ctx: DailyContext, s: number, counts: Int32Array): void {
     const nx = x + dx;
     const ny = y + dy;
     if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+    if (crossesWater(terrain, width, x + 0.5, y + 0.5, nx + 0.5, ny + 0.5)) return;
     counts[c] = counts[c]! - k;
     incoming[ny * width + nx] = incoming[ny * width + nx]! + k;
   };

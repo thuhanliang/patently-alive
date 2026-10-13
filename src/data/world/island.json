@@ -1,0 +1,28 @@
+{
+  "name": "鸟岛",
+  "width": 128,
+  "height": 128,
+  "cellSizeM": 50,
+  "fertility": { "min": 0.35, "max": 1, "patchSize": 20 },
+  "terrain": {
+    "kind": "island",
+    "mainRadius": 0.72,
+    "coastRoughness": 0.28,
+    "coastPatchSize": 14,
+    "islets": { "count": 3, "minRadius": 4, "maxRadius": 7, "minGapCells": 10 },
+    "shrubFraction": 0.35,
+    "shrubPatchSize": 12,
+    "fertilityBy": { "coast": 0.35, "grass": 1, "shrub": 0.8 }
+  },
+  "vegetation": {
+    "maxBiomass": 450,
+    "floorBiomass": 8,
+    "initialFraction": 0.35,
+    "growthRate": 0.08,
+    "growthByMonth": [0.6, 1.0, 1.0, 0.75, 0.45, 0.4, 0.5, 0.45, 0.25, 0.0, 0.0, 0.15],
+    "decayByMonth": [0.002, 0.002, 0.003, 0.005, 0.007, 0.007, 0.008, 0.012, 0.015, 0.01, 0.008, 0.004]
+  },
+  "weather": { "persistence": 0.85, "min": 0.4, "max": 1.6 },
+  "species": ["vole", "rabbit", "weasel", "stoat"],
+  "source": "地形为手调值：主岛约 4.6 公里宽（50 米一格），三座离岸小岛与主岛隔 500 米以上的水。植被参数暂时沿用温带草原（【未核对】，第 2 步换成岛上的植被与物种时一起核对）。物种暂用阶段 0 的四种占位，第 2 步换成鸟、猫、鼠、兔。"
+}

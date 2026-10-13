@@ -2,6 +2,7 @@ import { SimConfigSchema, type SimConfig } from './config';
 import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
 import { createGrid, growVegetation, type Grid } from './grid';
+import { isLand } from './terrain';
 import { deriveAll, type DerivedSpecies } from './physiology';
 import {
   createPopulation,
@@ -101,7 +102,7 @@ export class Sim {
     this.rng = Rng.fromState(this.s.rng);
     ({ derived: this.derived, prey: this.prey } = deriveAll(this.s.config.species, this.s.config.world.cellSizeM));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
-    this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height);
+    this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height, this.s.grid.terrain);
   }
 
   static create(config: SimConfig): Sim {
@@ -162,6 +163,7 @@ export class Sim {
     }
     if (!Number.isInteger(count) || count < 1) throw new RangeError(`投放数量不合法：${count}`);
     const c = y * width + x;
+    if (!isLand(this.s.grid.terrain[c]!)) throw new RangeError(`不能投放到水里：(${x}, ${y})`);
     const pop = this.s.populations[speciesIndex]!;
     pop.adults[c] = pop.adults[c]! + count;
     this.s.dayAccum[speciesIndex]!.released += count;
