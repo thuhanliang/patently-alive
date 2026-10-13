@@ -1,17 +1,16 @@
-import type { FixedStepClock } from '../sim';
-
 const SPEEDS = [1, 10, 100] as const;
 
 /**
  * 时间控制：暂停 / 继续（空格）、单步一天（.）、倍速 1 / 10 / 100（[ ] 切换）。
- * 只影响"多快看到"，不影响推演结果；第 5 步改成走统一操作接口、写进操作日志。
+ * 调速和暂停走统一操作接口（写进操作日志）；单步只是推进时间。
  */
 export function bindTimeControls(
   bar: HTMLElement,
-  clock: FixedStepClock,
+  getSpeed: () => number,
+  setSpeed: (speed: number) => void,
   stepOneDay: () => void,
 ): () => void {
-  let resumeSpeed = clock.speed > 0 ? clock.speed : 1;
+  let resumeSpeed = getSpeed() > 0 ? getSpeed() : 1;
 
   const button = (label: string, onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
@@ -22,43 +21,43 @@ export function bindTimeControls(
   };
 
   const togglePause = (): void => {
-    if (clock.speed > 0) {
-      resumeSpeed = clock.speed;
-      clock.speed = 0;
+    if (getSpeed() > 0) {
+      resumeSpeed = getSpeed();
+      setSpeed(0);
     } else {
-      clock.speed = resumeSpeed;
+      setSpeed(resumeSpeed);
     }
-    clock.reset();
   };
-  const setSpeed = (s: number): void => {
+  const choose = (s: number): void => {
     resumeSpeed = s;
-    clock.speed = s;
+    setSpeed(s);
+  };
+  const step = (): void => {
+    if (getSpeed() > 0) togglePause();
+    stepOneDay();
   };
 
   const pauseBtn = button('暂停 [空格]', togglePause);
-  button('单步一天 [.]', () => {
-    if (clock.speed > 0) togglePause();
-    stepOneDay();
-  });
-  const speedBtns = SPEEDS.map((s) => [s, button(`${s}x`, () => setSpeed(s))] as const);
+  button('单步一天 [.]', step);
+  const speedBtns = SPEEDS.map((s) => [s, button(`${s}x`, () => choose(s))] as const);
 
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (e.key === ' ') {
       e.preventDefault();
       togglePause();
     } else if (e.key === '.') {
-      if (clock.speed > 0) togglePause();
-      stepOneDay();
+      step();
     } else if (e.key === ']' || e.key === '[') {
       const i = SPEEDS.indexOf(resumeSpeed as (typeof SPEEDS)[number]);
-      const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, (i < 0 ? 0 : i) + (e.key === ']' ? 1 : -1)))]!;
-      setSpeed(next);
+      choose(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, (i < 0 ? 0 : i) + (e.key === ']' ? 1 : -1)))]!);
     }
   });
 
   return () => {
-    pauseBtn.textContent = clock.speed > 0 ? '暂停 [空格]' : '继续 [空格]';
-    pauseBtn.classList.toggle('active', clock.speed === 0);
-    for (const [s, b] of speedBtns) b.classList.toggle('active', clock.speed > 0 && clock.speed === s);
+    const speed = getSpeed();
+    pauseBtn.textContent = speed > 0 ? '暂停 [空格]' : '继续 [空格]';
+    pauseBtn.classList.toggle('active', speed === 0);
+    for (const [s, b] of speedBtns) b.classList.toggle('active', speed > 0 && speed === s);
   };
 }

@@ -75,7 +75,13 @@ export class GreyboxView {
 
   setLayer(layer: DataLayer): void {
     this.layer = layer;
-    this.lastDay = -1; // 下一帧重画
+    this.redraw();
+  }
+
+  /** 下一帧强制重画格子和个体（换了一局、投放了动物时用）。 */
+  redraw(): void {
+    this.lastDay = -1;
+    this.lastTick = -1;
   }
 
   draw(state: Readonly<SimState>): void {

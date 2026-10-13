@@ -14,10 +14,11 @@ import {
   type DayStats,
   type Population,
 } from './population';
-import { FOCUS_BLOCK, FOCUS_MAX_CELLS, sameFocus, type FocusRect } from './focus';
+import { FOCUS_BLOCK, FOCUS_MAX_CELLS, inFocus, sameFocus, type FocusRect } from './focus';
 import {
   absorbImmigrants,
   applyFocus,
+  expandCell,
   countBySpecies,
   createIndividuals,
   individualsDaily,
@@ -122,6 +123,12 @@ export class Sim {
    * 关注区会影响推演结果，第 5 步改成写进操作日志的操作。
    */
   setFocus(focus: FocusRect | null): void {
+    this.validateFocus(focus);
+    this.s.requestedFocus = focus ? { ...focus } : null;
+  }
+
+  /** 关注区不合法时抛出 RangeError（在地图内、左上角对齐、边长不超过上限）。 */
+  validateFocus(focus: FocusRect | null): void {
     if (focus) {
       const { width, height } = this.s.grid;
       const { x0, y0, x1, y1 } = focus;
@@ -137,7 +144,35 @@ export class Sim {
         );
       }
     }
-    this.s.requestedFocus = focus ? { ...focus } : null;
+  }
+
+  /**
+   * 在 (x, y) 格投放 count 只成体。立即生效；那一格在关注区里就直接展开成个体。
+   * 计入当天账目的 released。只该由统一操作接口调用（它负责校验和写日志）。
+   */
+  release(speciesIndex: number, x: number, y: number, count: number): void {
+    const { width, height } = this.s.grid;
+    const sp = this.derived[speciesIndex];
+    if (!sp || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height) {
+      throw new RangeError(`投放位置或物种不合法：${speciesIndex} @ (${x}, ${y})`);
+    }
+    if (!Number.isInteger(count) || count < 1) throw new RangeError(`投放数量不合法：${count}`);
+    const c = y * width + x;
+    const pop = this.s.populations[speciesIndex]!;
+    pop.adults[c] = pop.adults[c]! + count;
+    this.s.dayAccum[speciesIndex]!.released += count;
+    if (inFocus(this.s.focus, x, y)) {
+      expandCell(
+        this.s.individuals,
+        this.derived,
+        this.s.populations,
+        width,
+        c,
+        this.rng,
+        (this.s.tick % TICKS_PER_DAY) / TICKS_PER_DAY,
+      );
+      this.s.rng = this.rng.state();
+    }
   }
 
   /** 每个物种的总数：格子计数 + 待合并计数 + 展开的个体。 */
@@ -240,6 +275,7 @@ export class Sim {
       deathsPredation: c.deathsPredation + acc[s]!.deathsPredation,
       deathsStarvation: c.deathsStarvation + acc[s]!.deathsStarvation,
       deathsOther: c.deathsOther + acc[s]!.deathsOther,
+      released: acc[s]!.released,
     }));
     this.s.dayAccum = this.derived.map(() => emptyDayStats());
   }

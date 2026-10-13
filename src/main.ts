@@ -1,5 +1,6 @@
 import { grassland, grasslandSpecies } from './data';
-import { FixedStepClock, Sim, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect } from './sim';
+import { FixedStepClock, Session, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { worldToCell } from './render/projection';
 import { GreyboxView } from './render/view';
 import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
@@ -7,9 +8,9 @@ import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
 import { bindLayerControls } from './ui/layerControls';
 import { bindTimeControls } from './ui/timeControls';
+import { bindToolControls } from './ui/toolControls';
 
-// 地址栏 ?seed=123 可以换种子，?speed=10 可以换开局倍速；不合法时用默认值。
-// （正式的"改种子 / 调速"操作在第 5 步走统一操作接口。）
+// 地址栏 ?seed=123 指定开局种子，?speed=10 指定开局倍速（开局倍速也作为一条操作记进日志）。
 function intParam(name: string, fallback: number, max: number): number {
   const raw = new URLSearchParams(location.search).get(name);
   const n = raw === null ? NaN : Number(raw);
@@ -23,45 +24,103 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 async function main(): Promise<void> {
-  const sim = Sim.create({ seed: intParam('seed', 1, 0xffff_ffff), world: grassland, species: grasslandSpecies });
+  const newSession = (seed: number): Session => new Session({ seed, world: grassland, species: grasslandSpecies });
+  let session = newSession(intParam('seed', 1, 0xffff_ffff));
+
   // 一帧最多推进两天：推演每天要算整张地图，再多画面就卡了。倍速太高时实际速度会低于设定。
   const clock = new FixedStepClock({ stepMs: 50, maxStepsPerFrame: TICKS_PER_DAY * 2 });
-  clock.speed = intParam('speed', 1, 1000);
-
-  const view = await GreyboxView.mount(el('app'), sim.state, sim.species);
+  const view = await GreyboxView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
-  const names = sim.species.map((s) => s.params.name);
+  const status = el('status');
+  const names = session.sim.species.map((s) => s.params.name);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(el<HTMLCanvasElement>('chart'), history, grassland.vegetation.maxBiomass);
 
-  const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'));
+  /** 所有玩家操作都从这里进统一操作接口；被拒绝时在状态栏说明原因。 */
+  const submit = (op: Op): boolean => {
+    const r = session.submit(op);
+    status.textContent = r.ok ? '' : `操作被拒绝：${r.reason}`;
+    return r.ok;
+  };
+
+  const restart = (next: Session): void => {
+    session = next;
+    clock.reset();
+    history.clear();
+    history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
+    view.redraw();
+  };
+  submit({ type: 'setSpeed', speed: intParam('speed', 1, 1000) });
+
+  const tools = bindToolControls(
+    el('tool-bar'),
+    session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    {
+      reseed: (seed) => {
+        const speed = session.speed;
+        restart(newSession(seed));
+        submit({ type: 'setSpeed', speed });
+      },
+      exportLog: () => session.exportLog(),
+      importLog: (json) => {
+        try {
+          const next = Session.replay(json);
+          const { width, height } = next.sim.state.grid;
+          if (width !== session.sim.state.grid.width || height !== session.sim.state.grid.height) {
+            status.textContent = '这份日志的地图尺寸和当前不同，暂不支持';
+            return;
+          }
+          restart(next);
+          status.textContent = `已回放到第 ${next.sim.tick} tick`;
+        } catch (e) {
+          status.textContent = `日志无法回放：${(e as Error).message}`;
+        }
+      },
+    },
+  );
+
+  const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'), (screen) => {
+    if (!tools.isReleasing()) return;
+    const cell = worldToCell(view.camera.screenToWorld(screen));
+    const { id, count } = tools.releaseChoice();
+    if (submit({ type: 'release', species: id, x: cell.x, y: cell.y, count })) {
+      status.textContent = `在 (${cell.x}, ${cell.y}) 投放了 ${count} 只`;
+      view.redraw();
+    }
+  });
   bindLayerControls(el('layer-bar'), names, (layer) => view.setLayer(layer));
 
   const advance = (ticks: number): void => {
     for (let i = 0; i < ticks; i++) {
-      sim.step();
-      if (sim.tick % TICKS_PER_DAY === 0) history.record(sim.tick / TICKS_PER_DAY, sim.state);
+      session.advance(1);
+      if (session.sim.tick % TICKS_PER_DAY === 0) history.record(session.sim.tick / TICKS_PER_DAY, session.sim.state);
     }
   };
-  history.record(0, sim.state);
-  const syncTime = bindTimeControls(el('time-bar'), clock, () => advance(TICKS_PER_DAY - (sim.tick % TICKS_PER_DAY)));
+  history.record(0, session.sim.state);
+  const syncTime = bindTimeControls(
+    el('time-bar'),
+    () => session.speed,
+    (speed) => submit({ type: 'setSpeed', speed }),
+    () => advance(TICKS_PER_DAY - (session.sim.tick % TICKS_PER_DAY)),
+  );
 
   // 镜头放大到地块档时，以画面中心为准请求关注区；拉远时全部收拢。
-  // （关注区会影响推演结果，第 5 步改成走统一操作接口、写进操作日志。）
+  // 关注区会影响推演结果，所以作为一条操作提交，写进日志。
   const syncFocus = (): void => {
     let want: FocusRect | null = null;
     if (view.closeUp) {
       const v = view.visibleCells();
-      want = focusAround(v.cx, v.cy, v.w, v.h, sim.state.grid.width, sim.state.grid.height);
+      want = focusAround(v.cx, v.cy, v.w, v.h, session.sim.state.grid.width, session.sim.state.grid.height);
     }
-    if (!sameFocus(want, sim.state.requestedFocus)) sim.setFocus(want);
+    if (!sameFocus(want, session.sim.state.requestedFocus)) submit({ type: 'setFocus', focus: want });
   };
 
   view.ticker.add((ticker) => {
     syncFocus();
+    clock.speed = session.speed;
     advance(clock.advance(ticker.deltaMS));
-    view.draw(sim.state);
-    hud.update(sim.state, clock.speed);
+    view.draw(session.sim.state);
+    hud.update(session.sim.state, session.speed, session.entries.length);
     chart.draw();
     syncCamera();
     syncTime();

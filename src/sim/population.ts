@@ -41,10 +41,12 @@ export interface DayStats {
   deathsPredation: number;
   deathsStarvation: number;
   deathsOther: number;
+  /** 玩家投放进来的数量。 */
+  released: number;
 }
 
 export function emptyDayStats(total = 0): DayStats {
-  return { total, births: 0, deathsPredation: 0, deathsStarvation: 0, deathsOther: 0 };
+  return { total, births: 0, deathsPredation: 0, deathsStarvation: 0, deathsOther: 0, released: 0 };
 }
 
 /** 按体型折算的数量：幼体算半只（食量、作为猎物的体重都按这个算）。 */
