@@ -39,3 +39,14 @@ describe('状态数据工具', () => {
     expect(() => serialize({ x: Infinity })).toThrow(RangeError);
   });
 });
+
+describe('状态数据工具的边界情况', () => {
+  it('类型化数组里的非有限数也拒绝序列化', () => {
+    expect(() => serialize({ f: Float64Array.from([1, Number.NaN]) })).toThrow(RangeError);
+  });
+
+  it('不是自己标签的 $ 键当普通数据处理', () => {
+    const odd = { $toString: [1, 2] };
+    expect(deserialize<typeof odd>(JSON.stringify(odd))).toEqual(odd);
+  });
+});

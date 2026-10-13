@@ -16,3 +16,11 @@ describe('数据文件校验', () => {
     });
   }
 });
+
+describe('世界 schema 的取值约束', () => {
+  it('min 大于 max 时拒绝', () => {
+    const base = worlds[Object.keys(worlds)[0]!] as Record<string, Record<string, unknown>>;
+    expect(WorldParamsSchema.safeParse({ ...base, fertility: { ...base.fertility, min: 0.9, max: 0.2 } }).success).toBe(false);
+    expect(WorldParamsSchema.safeParse({ ...base, weather: { ...base.weather, min: 2, max: 1 } }).success).toBe(false);
+  });
+});

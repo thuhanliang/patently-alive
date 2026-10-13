@@ -19,7 +19,7 @@ export const WorldParamsSchema = z.object({
     max: z.number().min(0).max(1),
     /** 肥力噪声的特征尺度（格）。越大斑块越大。 */
     patchSize: z.number().int().min(2),
-  }),
+  }).refine((f) => f.min <= f.max, { message: 'fertility.min 不能大于 fertility.max' }),
   vegetation: z.object({
     /** 肥力为 1 的格子的植被上限。 */
     maxBiomass: z.number().positive(),
@@ -40,7 +40,7 @@ export const WorldParamsSchema = z.object({
     /** 每天新抽的天气系数范围，乘在植被生长上。 */
     min: z.number().min(0),
     max: z.number().min(0),
-  }),
+  }).refine((w) => w.min <= w.max, { message: 'weather.min 不能大于 weather.max' }),
   /** 数值出处说明。 */
   source: z.string(),
 });

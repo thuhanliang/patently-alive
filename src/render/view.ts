@@ -1,5 +1,5 @@
 import { Application, Container } from 'pixi.js';
-import type { SimState } from '../sim';
+import { TICKS_PER_DAY, type SimState } from '../sim';
 import { Camera } from './camera';
 import { GridLayer } from './gridLayer';
 import { CELL_PX, mapWorldSize } from './projection';
@@ -15,7 +15,7 @@ export class GreyboxView {
   readonly camera = new Camera();
   private readonly world = new Container();
   private readonly grid: GridLayer;
-  private lastTick = -1;
+  private lastDay = -1;
 
   private constructor(
     readonly app: Application,
@@ -48,10 +48,11 @@ export class GreyboxView {
   }
 
   draw(state: Readonly<SimState>): void {
-    // 植被每天才变一次，只在 tick 变了时重画贴图。
-    if (state.tick !== this.lastTick) {
+    // 植被每天才变一次，只在换天时重画贴图。
+    const day = Math.floor(state.tick / TICKS_PER_DAY);
+    if (day !== this.lastDay) {
       this.grid.update(state);
-      this.lastTick = state.tick;
+      this.lastDay = day;
     }
     this.grid.setGridLinesVisible(this.camera.zoom * CELL_PX >= GRID_LINES_MIN_CELL_PX);
     this.camera.apply(this.world);

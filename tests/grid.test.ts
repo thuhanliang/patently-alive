@@ -73,3 +73,16 @@ describe('格子地图与植被', () => {
     expect(Array.from(sim.state.grid.vegetation)).not.toEqual(Array.from(at));
   });
 });
+
+describe('格子地图的边界情况', () => {
+  it('肥力为 0、下限为 0 时也不出 NaN', () => {
+    const world = {
+      ...smallWorld,
+      fertility: { ...smallWorld.fertility, min: 0, max: 0 },
+      vegetation: { ...smallWorld.vegetation, floorBiomass: 0 },
+    };
+    const sim = makeSim(1, world);
+    sim.stepN(TICKS_PER_DAY * 30);
+    expect(Array.from(sim.state.grid.vegetation).every((v) => v === 0)).toBe(true);
+  });
+});

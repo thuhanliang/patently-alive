@@ -51,7 +51,6 @@ export class Sim {
   step(): void {
     this.s.tick += 1;
     if (this.s.tick % TICKS_PER_DAY === 0) this.daily();
-    this.s.rng = this.rng.state();
   }
 
   stepN(count: number): void {
@@ -73,5 +72,6 @@ export class Sim {
     const growth = monthlyCurve(world.vegetation.growthByMonth, dayOfYear) * this.s.weather;
     const decay = monthlyCurve(world.vegetation.decayByMonth, dayOfYear);
     growVegetation(this.s.grid, world, growth, decay);
+    this.s.rng = this.rng.state();
   }
 }

@@ -46,7 +46,11 @@ export function encodeData(value: unknown): unknown {
     return value;
   }
   const tag = typedTag(value);
-  if (tag) return { [`$${tag}`]: Array.from(value as unknown as TypedArray) };
+  if (tag) {
+    const arr = Array.from(value as unknown as TypedArray);
+    for (const n of arr) assertFinite(n);
+    return { [`$${tag}`]: arr };
+  }
   if (Array.isArray(value)) return value.map(encodeData);
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(value).sort()) out[k] = encodeData((value as Record<string, unknown>)[k]);
@@ -59,9 +63,10 @@ export function decodeData<T>(value: unknown): T {
   if (Array.isArray(value)) return value.map((v) => decodeData(v)) as T;
   const keys = Object.keys(value);
   if (keys.length === 1 && keys[0]!.startsWith('$')) {
-    const tag = keys[0]!.slice(1) as TypedTag;
-    const Ctor = TYPED_TAGS[tag];
-    if (Ctor) return Ctor.from((value as Record<string, number[]>)[keys[0]!]!) as T;
+    const tag = keys[0]!.slice(1);
+    if (Object.hasOwn(TYPED_TAGS, tag)) {
+      return TYPED_TAGS[tag as TypedTag].from((value as Record<string, number[]>)[keys[0]!]!) as T;
+    }
   }
   const out: Record<string, unknown> = {};
   for (const k of keys) out[k] = decodeData((value as Record<string, unknown>)[k]);
@@ -88,8 +93,8 @@ export function checksum(value: unknown): number {
 
 class Hasher {
   private h = 0x811c9dc5;
-  private readonly f64 = new Float64Array(1);
-  private readonly u32 = new Uint32Array(this.f64.buffer);
+  // 用 DataView 固定按小端取字，校验和与宿主的字节序无关。
+  private readonly view = new DataView(new ArrayBuffer(8));
 
   digest(): number {
     return this.h >>> 0;
@@ -104,9 +109,9 @@ class Hasher {
 
   private num(n: number): void {
     assertFinite(n);
-    this.f64[0] = n === 0 ? 0 : n; // -0 和 0 视为相同
-    this.u32word(this.u32[0]!);
-    this.u32word(this.u32[1]!);
+    this.view.setFloat64(0, n === 0 ? 0 : n, true); // -0 和 0 视为相同
+    this.u32word(this.view.getUint32(0, true));
+    this.u32word(this.view.getUint32(4, true));
   }
 
   private str(s: string): void {

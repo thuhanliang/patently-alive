@@ -20,6 +20,7 @@ export class Camera {
 
   setScreen(width: number, height: number): void {
     this.screen = { x: width, y: height };
+    this.zoom = Math.min(this.maxZoom, Math.max(this.minZoom, this.zoom));
   }
 
   setWorld(size: Point): void {

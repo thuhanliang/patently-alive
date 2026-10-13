@@ -28,7 +28,9 @@ export function bindCameraControls(canvas: HTMLCanvasElement, camera: Camera, to
     (e) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      camera.zoomAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, Math.pow(1.0015, -e.deltaY));
+      // Firefox 的鼠标滚轮按"行"报告（deltaMode = 1），换算成像素再用。
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? rect.height : 1;
+      camera.zoomAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, Math.pow(1.0015, -e.deltaY * unit));
     },
     { passive: false },
   );

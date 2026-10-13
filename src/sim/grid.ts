@@ -43,7 +43,8 @@ export function growVegetation(grid: Grid, world: WorldParams, growth: number, d
   for (let i = 0; i < vegetation.length; i++) {
     const k = veg.maxBiomass * fertility[i]!;
     const v = vegetation[i]!;
-    let next = v + r * v * (1 - v / k) - decay * v;
+    // 肥力为 0 的格子 K = 0：不长，只保留下限。
+    let next = k > 0 ? v + r * v * (1 - v / k) - decay * v : 0;
     if (next > k) next = k;
     if (next < veg.floorBiomass) next = veg.floorBiomass;
     vegetation[i] = next;
