@@ -32,8 +32,11 @@ export function causeCount(species: number): number {
 export const RECENT_HALF_LIFE_DAYS = 30;
 const RECENT_KEEP = detPow(0.5, 1 / RECENT_HALF_LIFE_DAYS);
 
-/** 尸体保持新鲜、还能尸检的天数（含死的那天）。假设值，见 docs/MODEL.md。 */
-export const FRESH_DAYS = 3;
+/**
+ * 尸体（和蛋壳、残巢）还能尸检的天数（含死的那天）。小动物的尸体几天内就被吃掉或腐烂，一周后基本找不到。
+ * 假设值，见 docs/MODEL.md。
+ */
+export const FRESH_DAYS = 7;
 
 export interface DeathLedger {
   species: number;
@@ -117,13 +120,36 @@ export function recentByCause(ledger: DeathLedger, s: number, block?: number): n
   return out;
 }
 
-/** 死因的名字（界面、尸检报告用）。names 是各物种的名字。 */
+export type DecodedCause =
+  | { kind: 'starvation' }
+  | { kind: 'other' }
+  | { kind: 'removed' }
+  | { kind: 'predation'; predator: number }
+  | { kind: 'nest'; predator: number };
+
+/** 把死因编号拆开（CAUSE 的反函数）。species 是物种数；不合法的编号抛 RangeError。 */
+export function decodeCause(cause: number, species: number): DecodedCause {
+  if (cause === CAUSE.starvation) return { kind: 'starvation' };
+  if (cause === CAUSE.other) return { kind: 'other' };
+  if (cause === CAUSE.removed) return { kind: 'removed' };
+  const predator = Math.floor((cause - 3) / 2);
+  if (!Number.isInteger(cause) || predator < 0 || predator >= species) throw new RangeError(`没有这种死因：${cause}`);
+  return (cause - 3) % 2 === 0 ? { kind: 'predation', predator } : { kind: 'nest', predator };
+}
+
+/** 死因的名字（界面用）。names 是各物种的名字。 */
 export function causeName(cause: number, names: readonly string[]): string {
-  if (cause === CAUSE.starvation) return '饿死';
-  if (cause === CAUSE.other) return '其他（衰老、疾病、意外）';
-  if (cause === CAUSE.removed) return '人为移除';
-  const p = Math.floor((cause - 3) / 2);
-  const who = names[p];
-  if (!Number.isInteger(cause) || who === undefined) throw new RangeError(`没有这种死因：${cause}`);
-  return (cause - 3) % 2 === 0 ? `被${who}捕食` : `巢失败（被${who}吃掉）`;
+  const d = decodeCause(cause, names.length);
+  switch (d.kind) {
+    case 'starvation':
+      return '饿死';
+    case 'other':
+      return '其他（衰老、疾病、意外）';
+    case 'removed':
+      return '人为移除';
+    case 'predation':
+      return `被${names[d.predator]}捕食`;
+    case 'nest':
+      return `巢失败（被${names[d.predator]}吃掉）`;
+  }
 }

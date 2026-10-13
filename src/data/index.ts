@@ -3,8 +3,15 @@ import { SpeciesSchema, type SpeciesParams } from './schema/species';
 import { ScenarioSchema, type Scenario } from './schema/scenario';
 import { ToolsSchema, type Tools } from './schema/tools';
 import toolsJson from './tools/tools.json';
+import { NecropsyTemplatesSchema, type NecropsyTemplates } from './schema/report';
+import necropsyJson from './reports/necropsy.json';
 
 export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, ToolsSchema, type Tools };
+
+export { NecropsyTemplatesSchema, type NecropsyTemplates };
+
+/** 尸检报告的模板。 */
+export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
 
 /** 兽医工具的参数。 */
 export const tools: Tools = ToolsSchema.parse(toolsJson);

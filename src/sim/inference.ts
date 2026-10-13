@@ -12,6 +12,8 @@ import type { Capture } from './jobs';
 export const Z95 = 1.96;
 /** 体况评分不高于这个值算"偏瘦"。 */
 export const THIN_BCS = 2;
+/** 体况评分高于这个值算"偏胖 / 脂肪充足"（吃饱的平均约 3.5）。 */
+export const GOOD_BCS = 3.5;
 
 export interface Proportion {
   k: number;

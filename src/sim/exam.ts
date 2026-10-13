@@ -92,6 +92,17 @@ export function grownDays(sp: DerivedSpecies): number {
   return sp.juvenileStages * sp.stageDays;
 }
 
+/** 体况评分：1 + BCS_RANGE × 营养，加评分误差，半分一档，夹在 1–5。 */
+export function scoreBcs(nutrition: number, rng: Rng): number {
+  const raw = 1 + BCS_RANGE * nutrition + BCS_NOISE * standardNormal(rng);
+  return Math.min(5, Math.max(1, Math.round(raw * 2) / 2));
+}
+
+/** 格子里物种 s 在格 c 的营养状况（0–1）。 */
+export function cellNutrition(fedLast: readonly Float64Array[], s: number, c: number): number {
+  return clamp01(fedLast[s]![c]! / FED_SUFFICIENT);
+}
+
 /** 营养状况对体重的影响。 */
 export function massFactor(nutrition: number): number {
   return MASS_STARVED + MASS_CONDITION_SPAN * nutrition;
@@ -138,13 +149,12 @@ export function examine(subject: Subject, ctx: ExamContext): Exam {
       const t = Math.floor(-detLog(1 - rng.nextFloat() * (1 - tail)) / m);
       ageDays = grownDays(sp) + Math.min(span, t);
     }
-    nutrition = clamp01(ctx.fedLast[s]![c]! / FED_SUFFICIENT);
+    nutrition = cellNutrition(ctx.fedLast, s, c);
   }
   const sp = ctx.species[s]!;
   const growth = juvenile ? Math.min(1, BIRTH_MASS_FRACTION + (1 - BIRTH_MASS_FRACTION) * (ageDays / grownDays(sp))) : 1;
   const massKg = Math.max(0, sp.params.bodyMassKg * growth * massFactor(nutrition) * (1 + MASS_NOISE * standardNormal(rng)));
-  const rawBcs = 1 + BCS_RANGE * nutrition + BCS_NOISE * standardNormal(rng);
-  const bcs = Math.min(5, Math.max(1, Math.round(rawBcs * 2) / 2));
+  const bcs = scoreBcs(nutrition, rng);
   return { species: s, x, y, female, juvenile, ageDays, massKg, bcs, stomach: stomachOf(s, c, nutrition, ctx) };
 }
 
