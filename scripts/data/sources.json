@@ -9,7 +9,7 @@
       "url": "https://esapubs.org/archive/ecol/E090/184/PanTHERIA_1-0_WR05_Aug2008.txt",
       "file": "PanTHERIA_1-0_WR05_Aug2008.txt",
       "dir": "external",
-      "sha256": null
+      "sha256": "36e64314cae0394a966a63b949504d1975ac5c5629e05e36c1b139b3348f044a"
     },
     {
       "id": "anage",
@@ -19,13 +19,29 @@
       "url": "https://genomics.senescence.info/species/dataset.zip",
       "file": "anage_dataset.zip",
       "dir": "raw",
-      "sha256": null
+      "sha256": "e3ddb66e32e973a79932859ba53013e8f60d957c6ec01c6eb573e3ea3018d630"
     }
   ],
   "extraTaxa": {
     "说明": "游戏里还没有、但后续阶段会用到的物种：一并摘录进 traits-reference.json，免得以后再下载。",
-    "阶段 1（野猫与鸟岛）": ["Felis catus", "Rattus rattus", "Rattus norvegicus", "Rattus exulans", "Mus musculus"],
-    "阶段 2（档案馆与引种）": ["Herpestes auropunctatus", "Mustela furo", "Vulpes vulpes", "Trichosurus vulpecula"],
-    "鸟类（只有 AnAge 有）": ["Apteryx mantelli", "Philesturnus carunculatus", "Strigops habroptilus", "Gallirallus australis"]
+    "阶段 1（野猫与鸟岛）": [
+      "Felis catus",
+      "Rattus rattus",
+      "Rattus norvegicus",
+      "Rattus exulans",
+      "Mus musculus"
+    ],
+    "阶段 2（档案馆与引种）": [
+      "Herpestes auropunctatus",
+      "Mustela furo",
+      "Vulpes vulpes",
+      "Trichosurus vulpecula"
+    ],
+    "鸟类（只有 AnAge 有）": [
+      "Apteryx mantelli",
+      "Philesturnus carunculatus",
+      "Strigops habroptilus",
+      "Gallirallus australis"
+    ]
   }
 }
