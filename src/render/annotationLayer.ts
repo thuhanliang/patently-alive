@@ -64,10 +64,12 @@ export class AnnotationLayer {
       const cy = (job.y + 0.5) * CELL_PX;
       let unit = '晚';
       if (job.kind === 'trap') {
-        // 方框是笼子摊开的范围（单点的陷阱画 3×3 格）。
-        const half = CELL_PX * (1.5 + (this.tools?.traps[job.trap]?.spreadCells ?? 0));
+        // 方框是笼子摊开的范围（单点的陷阱画 3×3 格）；中间的实心小方块标出布网的位置，大小不变。
+        const spread = this.tools?.traps[job.trap]?.spreadCells ?? 0;
+        const half = CELL_PX * (spread > 0 ? spread + 0.5 : 1.5);
+        const core = CELL_PX * 0.5;
         this.marks.rect(cx - half, cy - half, half * 2, half * 2).stroke({ width: 2, color: BLUEPRINT });
-        this.marks.rect(cx - half / 3, cy - half / 3, (half * 2) / 3, (half * 2) / 3).fill({ color: BLUEPRINT, alpha: 0.6 });
+        this.marks.rect(cx - core, cy - core, core * 2, core * 2).fill({ color: BLUEPRINT, alpha: 0.6 });
       } else if (job.kind === 'cull') {
         this.marks.circle(cx, cy, (this.tools?.cull.radiusCells ?? 1) * CELL_PX).stroke({ width: 2, color: BLUEPRINT });
       } else if (job.kind === 'sample') {

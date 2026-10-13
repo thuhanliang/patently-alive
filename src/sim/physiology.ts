@@ -220,7 +220,8 @@ function crowdingRadius(p: SpeciesParams, cellSizeM: number): number {
   const home = p.movement.homeRangeKm2;
   if (home === undefined) return 0;
   const blockKm = (CROWDING_BLOCK_CELLS * cellSizeM) / 1000;
-  return Math.max(0, Math.ceil((Math.sqrt(home) / blockKm - 1) / 2));
+  // 减一个极小量：边长正好是奇数个区块时，浮点误差不会把窗口多算一圈。
+  return Math.max(0, Math.ceil((Math.sqrt(home) / blockKm - 1) / 2 - 1e-9));
 }
 
 /** 幼体传送带的段数、窝里的段数、每段天数（见 JUVENILE_STAGES、MIN_STAGES）。 */

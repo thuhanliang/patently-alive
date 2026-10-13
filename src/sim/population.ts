@@ -588,8 +588,8 @@ function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | nu
     if (!h) continue;
     fed[s] = h.fed[b]!;
     const kill = h.kill[b]!;
-    const search = h.search[b]! * (h.nestScale[b]! > 0 ? 1 : 0);
-    if (kill === 0 && search === 0) continue;
+    const search = h.search[b]!;
+    if (kill === 0 && h.nestScale[b] === 0) continue;
     const mob = prey.mobile[s]!;
     for (let j = 0; j < species.length; j++) {
       const wn = nestWeight(ctx, s, j, c);

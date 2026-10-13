@@ -45,7 +45,12 @@ function play(route: Route, seed: number): string[] {
     return best;
   };
   const islet = (c: number) => state().grid.island[c] !== 1;
-  const freeTeams = () => session.resources.busyUntil.filter((t) => t <= state().tick).length;
+  // 别把几支队伍派到同一处：已经有陷阱的地方附近不再选。
+  const untrapped = (c: number, r: number): boolean => {
+    const x = c % W;
+    const y = Math.floor(c / W);
+    return state().jobs.every((j) => j.kind !== 'trap' || Math.max(Math.abs(j.x - x), Math.abs(j.y - y)) > r);
+  };
   const ratNet = (x: number, y: number): Op => ({ type: 'trap', trap: 'rat-cage', x, y, nights: 10, remove: ['rat'] });
 
   const nextOp = (): Op | null => {
@@ -54,16 +59,16 @@ function play(route: Route, seed: number): string[] {
         return null;
       case 'cats': {
         if (session.sim.totals()[cat] === 0) return null;
-        const h = hotspot(cat, 6);
+        const h = hotspot(cat, 6, (c) => untrapped(c, 12));
         return { type: 'trap', trap: 'cat-cage', x: h.x, y: h.y, nights: 15, remove: ['cat'] };
       }
       case 'rats': {
-        const h = hotspot(bird, 4);
+        const h = hotspot(bird, 4, (c) => untrapped(c, 10));
         return ratNet(h.x, h.y);
       }
       case 'islets-rats': {
-        const left = hotspot(rat, 2, islet);
-        const h = left.n > 3 ? left : hotspot(bird, 4);
+        const left = hotspot(rat, 2, (c) => islet(c) && untrapped(c, 5));
+        const h = left.n > 3 ? left : hotspot(bird, 4, (c) => untrapped(c, 10));
         return ratNet(h.x, h.y);
       }
     }
@@ -71,7 +76,7 @@ function play(route: Route, seed: number): string[] {
 
   const rows: string[] = [];
   for (let d = 1; d <= scenario.goal.years * DAYS_PER_YEAR; d++) {
-    for (let k = 0; k < 3 && freeTeams() > 0 && !session.ended; k++) {
+    for (let k = 0; k < 3 && session.freeStaff() > 0 && !session.ended; k++) {
       const op = nextOp();
       if (!op || !session.submit(op).ok) break;
     }
