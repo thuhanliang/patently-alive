@@ -41,6 +41,8 @@ export const WorldParamsSchema = z.object({
     min: z.number().min(0),
     max: z.number().min(0),
   }).refine((w) => w.min <= w.max, { message: 'weather.min 不能大于 weather.max' }),
+  /** 这片世界里的预设物种（物种数据文件的 id）。 */
+  species: z.array(z.string()).min(1),
   /** 数值出处说明。 */
   source: z.string(),
 });

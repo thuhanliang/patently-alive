@@ -1,0 +1,20 @@
+{
+  "id": "rabbit",
+  "name": "穴兔",
+  "scientificName": "Oryctolagus cuniculus",
+  "diet": "herbivore",
+  "bodyMassKg": 1.6,
+  "activity": "crepuscular",
+  "reproduction": {
+    "litterSize": 5,
+    "gestationDays": 30,
+    "litterIntervalDays": 35,
+    "ageAtMaturityDays": 120,
+    "breedingByMonth": [1, 1, 1, 1, 0.8, 0.5, 0.3, 0, 0, 0, 0, 0.4]
+  },
+  "survival": { "adultAnnual": 0.45 },
+  "maxLifespanYears": 9,
+  "movement": { "dailyRangeM": 150 },
+  "initialDensityPerHa": 6,
+  "source": "体重、窝仔数、妊娠期、性成熟：PanTHERIA / AnAge 的数量级；野外成体年存活率约 0.3–0.5、活动范围约 0.5–2 公顷：Wikipedia「European rabbit」及其引用。"
+}
