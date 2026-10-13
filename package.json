@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.sim.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "data:fetch": "node scripts/data/fetch.mjs",
+    "data:check": "node scripts/data/check-traits.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.22.0",

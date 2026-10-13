@@ -16,5 +16,5 @@
   "maxLifespanYears": 6,
   "movement": { "dailyRangeM": 1500 },
   "initialDensityPerHa": 0.06,
-  "source": "体重、窝仔数：PanTHERIA / AnAge 的数量级；一年一窝（延迟着床，妊娠期按着床后计）、雌性几周大即在巢中交配（性成熟按雌性取约 80 天）、每晚可走 1–3 公里、密度约每平方公里几只：Wikipedia「Stoat」及其引用。"
+  "source": "【未核对】体重、窝仔、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。白鼬有延迟着床，这里的妊娠期只算着床之后；雌性几周大即在巢中交配，性成熟按雌性取。野外成体年存活率、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。"
 }

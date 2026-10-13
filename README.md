@@ -25,6 +25,10 @@ npm run build      # 类型检查 + 打包到 dist/
 - 所有会改变推演的操作都走统一操作接口（`src/sim/session.ts`）并写进操作日志；
   "导出日志"得到的 JSON 就是存档，"载入日志回放"可以原样重现。
 
+## 需要在本地完成的任务
+
+开发环境不能访问的外部数据、需要图像模型生成的美术资源，写在 `handoff/` 里，见 `handoff/README.md`。
+
 ## 目录
 
 - `src/sim`：模拟内核。纯 TS、固定步长、带种子随机数；不引用渲染、DOM 和系统时钟。
@@ -32,3 +36,6 @@ npm run build      # 类型检查 + 打包到 dist/
 - `src/ui`：界面。
 - `src/data`：数据文件与 schema。
 - `tests`：测试。
+- `scripts/data`：外部性状数据库的下载与核对（`npm run data:fetch`、`npm run data:check`）。
+- `docs/MODEL.md`：推演用到的每个数字从哪里来（数据 / 规律 / 假设）、可调范围。
+- `handoff/`：需要在本地完成的任务。

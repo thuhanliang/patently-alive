@@ -1,0 +1,31 @@
+{
+  "说明": "外部性状数据库的固定版本。只在开发时下载（npm run data:fetch），运行时不联网（铁律 6）。sha256 在第一次下载后用 --pin 填入，之后内容变了会报警。dir 为 external 的文件进仓库（许可允许再分发），raw 的不进仓库。",
+  "sources": [
+    {
+      "id": "pantheria",
+      "name": "PanTHERIA 1.0（MSW05 分类）",
+      "citation": "Jones, K.E. et al. (2009) PanTHERIA: a species-level database of life history, ecology, and geography of extant and recently extinct mammals. Ecology 90:2648. Ecological Archives E090-184.",
+      "license": "CC0（作者放弃全部版权及相关权利），整份文件放进仓库",
+      "url": "https://esapubs.org/archive/ecol/E090/184/PanTHERIA_1-0_WR05_Aug2008.txt",
+      "file": "PanTHERIA_1-0_WR05_Aug2008.txt",
+      "dir": "external",
+      "sha256": null
+    },
+    {
+      "id": "anage",
+      "name": "AnAge: The Animal Ageing and Longevity Database",
+      "citation": "Tacutu, R. et al. (2018) Human Ageing Genomic Resources: new and updated databases. Nucleic Acids Research 46:D1083–D1090.",
+      "license": "使用时须引用；再分发条款未确认，仓库里只保存用到的物种的摘录",
+      "url": "https://genomics.senescence.info/species/dataset.zip",
+      "file": "anage_dataset.zip",
+      "dir": "raw",
+      "sha256": null
+    }
+  ],
+  "extraTaxa": {
+    "说明": "游戏里还没有、但后续阶段会用到的物种：一并摘录进 traits-reference.json，免得以后再下载。",
+    "阶段 1（野猫与鸟岛）": ["Felis catus", "Rattus rattus", "Rattus norvegicus", "Rattus exulans", "Mus musculus"],
+    "阶段 2（档案馆与引种）": ["Herpestes auropunctatus", "Mustela furo", "Vulpes vulpes", "Trichosurus vulpecula"],
+    "鸟类（只有 AnAge 有）": ["Apteryx mantelli", "Philesturnus carunculatus", "Strigops habroptilus", "Gallirallus australis"]
+  }
+}
