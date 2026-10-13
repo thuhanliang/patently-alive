@@ -40,6 +40,19 @@ describe('从性状推导的参数', () => {
     expect(deriveSpecies(byId('stoat'), cell).litterRate).toBeCloseTo(1 / 30, 6);
   });
 
+  it('两段分开的繁殖季各算各的：每段都比间隔短时，每段约一窝', () => {
+    const base = byId('rabbit');
+    const split = {
+      ...base,
+      reproduction: { ...base.reproduction, litterIntervalDays: 35, breedingByMonth: [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0] },
+    };
+    // 最长一段只有 30 天，比 35 天的间隔短：每天产窝概率按 1/30 算，而不是两段合计 60 天后的 1/35。
+    expect(deriveSpecies(split, cell).litterRate).toBeCloseTo(1 / 30, 6);
+    // 跨年连续的繁殖期（12 月 + 1、2 月）算一段。
+    const wrap = { ...base, reproduction: { ...base.reproduction, breedingByMonth: [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1] } };
+    expect(deriveSpecies(wrap, cell).litterRate).toBeCloseTo(1 / 35, 6);
+  });
+
   it('体型适合度：太小、太大都难抓', () => {
     expect(sizeSuitability(0.001)).toBe(0);
     expect(sizeSuitability(0.1)).toBe(1);

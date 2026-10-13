@@ -16,6 +16,7 @@ export class GridLayer {
   private readonly image: ImageData;
   private readonly texture: Texture;
   private readonly lines = new Graphics();
+  private readonly counts: Int32Array;
 
   constructor(width: number, height: number) {
     this.canvas = document.createElement('canvas');
@@ -25,6 +26,7 @@ export class GridLayer {
     if (!ctx) throw new Error('无法创建 2D 画布');
     this.ctx = ctx;
     this.image = ctx.createImageData(width, height);
+    this.counts = new Int32Array(width * height);
 
     this.texture = Texture.from(this.canvas);
     this.texture.source.scaleMode = 'nearest';
@@ -42,7 +44,7 @@ export class GridLayer {
       max = state.config.world.vegetation.maxBiomass;
     } else {
       const pop = state.populations[layer.index]!;
-      const counts = new Int32Array(pop.adults.length);
+      const counts = this.counts;
       max = 1;
       for (let i = 0; i < counts.length; i++) {
         counts[i] = pop.adults[i]! + pop.juveniles[i]!;

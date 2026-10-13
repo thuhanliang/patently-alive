@@ -22,6 +22,10 @@ export const FED_SUFFICIENT = 0.6;
  */
 const DAMUTH_COEF = 16982;
 const CROWDING_FACTOR = 20;
+/** 拥挤程度按多大的区块统计（格）。动物会在几格之间走动，单格计数太跳。 */
+export const CROWDING_BLOCK_CELLS = 8;
+/** 幼体按成体的这个比例算食量和体重（从刚出生到长成的平均）。 */
+export const JUVENILE_SIZE_FACTOR = 0.5;
 /** 幼体的基础日死亡率是成体的几倍。 */
 const JUVENILE_MORTALITY_FACTOR = 2.5;
 /** 一天里一格植被最多被啃掉的比例（剩下的够不着或不爱吃）。 */
@@ -44,7 +48,7 @@ export interface DerivedSpecies {
   readonly maturationRate: number;
   /** 繁殖期内每只雌性每天产一窝的概率。 */
   readonly litterRate: number;
-  /** 一格里住到这么多只就不再繁殖。 */
+  /** 平均每格住到这么多只就不再繁殖（按区块统计）。 */
   readonly crowdingCapacity: number;
   /** 每天离开所在格子的概率，以及一跳的最大格数。 */
   readonly moveProb: number;
@@ -56,8 +60,8 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
   const metabolicMass = detPow(p.bodyMassKg, 0.75);
   const adultDailyMortality = 1 - detPow(p.survival.adultAnnual, 1 / DAYS_PER_YEAR);
   const cellsPerDay = p.movement.dailyRangeM / cellSizeM;
-  // 一年里处于繁殖期的天数；繁殖期比两窝间隔还短时，整个繁殖期只够生一窝。
-  const breedingDays = p.reproduction.breedingByMonth.reduce((a, b) => a + b, 0) * DAYS_PER_MONTH;
+  // 最长一段连续繁殖期的天数；它比两窝间隔还短时，每段繁殖期只够生一窝。
+  const breedingDays = longestSeasonDays(p.reproduction.breedingByMonth);
   const typicalPerKm2 = DAMUTH_COEF * detPow(p.bodyMassKg * 1000, -0.75);
   const cellKm2 = (cellSizeM * cellSizeM) / 1_000_000;
   return {
@@ -74,6 +78,29 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     moveProb: Math.min(0.5, cellsPerDay / 2),
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
   };
+}
+
+/** 最长一段连续（跨年也算连续）繁殖期的天数，按各月比例累加。 */
+function longestSeasonDays(byMonth: readonly number[]): number {
+  if (byMonth.every((m) => m > 0)) return byMonth.reduce((a, b) => a + b, 0) * DAYS_PER_MONTH;
+  let best = 0;
+  let run = 0;
+  // 走两圈，处理跨年的繁殖期。
+  for (let i = 0; i < byMonth.length * 2; i++) {
+    const m = byMonth[i % byMonth.length]!;
+    run = m > 0 ? run + m : 0;
+    if (run > best) best = run;
+  }
+  return best * DAYS_PER_MONTH;
+}
+
+/** 由配置推导全部物种参数和捕食矩阵；状态初始化和推演都用这一处，保证一致。 */
+export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number): {
+  derived: DerivedSpecies[];
+  prey: number[][];
+} {
+  const derived = species.map((s) => deriveSpecies(s, cellSizeM));
+  return { derived, prey: preyMatrix(derived) };
 }
 
 type Activity = SpeciesParams['activity'];

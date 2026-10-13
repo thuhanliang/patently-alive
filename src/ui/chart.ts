@@ -16,6 +16,7 @@ const VEG_STYLE = { color: '#666666', dash: [] as number[] };
  */
 export class PopulationChart {
   private readonly ctx: CanvasRenderingContext2D;
+  private drawnKey = '';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -32,6 +33,11 @@ export class PopulationChart {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
+    // 只有记录或尺寸变了才重画（暂停时不白画）。
+    const n0 = history.length;
+    const key = `${n0}:${n0 > 0 ? history.day(n0 - 1) : -1}:${w}x${h}:${dpr}`;
+    if (key === this.drawnKey) return;
+    this.drawnKey = key;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);

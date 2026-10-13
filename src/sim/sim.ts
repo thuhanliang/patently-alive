@@ -2,7 +2,7 @@ import { SimConfigSchema, type SimConfig } from './config';
 import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
 import { createGrid, growVegetation, type Grid } from './grid';
-import { deriveSpecies, preyMatrix, type DerivedSpecies } from './physiology';
+import { deriveAll, type DerivedSpecies } from './physiology';
 import {
   createPopulation,
   dailyPopulation,
@@ -36,7 +36,7 @@ export function createInitialState(config: SimConfig): SimState {
   const parsed = SimConfigSchema.parse(config);
   const rng = Rng.fromSeed(parsed.seed);
   const grid = createGrid(parsed.world, rng);
-  const derived = parsed.species.map((s) => deriveSpecies(s, parsed.world.cellSizeM));
+  const { derived } = deriveAll(parsed.species, parsed.world.cellSizeM);
   const populations = derived.map((d) => createPopulation(d, grid, cellArea(parsed), rng));
   return {
     config: parsed,
@@ -64,8 +64,7 @@ export class Sim {
   constructor(state: SimState) {
     this.s = cloneData(state);
     this.rng = Rng.fromState(this.s.rng);
-    this.derived = this.s.config.species.map((sp) => deriveSpecies(sp, this.s.config.world.cellSizeM));
-    this.prey = preyMatrix(this.derived);
+    ({ derived: this.derived, prey: this.prey } = deriveAll(this.s.config.species, this.s.config.world.cellSizeM));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
   }
 

@@ -1,5 +1,12 @@
 import type { Grid } from './grid';
-import { FED_SUFFICIENT, MAX_GRAZE_FRACTION, PREDATION_HALF_SATURATION_DAYS, type DerivedSpecies } from './physiology';
+import {
+  CROWDING_BLOCK_CELLS,
+  FED_SUFFICIENT,
+  JUVENILE_SIZE_FACTOR,
+  MAX_GRAZE_FRACTION,
+  PREDATION_HALF_SATURATION_DAYS,
+  type DerivedSpecies,
+} from './physiology';
 import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
 
@@ -23,6 +30,11 @@ export interface DayStats {
 
 export function emptyDayStats(total = 0): DayStats {
   return { total, births: 0, deathsPredation: 0, deathsStarvation: 0, deathsOther: 0 };
+}
+
+/** 按体型折算的数量：幼体算半只（食量、作为猎物的体重都按这个算）。 */
+function sizeWeighted(p: Population, c: number): number {
+  return p.adults[c]! + JUVENILE_SIZE_FACTOR * p.juveniles[c]!;
 }
 
 export function populationTotal(p: Population): number {
@@ -64,7 +76,8 @@ export interface DailyContext {
 }
 
 /**
- * 一天的种群推演，逐格进行：进食 → 捕食 → 出生 → 死亡 → 长大，最后整张图一起扩散。
+ * 一天的种群推演，逐格进行：捕食 → 进食 → 出生 → 死亡 → 长大，最后整张图一起扩散。
+ * 先捕食：今天被吃掉的动物不再分走植被。
  * 返回各物种当天的账目。
  */
 export function dailyPopulation(ctx: DailyContext): DayStats[] {
@@ -72,13 +85,18 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   const stats = species.map(() => emptyDayStats());
   const cells = grid.width * grid.height;
   const fed = new Float64Array(species.length);
+  const crowding = crowdingByBlock(ctx);
+  const bw = Math.ceil(grid.width / CROWDING_BLOCK_CELLS);
 
   for (let c = 0; c < cells; c++) {
-    graze(ctx, c, fed);
     hunt(ctx, c, fed, stats);
+    graze(ctx, c, fed);
+    const block =
+      Math.floor(Math.floor(c / grid.width) / CROWDING_BLOCK_CELLS) * bw +
+      Math.floor((c % grid.width) / CROWDING_BLOCK_CELLS);
     for (let s = 0; s < species.length; s++) {
       if (populations[s]!.adults[c]! + populations[s]!.juveniles[c]! > 0) {
-        lifeCycle(ctx, s, c, fed[s]!, stats[s]!);
+        lifeCycle(ctx, s, c, fed[s]!, crowding[s]![block]!, stats[s]!);
       }
     }
   }
@@ -91,6 +109,31 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   return stats;
 }
 
+/**
+ * 各物种在每个区块里的拥挤程度：区块平均每格只数 / 拥挤上限。
+ * 当天开始时统计一次（区块边缘不满 8×8 时按实际格数算）。
+ */
+function crowdingByBlock(ctx: DailyContext): Float64Array[] {
+  const { width, height } = ctx.grid;
+  const B = CROWDING_BLOCK_CELLS;
+  const bw = Math.ceil(width / B);
+  const bh = Math.ceil(height / B);
+  const cellsIn = new Float64Array(bw * bh);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) cellsIn[Math.floor(y / B) * bw + Math.floor(x / B)]! += 1;
+  return ctx.species.map((sp, s) => {
+    const pop = ctx.populations[s]!;
+    const out = new Float64Array(bw * bh);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const c = y * width + x;
+        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += pop.adults[c]! + pop.juveniles[c]!;
+      }
+    }
+    for (let b = 0; b < out.length; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;
+    return out;
+  });
+}
+
 /** 食草动物分享这一格能啃的植被；fed[s] 记下各物种吃饱的比例。 */
 function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
   const { species, populations, grid, cellAreaM2 } = ctx;
@@ -98,7 +141,7 @@ function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
   for (let s = 0; s < species.length; s++) {
     const sp = species[s]!;
     if (!sp.herbivore) continue;
-    demand += (populations[s]!.adults[c]! + populations[s]!.juveniles[c]!) * sp.dailyIntakeG;
+    demand += sizeWeighted(populations[s]!, c) * sp.dailyIntakeG;
   }
   let ratio = 1;
   if (demand > 0) {
@@ -124,7 +167,7 @@ function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]
   for (let s = 0; s < species.length; s++) {
     const pred = species[s]!;
     if (pred.herbivore) continue;
-    const hunters = populations[s]!.adults[c]! + populations[s]!.juveniles[c]!;
+    const hunters = sizeWeighted(populations[s]!, c);
     if (hunters === 0) {
       fed[s] = 1;
       continue;
@@ -134,14 +177,15 @@ function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]
     for (let j = 0; j < species.length; j++) {
       const w = row[j]!;
       if (w === 0) continue;
-      available += w * (populations[j]!.adults[c]! + populations[j]!.juveniles[c]!) * species[j]!.bodyMassG;
+      available += w * sizeWeighted(populations[j]!, c) * species[j]!.bodyMassG;
     }
     const demand = hunters * pred.dailyIntakeG;
     if (available <= 0) {
       fed[s] = 0;
       continue;
     }
-    const captured = (demand * available) / (available + PREDATION_HALF_SATURATION_DAYS * demand);
+    // 捕获量不会超过格子里实际可捕的猎物。
+    const captured = Math.min(available, (demand * available) / (available + PREDATION_HALF_SATURATION_DAYS * demand));
     for (let j = 0; j < species.length; j++) {
       const w = row[j]!;
       if (w === 0) continue;
@@ -158,8 +202,11 @@ function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]
   }
 }
 
-/** 一个物种在一格里的出生、死亡、长大。fedRatio 是今天吃饱的比例。 */
-function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, st: DayStats): void {
+/**
+ * 一个物种在一格里的出生、死亡、长大。
+ * fedRatio 是今天吃饱的比例；crowding 是所在区块的拥挤程度（1 = 住满）。
+ */
+function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, crowding: number, st: DayStats): void {
   const sp = ctx.species[s]!;
   const pop = ctx.populations[s]!;
   const rng = ctx.rng;
@@ -168,7 +215,7 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, st
 
   // 出生：约一半成体是雌性；繁殖期内、按吃饱程度打折，越拥挤生得越少。
   const breeding = ctx.breeding[s]!;
-  const room = 1 - (adults + juveniles) / sp.crowdingCapacity;
+  const room = 1 - crowding;
   if (breeding > 0 && adults > 0 && room > 0) {
     const pLitter = 0.5 * breeding * sp.litterRate * Math.min(1, fedRatio / FED_SUFFICIENT) * room;
     const litters = binomial(rng, adults, Math.min(1, pLitter));
@@ -202,7 +249,8 @@ function dieOff(rng: Rng, n: number, base: number, starve: number, st: DayStats)
   const p = Math.min(1, base + starve);
   const dead = binomial(rng, n, p);
   if (dead > 0) {
-    const starved = starve > 0 ? binomial(rng, dead, starve / p) : 0;
+    // 按两种死因各自的比重拆分（p 被截到 1 时也保持比例）。
+    const starved = starve > 0 ? binomial(rng, dead, starve / (base + starve)) : 0;
     st.deathsStarvation += starved;
     st.deathsOther += dead - starved;
   }
