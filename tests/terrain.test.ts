@@ -3,7 +3,8 @@ import { scenarioLibrary, speciesFor, worldFor, type WorldParams } from '../src/
 import { Session, Sim, TICKS_PER_DAY, checksum, countAt } from '../src/sim';
 import { createGrid } from '../src/sim/grid';
 import { Rng } from '../src/sim/rng';
-import { TERRAIN, crossesWater } from '../src/sim/terrain';
+import { TERRAIN } from '../src/sim/terrain';
+import { pathBlocked } from '../src/sim/fence';
 
 const island: WorldParams = worldFor(scenarioLibrary.get('bird-island')!);
 /** 测试用的小岛：同样的参数，地图小一些。 */
@@ -121,9 +122,9 @@ describe('过水判定', () => {
   // 5×1 的一行：陆 陆 水 陆 陆。
   const terrain = Uint8Array.from([2, 2, 0, 2, 2]);
   it('路上有水就算过水，哪怕落点是陆地', () => {
-    expect(crossesWater(terrain, 5, 0.5, 0.5, 4.5, 0.5)).toBe(true);
-    expect(crossesWater(terrain, 5, 3.5, 0.5, 4.5, 0.5)).toBe(false);
-    expect(crossesWater(terrain, 5, 0.2, 0.5, 1.9, 0.5)).toBe(false);
+    expect(pathBlocked(terrain, null, 5, 0.5, 0.5, 4.5, 0.5)).toBe(true);
+    expect(pathBlocked(terrain, null, 5, 3.5, 0.5, 4.5, 0.5)).toBe(false);
+    expect(pathBlocked(terrain, null, 5, 0.2, 0.5, 1.9, 0.5)).toBe(false);
   });
 
   it('格子扩散过不了水：清空一座离岸小岛后，没有动物能扩散上去', () => {

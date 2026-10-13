@@ -39,7 +39,7 @@ export class MapView {
       species.map((sp) => shapes[shapeOf(sp.params.id)]),
       colors.map((c) => c.body),
     );
-    this.annotations = new AnnotationLayer(state.config.tools?.cull.radiusCells ?? 1);
+    this.annotations = new AnnotationLayer(state.config.tools);
     this.world.addChild(this.grid.container, this.individuals.container, this.annotations.container);
     app.stage.addChild(this.world);
 
@@ -87,6 +87,11 @@ export class MapView {
   setLayer(layer: DataLayer): void {
     this.layer = layer;
     this.redraw();
+  }
+
+  /** 正在画的围栏的起点（格角坐标），在地图上标出来；null 表示没在画。 */
+  setFenceStart(p: { x: number; y: number } | null): void {
+    this.annotations.fenceStart = p;
   }
 
   /** 下一帧强制重画格子和个体（换了一局、投放了动物时用）。 */

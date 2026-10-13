@@ -41,11 +41,49 @@ export const CullSchema = z.object({
   source: z.string(),
 });
 
+/**
+ * 尸检：兽医队在一处搜一天，找新鲜尸体（死了不到几天、还没腐烂的，见 ledger.ts 的 FRESH_DAYS）带回来剖检。
+ * 能找到多少看那一带最近死了多少；死因由引擎记账给出，报告的措辞在第 6 步。
+ */
+export const NecropsySchema = z.object({
+  name: z.string(),
+  /** 搜索半径（格）。 */
+  radiusCells: z.number().int().min(1),
+  /** 范围里每具新鲜尸体被找到的概率。 */
+  detection: z.number().min(0).max(1),
+  /** 一次最多带回几具。 */
+  maxCarcasses: z.number().int().min(1),
+  cost: z.number().int().min(0),
+  source: z.string(),
+});
+
+/**
+ * 围栏：画一条直线。谁过不去由性状推出（见 src/sim/fence.ts）：会飞的、比 minMassKg 轻的过得去，
+ * 会爬的翻得过去，除非 stopsClimbers（顶上有防爬帽）。
+ */
+export const FenceTypeSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  name: z.string(),
+  /** 网眼挡得住的最小体重（千克）：更轻的钻得过去。 */
+  minMassKg: z.number().positive(),
+  /** 顶上有防爬帽，会爬的也翻不过。 */
+  stopsClimbers: z.boolean(),
+  /** 每公里造价（元）。 */
+  costPerKm: z.number().int().min(0),
+  /** 一支队伍一天能架多少公里。 */
+  kmPerDay: z.number().positive(),
+  source: z.string(),
+});
+
 export const ToolsSchema = z.object({
   traps: z.array(TrapTypeSchema).min(1),
   cull: CullSchema,
+  necropsy: NecropsySchema,
+  fences: z.array(FenceTypeSchema).min(1),
 });
 
 export type TrapType = z.infer<typeof TrapTypeSchema>;
 export type CullParams = z.infer<typeof CullSchema>;
+export type NecropsyParams = z.infer<typeof NecropsySchema>;
+export type FenceType = z.infer<typeof FenceTypeSchema>;
 export type Tools = z.infer<typeof ToolsSchema>;

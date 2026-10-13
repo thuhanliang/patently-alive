@@ -30,5 +30,33 @@
     "cost": 3000,
     "satisfaction": -2,
     "source": "一支队伍一晚在约 600 米范围内用灯光搜寻、移除指定物种，只针对认得出的目标。成功率、价格为假设值（见 docs/MODEL.md）。"
-  }
+  },
+  "necropsy": {
+    "name": "找尸体做尸检",
+    "radiusCells": 5,
+    "detection": 0.25,
+    "maxCarcasses": 3,
+    "cost": 600,
+    "source": "一支队伍白天在约 500 米范围内沿样线搜寻新鲜尸体、蛋壳和残巢，带回剖检。找到的概率、价格为假设值（见 docs/MODEL.md）。"
+  },
+  "fences": [
+    {
+      "id": "rabbit-fence",
+      "name": "防兔网",
+      "minMassKg": 0.5,
+      "stopsClimbers": false,
+      "costPerKm": 8000,
+      "kmPerDay": 1,
+      "source": "铁丝网约 1 米高、下沿埋进土里，挡兔子；鼠从网眼钻过去，猫和鼠也翻得过去。价格为假设值（见 docs/MODEL.md）。"
+    },
+    {
+      "id": "predator-fence",
+      "name": "防捕食者围栏",
+      "minMassKg": 0.01,
+      "stopsClimbers": true,
+      "costPerKm": 60000,
+      "kmPerDay": 0.2,
+      "source": "参照新西兰的防捕食者围栏（如 Zealandia、Maungatautari）：约 2 米高的细网，下沿埋入地下，顶上有弧形防爬帽，连小鼠都挡得住；造价很高。价格按本游戏的预算尺度缩放，为假设值（见 docs/MODEL.md）。"
+    }
+  ]
 }

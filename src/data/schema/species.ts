@@ -65,6 +65,8 @@ export const SpeciesSchema = z
       territorial: z.boolean().optional(),
       /** 会飞：受惊的成体和出了窝的幼体大多能飞走（窝里的蛋和雏鸟不能）。 */
       flies: z.boolean().optional(),
+      /** 会爬：翻得过普通围栏（顶上有防爬帽的翻不过，见 tools.fences）。 */
+      climbs: z.boolean().optional(),
     }),
     /** 开局密度（只 / 公顷）。 */
     initialDensityPerHa: z.number().min(0),

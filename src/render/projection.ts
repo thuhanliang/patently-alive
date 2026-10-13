@@ -20,6 +20,11 @@ export function worldToCell(p: Point): Point {
   return { x: Math.floor(p.x / CELL_PX), y: Math.floor(p.y / CELL_PX) };
 }
 
+/** 离世界坐标最近的格角（格子坐标，整数；围栏端点用）。 */
+export function worldToCorner(p: Point): Point {
+  return { x: Math.round(p.x / CELL_PX), y: Math.round(p.y / CELL_PX) };
+}
+
 export function mapWorldSize(width: number, height: number): Point {
   return { x: width * CELL_PX, y: height * CELL_PX };
 }

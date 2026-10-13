@@ -1,5 +1,5 @@
 import type { Grid } from './grid';
-import { crossesWater } from './terrain';
+import { pathBlocked, type Barrier } from './fence';
 import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
 import { inFocus, type FocusRect } from './focus';
 import {
@@ -294,6 +294,8 @@ export interface HourlyContext {
   /** 死因账本，以及每格属于哪个区块（账本按区块记）。 */
   ledger: DeathLedger;
   blockOf: Int32Array;
+  /** 围栏挡住的格边（见 fence.ts），按物种；成体和出了窝的幼体各一套。 */
+  barriers?: { adult: readonly (Barrier | null)[]; juvenile: readonly (Barrier | null)[] } | undefined;
 }
 
 /**
@@ -316,8 +318,8 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     const sp = species[s]!;
 
     // 窝里的幼崽不走动（和格子模型里前几个年龄段不扩散一致），但照样吃东西。
-    const nested = juvenileStageAt(sp, ind.born[i]!, ctx.day) < sp.nestStages;
-    if (nested) {
+    const stage = juvenileStageAt(sp, ind.born[i]!, ctx.day);
+    if (stage < sp.nestStages) {
       feed(ind, i, sp, grid, ctx);
       continue;
     }
@@ -341,8 +343,9 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
       vy = -vy;
       ny = Math.min(grid.height - 1e-9, Math.max(0, ind.y[i]! + vy * sp.hourlyStepCells));
     }
-    // 走到水边就掉头，这一小时留在原地（不会游泳；一步走一格以上时，中途也不能过水）。
-    if (crossesWater(grid.terrain, grid.width, xs[i]!, ys[i]!, nx, ny)) {
+    // 走到水边或挡得住它的围栏就掉头，这一小时留在原地（不会游泳；一步走一格以上时，中途也不能过）。
+    const barrier = (stage < sp.juvenileStages ? ctx.barriers?.juvenile[s] : ctx.barriers?.adult[s]) ?? null;
+    if (pathBlocked(grid.terrain, barrier, grid.width, xs[i]!, ys[i]!, nx, ny)) {
       vx = -vx;
       vy = -vy;
       nx = xs[i]!;
