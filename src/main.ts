@@ -1,5 +1,7 @@
 import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { checksum, decodeData, FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, LOG_FORMAT, SAVE_FORMAT, SAVE_VERSION, SaveSchema, scenarioRules, serialize, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { RECENT_HALF_LIFE_DAYS, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { RemoteSession } from './runtime/remote';
+import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
@@ -59,23 +61,38 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
 async function main(): Promise<void> {
   const { world, seed: defaultSeed, rules, problem, scenario } = chosenWorld();
   const species = speciesFor(world);
-  const newSession = (seed: number): Session => new Session({ seed, world, species, tools: toolData }, rules);
-  let session = newSession(intParam('seed', defaultSeed, 0xffff_ffff));
+  const config = { seed: intParam('seed', defaultSeed, 0xffff_ffff), world, species, tools: toolData };
 
-  // 一帧最多推进两天：推演每天要算整张地图，再多画面就卡了。倍速太高时实际速度会低于设定。
-  const clock = new FixedStepClock({ stepMs: 50, maxStepsPerFrame: TICKS_PER_DAY * 2 });
-  const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
-  const hud = new Hud(el('hud'));
-  const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
-  const captures = new FieldLog(el('captures'), el('exam-card'), session.sim.species, toolData, necropsyTemplates);
-  const alertBanner = new AlertBanner(el('alert'), session.sim.species.map((s) => s.params.name), (at) =>
-    view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
-  );
+  // 推演在 Web Worker 里跑（src/runtime/simWorker.ts），主线程只渲染、收输入。
+  // 有委托时开局先停着，等玩家读完历史卡。
+  const worker = new Worker(new URL('./runtime/simWorker.ts', import.meta.url), { type: 'module' });
+  const session = new RemoteSession(worker, config, rules, intParam('speed', 1, 1000), scenario !== null);
   const status = el('status');
   status.textContent = problem;
-  const names = session.sim.species.map((s) => s.params.name);
-  // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演不走。
-  const cards = scenario ? new CommissionCards(el('modal'), scenario, session.sim.species.map((s) => s.params.id)) : null;
+  // 第一份视图到了才能建画面；它带着开局那天的曲线数据，先留着。
+  const firstDays: DayRecord[] = [];
+  await new Promise<void>((resolve, reject) => {
+    session.onView = (days) => {
+      firstDays.push(...days);
+      resolve();
+    };
+    session.onError = (message) => reject(new Error(message));
+  }).catch((e: Error) => {
+    status.textContent = `推演启动失败：${e.message}`;
+    throw e;
+  });
+  session.onError = (message) => (status.textContent = `推演出错：${message}`);
+
+  const view = await MapView.mount(el('app'), session.sim.state, session.species);
+  const names = session.species.map((s) => s.params.name);
+  const hud = new Hud(el('hud'));
+  const deaths = new DeathPanel(el('deaths'), names);
+  const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
+  const alertBanner = new AlertBanner(el('alert'), names, (at) =>
+    view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
+  );
+  // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
+  const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
   let shownQuarters = 0;
   cards?.briefing(names);
   const history = new PopulationHistory([...names, '平均植被']);
@@ -83,108 +100,63 @@ async function main(): Promise<void> {
     el<HTMLCanvasElement>('chart'),
     history,
     world.vegetation.maxBiomass,
-    session.sim.species.map((s) => speciesColor(s.params.id).chart),
+    session.species.map((s) => speciesColor(s.params.id).chart),
   );
   // 点图切换纵轴：各自比例 ↔ 对数（只是看法，不进操作日志）。
   el<HTMLCanvasElement>('chart').addEventListener('click', () => {
     chart.scale = chart.scale === 'relative' ? 'log' : 'relative';
   });
 
-  /** 上次算警报是哪一天；−1 表示下一帧重算。 */
-  let alertDay = -1;
-
-  /** 所有玩家操作都从这里进统一操作接口；被拒绝时在状态栏说明原因。 */
-  const submit = (op: Op): boolean => {
-    const r = session.submit(op);
+  /** 所有玩家操作都从这里进统一操作接口（在 Worker 里的 Session.submit）；被拒绝时在状态栏说明原因。 */
+  const submit = async (op: Op): Promise<boolean> => {
+    const r = await session.submit(op);
     status.textContent = r.ok ? '' : `操作被拒绝：${r.reason}`;
-    // 花了预算、扑杀降了满意度，资源类警报要马上更新，不等到第二天。
-    if (r.ok) alertDay = -1;
     return r.ok;
   };
 
-  const restart = (next: Session): void => {
-    session = next;
-    clock.reset();
+  // 换了一局（换种子、读档）：清掉按局缓存的界面。读进来的局已经结算过的季度不再弹出。
+  const restart = (): void => {
     hud.reset();
     deaths.reset();
     captures.reset();
     alertBanner.reset();
-    alertDay = -1;
-    // 载入的局已经结算过的季度不再弹出。
-    shownQuarters = next.quarters.length;
+    shownQuarters = session.quarters.length;
     cards?.close();
     history.clear();
-    history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
   };
-  submit({ type: 'setSpeed', speed: intParam('speed', 1, 1000) });
+  session.onView = (days, regenerated) => {
+    if (regenerated) restart();
+    for (const d of days) history.recordValues(d.day, d.totals, d.veg);
+  };
+  for (const d of firstDays) history.recordValues(d.day, d.totals, d.veg);
 
   // 这一局的标签：存档文件名和浏览器存档位都用它（情景、情景当沙盒、草原各不相同）。
   const label = `${rules.scenario ?? 'grassland'}${rules.goal ? '' : '-sandbox'}`;
+  const fileName = (day: number, suffix = ''): string => `patently-alive-${label}-seed${session.sim.state.config.seed}-day${day}${suffix}.json`;
 
-  /** 载入存档文件或操作日志：存档直接装回快照，日志从头回放。 */
+  /** 载入存档文件或操作日志（解析、核对、恢复都在 Worker 里做）。 */
   const loadText = (text: string): void => {
-    try {
-      const json = JSON.parse(text) as { format?: unknown; version?: unknown };
-      const isSave = json.format === SAVE_FORMAT;
-      if (isSave && json.version !== SAVE_VERSION) {
-        status.textContent = `存档版本是 ${String(json.version)}，这个版本的游戏只认 ${SAVE_VERSION}`;
-        return;
-      }
-      if (!isSave && json.format !== LOG_FORMAT) {
-        status.textContent = `不认识的文件格式：${String(json.format)}`;
-        return;
-      }
-      const parsed = isSave ? SaveSchema.safeParse(decodeData(json)) : OpLogSchema.safeParse(json);
-      if (!parsed.success) {
-        status.textContent = `${isSave ? '存档' : '操作日志'}内容不对：${parsed.error.issues[0]?.message ?? ''}`;
-        return;
-      }
-      const log = 'log' in parsed.data ? parsed.data.log : parsed.data;
-      // 画面、曲线都是按当前世界和物种建的；世界或物种不同的存档暂不支持载入。
-      // 按内容比（校验和和键的顺序无关；存档文件里的键是排过序的）。
-      const cur = session.exportLog().config;
-      const same =
-        checksum(log.config.world) === checksum(cur.world) &&
-        checksum(log.config.species) === checksum(cur.species) &&
-        checksum(log.rules) === checksum(session.rules) &&
-        checksum(log.config.tools ?? null) === checksum(cur.tools ?? null);
-      if (!same) {
-        status.textContent = '这份存档的世界、物种、工具数据或开局规则和当前不同，暂不支持载入';
-        return;
-      }
-      const next = 'log' in parsed.data ? Session.restoreParsed(parsed.data) : Session.replay(log);
-      restart(next);
-      status.textContent = `已${isSave ? '读档' : '回放'}到第 ${next.sim.day} 天`;
-    } catch (e) {
-      status.textContent = `无法载入：${(e as Error).message}`;
-    }
+    status.textContent = '载入中……';
+    void session.load(text).then((r) => (status.textContent = r.message));
   };
 
   const tools = bindToolControls(
     el('tool-bar'),
-    session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
     {
-      reseed: (seed) => {
-        const speed = session.speed;
-        restart(newSession(seed));
-        submit({ type: 'setSpeed', speed });
-      },
-      exportFile: () => ({
-        name: `patently-alive-${label}-seed${session.sim.state.config.seed}-day${session.sim.day}.json`,
-        text: serialize(session.save()),
-      }),
-      exportLog: () => ({
-        name: `patently-alive-${label}-seed${session.sim.state.config.seed}-day${session.sim.day}-log.json`,
-        text: JSON.stringify(session.exportLog()),
-      }),
+      reseed: (seed) => session.reseed(seed),
+      exportFile: () => session.saveText().then(({ text, day }) => ({ name: fileName(day), text })),
+      exportLog: () => session.logText().then(({ text, day }) => ({ name: fileName(day, '-log'), text })),
       importFile: (text) => loadText(text),
       quickSave: () => {
-        const day = session.sim.day;
-        writeSlot(label, serialize(session.save())).then(
-          () => (status.textContent = `已存档（第 ${day} 天）`),
-          (e: Error) => (status.textContent = `存档失败：${e.message}`),
-        );
+        void session
+          .saveText()
+          .then(({ text, day }) => writeSlot(label, text).then(() => day))
+          .then(
+            (day) => (status.textContent = `已存档（第 ${day} 天）`),
+            (e: Error) => (status.textContent = `存档失败：${e.message}`),
+          );
       },
       quickLoad: () => {
         readSlot(label).then(
@@ -202,7 +174,7 @@ async function main(): Promise<void> {
   const field = bindFieldTools(
     el('field-tools'),
     toolData,
-    session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
     world.cellSizeM,
     () => tools.stopReleasing(),
   );
@@ -216,84 +188,84 @@ async function main(): Promise<void> {
         status.textContent = '围栏起点已定，再点终点';
         return;
       }
-      if (submit(op)) {
-        status.textContent = placedText(op, (id) => session.sim.species.find((x) => x.params.id === id)?.params.name ?? id);
+      void submit(op).then((ok) => {
+        if (!ok) return;
+        status.textContent = placedText(op, (id) => session.species.find((x) => x.params.id === id)?.params.name ?? id);
         field.stop();
-      }
+      });
       return;
     }
     if (!tools.isReleasing()) return;
     const { id, count } = tools.releaseChoice();
-    if (submit({ type: 'release', species: id, x: cell.x, y: cell.y, count })) {
-      status.textContent = `在 (${cell.x}, ${cell.y}) 投放了 ${count} 只`;
-      view.redraw();
-    }
+    void submit({ type: 'release', species: id, x: cell.x, y: cell.y, count }).then((ok) => {
+      if (ok) status.textContent = `在 (${cell.x}, ${cell.y}) 投放了 ${count} 只`;
+    });
   });
   const layers = bindLayerControls(el('layer-bar'), names, (layer) => view.setLayer(layer));
 
-  // 警报每天由引擎算一次（操作成功后也重算）；地图上只圈最响的那一处。
-  const syncAlerts = (): void => {
-    const day = Math.floor(session.sim.tick / TICKS_PER_DAY);
-    if (day === alertDay) return;
-    alertDay = day;
-    const all = session.alerts();
-    alertBanner.update(day, all);
-    view.setAlertAt(all[0]?.at ?? null);
-  };
-
-  const advance = (ticks: number): void => {
-    for (let i = 0; i < ticks; i++) {
-      session.advance(1);
-      if (session.sim.tick % TICKS_PER_DAY === 0) history.record(session.sim.tick / TICKS_PER_DAY, session.sim.state);
-      // 刚结算了一季：停在这里，让结算单在季末那一刻弹出（不让高倍速跑过头）。
-      if (cards && session.quarters.length > shownQuarters) break;
-    }
-  };
-  history.record(0, session.sim.state);
   const syncTime = bindTimeControls(
     el('time-bar'),
     () => session.speed,
-    (speed) => submit({ type: 'setSpeed', speed }),
+    (speed) => void submit({ type: 'setSpeed', speed }),
     () => {
-      if (!cards?.isOpen) advance(TICKS_PER_DAY - (session.sim.tick % TICKS_PER_DAY));
+      if (!cards?.isOpen) session.stepDay();
     },
   );
 
   // 镜头放大到地块档时，以画面中心为准请求关注区；拉远时全部收拢。
-  // 关注区会影响推演结果，所以作为一条操作提交，写进日志。
+  // 关注区会影响推演结果，所以作为一条操作提交，写进日志。等上一次请求有了回音再发下一次，免得重复记进日志。
+  let focusInFlight = false;
   const syncFocus = (): void => {
+    if (focusInFlight) return;
     let want: FocusRect | null = null;
+    const { grid } = session.sim.state;
     if (view.closeUp) {
       const v = view.visibleCells();
-      want = focusAround(v.cx, v.cy, v.w, v.h, session.sim.state.grid.width, session.sim.state.grid.height);
+      want = focusAround(v.cx, v.cy, v.w, v.h, grid.width, grid.height);
     }
-    if (!sameFocus(want, session.sim.state.requestedFocus)) submit({ type: 'setFocus', focus: want });
+    if (sameFocus(want, session.sim.state.requestedFocus)) return;
+    focusInFlight = true;
+    void submit({ type: 'setFocus', focus: want }).then(() => {
+      // 回音到了；下一份视图一定带着提交之后的状态，到时再比较。
+      session.afterNextView(() => (focusInFlight = false));
+    });
   };
 
-  view.ticker.add((ticker) => {
+  // ?perf=1：在状态栏显示主线程每帧花在脚本上的时间（不含 GPU），检查性能用。
+  const perf = new URLSearchParams(location.search).get('perf') === '1' ? { sum: 0, worst: 0, n: 0, since: performance.now() } : null;
+
+  view.ticker.add(() => {
+    const frameStart = perf ? performance.now() : 0;
+    const state = session.sim.state;
     syncFocus();
-    if (clock.speed !== session.speed) {
-      // 换速时清掉按旧速度攒下的零头，免得第一帧跳一下。
-      clock.reset();
-      clock.speed = session.speed;
-    }
-    if (cards?.isOpen) clock.reset();
-    else advance(clock.advance(ticker.deltaMS));
-    // 新的季度结算：弹出结算单（一帧里结算了好几季时只弹最新的）。
+    // 新的季度结算：弹出结算单（Worker 结算后已经停下等着）。
     if (cards && session.quarters.length > shownQuarters) {
       shownQuarters = session.quarters.length;
       cards.quarter(session.quarters.at(-1)!, session, names);
     }
+    session.hold(cards?.isOpen ?? false);
     view.setFenceStart(field.fenceStart());
-    syncAlerts();
-    view.draw(session.sim.state);
+    alertBanner.update(session.sim.day, session.alerts);
+    view.setAlertAt(session.alerts[0]?.at ?? null);
+    view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
-    deaths.update(session.sim.state);
-    captures.update(session.sim.state);
+    deaths.update(state);
+    captures.update(state);
     chart.draw();
     syncCamera();
     syncTime();
+    session.requestFrame();
+    if (perf) {
+      const ms = performance.now() - frameStart;
+      perf.sum += ms;
+      perf.worst = Math.max(perf.worst, ms);
+      perf.n += 1;
+      if (frameStart - perf.since > 2000) {
+        status.textContent = `主线程每帧 ${(perf.sum / perf.n).toFixed(1)} ms（最慢 ${perf.worst.toFixed(1)} ms），第 ${session.sim.day} 天`;
+        Object.assign(perf, { sum: 0, worst: 0, n: 0, since: frameStart });
+      }
+    }
   });
 }
 

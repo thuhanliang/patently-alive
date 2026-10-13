@@ -24,12 +24,13 @@ const INFERENCE_WINDOW_DAYS = 90;
  * - 抽样推断：选一个物种，最近 90 天的检查记录汇总成比例和 95% 置信区间。
  */
 export class FieldLog {
-  private lastCapture: unknown = null;
-  private lastSearch: unknown = null;
+  // 推演在 Worker 里，每帧送来的是新拷贝：记录按内容比，不按对象比。
+  private lastCapture = '';
+  private lastSearch = '';
   private lastDay = -1;
   private drawn = false;
   private state: Readonly<SimState> | null = null;
-  private selected: Capture | Carcass | null = null;
+  private selected: string | null = null;
   /** 玩家没选过推断哪个物种时，跟着最近一条检查记录走。 */
   private userChose = false;
   private readonly log = document.createElement('div');
@@ -69,8 +70,8 @@ export class FieldLog {
     this.state = state;
     const caps = state.captures;
     const nec = state.necropsies;
-    const lastCapture = caps[caps.length - 1] ?? null;
-    const lastSearch = nec[nec.length - 1] ?? null;
+    const lastCapture = `${caps.length}:${captureKey(caps[caps.length - 1])}`;
+    const lastSearch = `${nec.length}:${nec[nec.length - 1]?.job ?? ''}`;
     // 有新记录时重画；换天时也重画推断（90 天的窗口往前挪了）。
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (this.drawn && lastCapture === this.lastCapture && lastSearch === this.lastSearch) {
@@ -85,7 +86,8 @@ export class FieldLog {
     this.lastCapture = lastCapture;
     this.lastSearch = lastSearch;
     this.el.style.display = caps.length + nec.length > 0 ? '' : 'none';
-    if (!this.userChose && lastCapture) this.inferSpecies.value = String(lastCapture.species);
+    const newest = caps[caps.length - 1];
+    if (!this.userChose && newest) this.inferSpecies.value = String(newest.species);
     this.renderLog();
     this.renderInference();
   }
@@ -103,11 +105,12 @@ export class FieldLog {
           continue;
         }
         n.found.forEach((c, k) => {
+          const key = `n${n.job}-${k}`;
           const b = document.createElement('button');
           b.className = 'log-row';
           b.textContent = `${date(n.day)} #${n.job}-${k + 1}：${names[c.species]}，${c.daysDead === 0 ? '当天死亡' : `死后约 ${c.daysDead} 天`}`;
-          b.classList.toggle('active', c === this.selected);
-          b.addEventListener('click', () => this.openReport(c));
+          b.classList.toggle('active', key === this.selected);
+          b.addEventListener('click', () => this.openReport(c, key));
           rows.push(b);
         });
       }
@@ -120,8 +123,9 @@ export class FieldLog {
         const b = document.createElement('button');
         b.className = 'log-row';
         b.textContent = `${date(c.day)} ${how}：${who} → ${c.removed ? '移除' : '放生'}`;
-        b.classList.toggle('active', c === this.selected);
-        b.addEventListener('click', () => this.open(c));
+        const key = captureKey(c);
+        b.classList.toggle('active', key === this.selected);
+        b.addEventListener('click', () => this.open(c, key));
         rows.push(b);
       }
     }
@@ -129,26 +133,26 @@ export class FieldLog {
   }
 
   /** 点同一条再点一次就关掉；返回是不是打开了。 */
-  private toggle(item: Capture | Carcass): boolean {
-    this.selected = this.selected === item ? null : item;
+  private toggle(key: string): boolean {
+    this.selected = this.selected === key ? null : key;
     this.renderLog();
     if (!this.selected) this.card.style.display = 'none';
     return this.selected !== null;
   }
 
-  private cardFrame(titleText: string, item: Capture | Carcass): HTMLElement[] {
+  private cardFrame(titleText: string, key: string): HTMLElement[] {
     const title = document.createElement('div');
     title.className = 'panel-title';
     title.textContent = titleText;
     const close = document.createElement('button');
     close.className = 'card-close';
     close.textContent = '×';
-    close.addEventListener('click', () => this.toggle(item));
+    close.addEventListener('click', () => this.toggle(key));
     return [close, title];
   }
 
-  private openReport(c: Carcass): void {
-    if (!this.toggle(c)) return;
+  private openReport(c: Carcass, key: string): void {
+    if (!this.toggle(key)) return;
     const sections = necropsyReport(this.templates, c, necropsyFindings(c, this.species), this.species);
     const table = document.createElement('dl');
     for (const sec of sections) {
@@ -158,12 +162,12 @@ export class FieldLog {
       dd.textContent = sec.text;
       table.append(dt, dd);
     }
-    this.card.replaceChildren(...this.cardFrame(this.templates.title, c), table);
+    this.card.replaceChildren(...this.cardFrame(this.templates.title, key), table);
     this.card.style.display = '';
   }
 
-  private open(c: Capture): void {
-    if (!this.toggle(c)) return;
+  private open(c: Capture, key: string): void {
+    if (!this.toggle(key)) return;
     const sp = this.species[c.species]!;
     const how = c.trap >= 0 ? `${this.tools?.traps[c.trap]?.name ?? '陷阱'}（#${c.job}）` : `体检采样（#${c.job}）`;
     const rows: [string, string][] = [
@@ -186,7 +190,7 @@ export class FieldLog {
       dd.textContent = v;
       table.append(dt, dd);
     }
-    this.card.replaceChildren(...this.cardFrame('检查卡', c), table);
+    this.card.replaceChildren(...this.cardFrame('检查卡', key), table);
     this.card.style.display = '';
   }
 
@@ -242,4 +246,9 @@ function line(text: string): HTMLElement {
 function date(day: number): string {
   const d = calendar(day * TICKS_PER_DAY);
   return `第${d.year + 1}年${d.month + 1}月${d.dayOfMonth + 1}日`;
+}
+
+/** 一条捕获记录的键：推演在 Worker 里，每帧送来的是新拷贝，按这几样认出是同一条。 */
+function captureKey(c: Capture | undefined): string {
+  return c ? `c${c.day}-${c.job}-${c.trap}-${c.species}-${c.x},${c.y}-${c.ageDays}-${c.massKg}` : '';
 }

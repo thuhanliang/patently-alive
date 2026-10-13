@@ -6,7 +6,7 @@ const LOG_LINES = 6;
 
 /**
  * 朱红警报：同一时间只显示最响的一条（横幅），点横幅把镜头移到出事的地方；
- * 最响的那条换了（或解除了）就在下面的日志里记一行。每天更新一次。
+ * 最响的那条换了（或解除了）就在下面的日志里记一行。可以每帧调用。
  */
 export class AlertBanner {
   private key = '';
@@ -33,6 +33,7 @@ export class AlertBanner {
     this.key = '';
     this.top = undefined;
     this.lines.length = 0;
+    this.rendered = '\u0000';
     this.render();
   }
 
@@ -50,8 +51,14 @@ export class AlertBanner {
     this.render();
   }
 
+  private rendered = '';
+
   private render(): void {
     const top = this.top;
+    // 每帧都会调用；内容没变就不碰 DOM。
+    const sig = `${alertKey(top)}|${top ? alertText(top, this.names) : ''}|${this.lines.length}|${this.lines[0] ?? ''}`;
+    if (sig === this.rendered) return;
+    this.rendered = sig;
     this.banner.style.display = top ? '' : 'none';
     this.banner.textContent = top ? `⚠ ${alertText(top, this.names)}${top.at ? '　［点击查看］' : ''}` : '';
     this.banner.style.cursor = top?.at ? 'pointer' : 'default';
