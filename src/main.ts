@@ -1,5 +1,5 @@
 import { grassland, grasslandSpecies } from './data';
-import { FixedStepClock, Session, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { FixedStepClock, OpLogSchema, Session, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { worldToCell } from './render/projection';
 import { GreyboxView } from './render/view';
 import { bindCameraControls } from './ui/cameraControls';
@@ -22,6 +22,11 @@ function el<T extends HTMLElement>(id: string): T {
   if (!e) throw new Error(`index.html 缺少 #${id}`);
   return e as T;
 }
+
+// 点过的按钮不保留焦点：否则按空格暂停时，浏览器还会再"按"一次这个按钮。
+document.addEventListener('click', (e) => {
+  if (e.target instanceof HTMLButtonElement) e.target.blur();
+});
 
 async function main(): Promise<void> {
   const newSession = (seed: number): Session => new Session({ seed, world: grassland, species: grasslandSpecies });
@@ -46,6 +51,7 @@ async function main(): Promise<void> {
   const restart = (next: Session): void => {
     session = next;
     clock.reset();
+    hud.reset();
     history.clear();
     history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
@@ -62,14 +68,24 @@ async function main(): Promise<void> {
         submit({ type: 'setSpeed', speed });
       },
       exportLog: () => session.exportLog(),
-      importLog: (json) => {
+      importLog: (text) => {
         try {
-          const next = Session.replay(json);
-          const { width, height } = next.sim.state.grid;
-          if (width !== session.sim.state.grid.width || height !== session.sim.state.grid.height) {
-            status.textContent = '这份日志的地图尺寸和当前不同，暂不支持';
+          const json: unknown = JSON.parse(text);
+          const parsed = OpLogSchema.safeParse(json);
+          if (!parsed.success) {
+            status.textContent = `不是有效的操作日志：${parsed.error.issues[0]?.message ?? ''}`;
             return;
           }
+          // 画面、曲线都是按当前世界和物种建的；世界或物种不同的日志暂不支持载入。
+          const cur = session.exportLog().config;
+          const same =
+            JSON.stringify(parsed.data.config.world) === JSON.stringify(cur.world) &&
+            JSON.stringify(parsed.data.config.species) === JSON.stringify(cur.species);
+          if (!same) {
+            status.textContent = '这份日志的世界或物种数据和当前不同，暂不支持载入';
+            return;
+          }
+          const next = Session.replay(parsed.data);
           restart(next);
           status.textContent = `已回放到第 ${next.sim.tick} tick`;
         } catch (e) {
@@ -117,7 +133,11 @@ async function main(): Promise<void> {
 
   view.ticker.add((ticker) => {
     syncFocus();
-    clock.speed = session.speed;
+    if (clock.speed !== session.speed) {
+      // 换速时清掉按旧速度攒下的零头，免得第一帧跳一下。
+      clock.reset();
+      clock.speed = session.speed;
+    }
     advance(clock.advance(ticker.deltaMS));
     view.draw(session.sim.state);
     hud.update(session.sim.state, session.speed, session.entries.length);

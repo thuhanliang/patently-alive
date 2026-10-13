@@ -3,7 +3,8 @@ import type { OpLog } from '../sim';
 export interface ToolCallbacks {
   reseed(seed: number): void;
   exportLog(): OpLog;
-  importLog(json: unknown): void;
+  /** 载入的文件原文；解析和校验由回调负责，出错时在状态栏说明。 */
+  importLog(text: string): void;
 }
 
 /**
@@ -57,7 +58,8 @@ export function bindToolControls(
     a.href = URL.createObjectURL(blob);
     a.download = `patently-alive-seed${log.config.seed}.json`;
     a.click();
-    URL.revokeObjectURL(a.href);
+    // 有的浏览器异步开始下载，立刻释放链接会让下载失败。
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
   });
 
   const file = document.createElement('input');
@@ -67,8 +69,12 @@ export function bindToolControls(
   file.addEventListener('change', async () => {
     const f = file.files?.[0];
     if (!f) return;
-    cb.importLog(JSON.parse(await f.text()));
-    file.value = '';
+    try {
+      cb.importLog(await f.text());
+    } finally {
+      // 清空，下次选同一个文件也能触发。
+      file.value = '';
+    }
   });
   const importBtn = document.createElement('button');
   importBtn.textContent = '载入日志回放';

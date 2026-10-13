@@ -8,6 +8,11 @@ export class Hud {
 
   constructor(private readonly el: HTMLElement) {}
 
+  /** 换了一局时清掉按天缓存的数值。 */
+  reset(): void {
+    this.lastDay = -1;
+  }
+
   update(state: Readonly<SimState>, speed: number, logLength: number): void {
     // 校验和与平均植被都要遍历整张地图，每天算一次（取当天开始时的状态）。
     const day = Math.floor(state.tick / TICKS_PER_DAY);

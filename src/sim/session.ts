@@ -1,6 +1,6 @@
 import { SimConfigSchema, type SimConfig } from './config';
 import { cloneData } from './data';
-import { costOf, LogEntrySchema, OpLogSchema, OpSchema, type LogEntry, type Op, type OpLog } from './ops';
+import { costOf, OpLogSchema, OpSchema, type LogEntry, type Op, type OpLog } from './ops';
 import { Sim } from './sim';
 
 export type SubmitResult = { ok: true } | { ok: false; reason: string };
@@ -63,6 +63,7 @@ export class Session {
 
     this.apply(op);
     this.resources.budget -= cost.budget;
+    this.resources.staff -= cost.staff;
     this.log.push({ tick: this.simulation.tick, op: cloneData(op) });
     return { ok: true };
   }
@@ -74,19 +75,19 @@ export class Session {
       version: 1,
       config: cloneData(this.config),
       entries: cloneData(this.log),
+      endTick: this.simulation.tick,
     };
   }
 
   /**
-   * 回放：按日志重建一局，推进到 untilTick（默认推进到最后一条操作所在的 tick）。
+   * 回放：按日志重建一局，推进到 untilTick（默认是日志导出时的 tick）。
    * 回放出的局继续可玩，后续操作接着写进它自己的日志。
    */
   static replay(input: unknown, untilTick?: number): Session {
     const log = OpLogSchema.parse(input);
     const session = new Session(log.config);
-    const end = untilTick ?? (log.entries.length > 0 ? log.entries[log.entries.length - 1]!.tick : 0);
-    for (const raw of log.entries) {
-      const entry = LogEntrySchema.parse(raw);
+    const end = untilTick ?? log.endTick;
+    for (const entry of log.entries) {
       if (entry.tick > end) break;
       session.advance(entry.tick - session.simulation.tick);
       const r = session.submit(entry.op);

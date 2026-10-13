@@ -32,7 +32,8 @@ describe('统一操作接口与操作日志', () => {
     const live = new Session(makeConfig(78));
     play(live);
     const text = JSON.stringify(live.exportLog());
-    const replayed = Session.replay(JSON.parse(text), live.sim.tick);
+    // 不指定 untilTick：默认推进到导出时的 tick，最后一条操作之后的时间也不丢。
+    const replayed = Session.replay(JSON.parse(text));
     expect(replayed.sim.tick).toBe(live.sim.tick);
     expect(checksum(replayed.sim.state)).toBe(checksum(live.sim.state));
     // 回放出的局里，日志也一模一样。
@@ -97,5 +98,6 @@ describe('统一操作接口与操作日志', () => {
     log.entries[0]!.op = { type: 'release', species: 'vole', x: 1, y: 9999, count: 3 };
     expect(() => Session.replay(log)).toThrow(/回放失败/);
     expect(() => Session.replay({ ...log, entries: [{ tick: 5, op: log.entries[0]!.op }, { tick: 1, op: log.entries[0]!.op }] })).toThrow();
+    expect(() => Session.replay({ ...log, endTick: -1 })).toThrow();
   });
 });

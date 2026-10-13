@@ -46,9 +46,14 @@ export const OpLogSchema = z
     version: z.literal(1),
     config: SimConfigSchema,
     entries: z.array(LogEntrySchema),
+    /** 导出时推演走到的 tick；回放默认推进到这里（最后一条操作之后的时间也不丢）。 */
+    endTick: z.number().int().min(0),
   })
   .refine((log) => log.entries.every((e, i) => i === 0 || e.tick >= log.entries[i - 1]!.tick), {
     message: '日志里的操作必须按 tick 先后排列',
+  })
+  .refine((log) => log.entries.every((e) => e.tick <= log.endTick), {
+    message: 'endTick 不能早于最后一条操作',
   });
 export type OpLog = z.infer<typeof OpLogSchema>;
 
