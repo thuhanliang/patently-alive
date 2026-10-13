@@ -2,6 +2,7 @@
  * 批量推演：同一套参数跑多个种子，打印每个物种的起伏和报警。
  *   npm run sweep                      # 默认 8 个种子、10 年、64×64
  *   SEEDS=20 YEARS=15 SIZE=96 npm run sweep
+ *   SEED0=5 SEEDS=1 npm run sweep      # 只跑第 5 个种子（并行跑几份时用）
  * 用来调参数：看起伏够不够、有没有哪个种子过早灭绝或爆炸。
  */
 import { it } from 'vitest';
@@ -13,12 +14,13 @@ const env = (globalThis as { process?: { env: Record<string, string | undefined>
 const SEEDS = Number(env.SEEDS ?? 8);
 const YEARS = Number(env.YEARS ?? 10);
 const SIZE = Number(env.SIZE ?? 64);
+const SEED0 = Number(env.SEED0 ?? 1);
 
 it(`sweep ${SEEDS} seeds × ${YEARS} years @ ${SIZE}²`, () => {
   const world = { ...grassland, width: SIZE, height: SIZE };
   const lines: string[] = [];
   let alarms = 0;
-  for (let seed = 1; seed <= SEEDS; seed++) {
+  for (let seed = SEED0; seed < SEED0 + SEEDS; seed++) {
     const r = balanceCheck({ seed, world, species: speciesFor(world) }, YEARS);
     alarms += r.alarms.length;
     const cols = r.species.map((s) => {

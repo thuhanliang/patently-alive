@@ -9,6 +9,8 @@ import {
   PREDATION_HALF_SATURATION_DAYS,
   type DerivedSpecies,
   usableMeal,
+  breedingRoom,
+  PREY_STOCK_DAYS,
 } from './physiology';
 import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
@@ -194,39 +196,67 @@ export interface CrowdingExtras {
 }
 
 /**
- * 各物种在每个区块里的拥挤程度：区块平均每格只数 / 拥挤上限。
- * 当天开始时统计一次（区块边缘不满 8×8 时按实际格数算）。
+ * 各物种在每个区块里的拥挤程度（1 = 住满，见 breedingRoom）。当天开始时统计一次。
+ * - 一般物种：区块平均每格只数 / 拥挤上限（区块边缘不满 8×8 时按实际格数算）。
+ * - 不守固定领地的食肉动物：领地随食物伸缩，能住多少只取决于区块里可捕的猎物，
+ *   每只要有 PREY_STOCK_DAYS 天的食量（Leslie–Gower 型数量反应）。
  */
 export function crowdingByBlock(
-  ctx: Pick<DailyContext, 'species' | 'populations' | 'blockOf'> & { cellsIn: Float64Array },
+  ctx: Pick<DailyContext, 'species' | 'populations' | 'blockOf' | 'prey'> & { cellsIn: Float64Array },
   extras: CrowdingExtras = {},
 ): Float64Array[] {
-  const { blockOf, cellsIn } = ctx;
-  return ctx.species.map((sp, s) => {
-    const pop = ctx.populations[s]!;
-    const pending = extras.pending?.[s];
-    const out = new Float64Array(cellsIn.length);
-    const add = (counts: Int32Array): void => {
-      for (let c = 0; c < counts.length; c++) {
-        const n = counts[c]!;
-        if (n !== 0) out[blockOf[c]!] = out[blockOf[c]!]! + n;
+  const { blockOf, cellsIn, species } = ctx;
+  const blocks = cellsIn.length;
+  // 各物种每个区块的只数，和按体重折算的"成体当量"（幼体算半只）。
+  const counts = species.map(() => new Float64Array(blocks));
+  const adultEq = species.map(() => new Float64Array(blocks));
+  species.forEach((_, s) => {
+    const out = counts[s]!;
+    const eq = adultEq[s]!;
+    const add = (cells: Int32Array, weight: number): void => {
+      for (let c = 0; c < cells.length; c++) {
+        const n = cells[c]!;
+        if (n === 0) continue;
+        const b = blockOf[c]!;
+        out[b] = out[b]! + n;
+        eq[b] = eq[b]! + n * weight;
       }
     };
-    add(pop.adults);
-    for (const st of pop.juveniles) add(st);
-    if (pending) {
-      add(pending.adults);
-      for (const st of pending.juveniles) add(st);
+    const pop = ctx.populations[s]!;
+    const pending = extras.pending?.[s];
+    for (const p of pending ? [pop, pending] : [pop]) {
+      add(p.adults, 1);
+      for (const st of p.juveniles) add(st, JUVENILE_SIZE_FACTOR);
     }
     const ind = extras.individuals;
     if (ind) {
+      // 展开的个体不分大小，按成体算（只影响猎物存量的估计，差别很小）。
       for (let i = 0; i < ind.count; i++) {
         if (ind.species[i] !== s) continue;
         const b = blockOf[Math.floor(ind.y[i]!) * ind.width + Math.floor(ind.x[i]!)]!;
         out[b] = out[b]! + 1;
+        eq[b] = eq[b]! + 1;
       }
     }
-    for (let b = 0; b < out.length; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;
+  });
+
+  return species.map((sp, s) => {
+    const out = counts[s]!;
+    if (sp.herbivore || sp.territorial) {
+      for (let b = 0; b < blocks; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;
+      return out;
+    }
+    const row = ctx.prey[s]!;
+    const meal = species.map((prey) => usableMeal(sp, sp.dailyIntakeG, prey.bodyMassG));
+    const perPredator = sp.dailyIntakeG * PREY_STOCK_DAYS;
+    for (let b = 0; b < blocks; b++) {
+      if (out[b] === 0) continue;
+      let stock = 0;
+      for (let j = 0; j < species.length; j++) {
+        if (row[j]! > 0) stock += row[j]! * adultEq[j]![b]! * meal[j]!;
+      }
+      out[b] = stock > 0 ? (out[b]! * perPredator) / stock : Number.POSITIVE_INFINITY;
+    }
     return out;
   });
 }
@@ -351,7 +381,7 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
 
   // 出生：约一半成体是雌性；繁殖期内、按吃饱程度打折，越拥挤生得越少。新生的进第 0 段。
   const breeding = ctx.breeding[s]!;
-  const room = 1 - crowding;
+  const room = breedingRoom(sp, crowding);
   let born = 0;
   if (breeding > 0 && adults > 0 && room > 0) {
     const pLitter = 0.5 * breeding * sp.litterRate * Math.min(1, fedRatio / FED_SUFFICIENT) * room;

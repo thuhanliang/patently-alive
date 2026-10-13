@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { grasslandSpecies, speciesLibrary } from '../src/data';
 import { TICKS_PER_DAY, populationTotal } from '../src/sim';
-import { deriveSpecies, preyMatrix, sizeSuitability, usableMeal } from '../src/sim/physiology';
+import { breedingRoom, deriveSpecies, preyMatrix, sizeSuitability, usableMeal } from '../src/sim/physiology';
+import { JUVENILE_STAGES } from '../src/sim/physiology';
+import { crowdingBlocks, crowdingByBlock, type Population } from '../src/sim/population';
 import { makeSim, smallWorld } from './helpers';
 
 const byId = (id: string) => {
@@ -56,8 +58,9 @@ describe('从性状推导的参数', () => {
   it('体型适合度：太小、太大都难抓', () => {
     expect(sizeSuitability(0.001)).toBe(0);
     expect(sizeSuitability(0.1)).toBe(1);
-    expect(sizeSuitability(2)).toBeLessThan(0.5);
-    expect(sizeSuitability(10)).toBe(0);
+    expect(sizeSuitability(2)).toBeLessThan(sizeSuitability(1));
+    expect(sizeSuitability(6)).toBeLessThan(0.5);
+    expect(sizeSuitability(12)).toBe(0);
   });
 
   it('谁吃谁由性状推出：白鼬主要吃田鼠，偶尔吃兔；食草动物不吃任何动物；不吃同类', () => {
@@ -71,6 +74,47 @@ describe('从性状推导的参数', () => {
     expect(m[stoat]![stoat]!).toBe(0);
     expect(m[vole]!.every((x) => x === 0)).toBe(true);
     expect(m[rabbit]!.every((x) => x === 0)).toBe(true);
+  });
+
+  it('食肉动物只抓比自己轻的食肉动物：白鼬会吃伶鼬，伶鼬不抓白鼬', () => {
+    const derived = ['vole', 'weasel', 'stoat'].map((id) => deriveSpecies(byId(id), cell));
+    const m = preyMatrix(derived);
+    expect(m[2]![1]!).toBeGreaterThan(0);
+    expect(m[1]![2]!).toBe(0);
+    expect(m[1]![0]!).toBeGreaterThan(0);
+  });
+
+  it('守固定领地的白鼬按家域限定密度、领地占满前照常繁殖；伶鼬和食草动物不按领地', () => {
+    const stoat = deriveSpecies(byId('stoat'), cell);
+    const weasel = deriveSpecies(byId('weasel'), cell);
+    const vole = deriveSpecies(byId('vole'), cell);
+    expect(stoat.territorial).toBe(true);
+    expect(weasel.territorial).toBe(false);
+    // 每平方公里 2 / 0.11 ≈ 18 只。
+    expect(stoat.crowdingCapacity / ((cell * cell) / 1e6)).toBeCloseTo(2 / 0.11, 5);
+    expect(breedingRoom(stoat, 0.9)).toBe(1);
+    expect(breedingRoom(stoat, 1)).toBe(0);
+    expect(breedingRoom(vole, 0.25)).toBeCloseTo(0.75);
+    expect(breedingRoom(vole, 2)).toBe(0);
+  });
+
+  it('伶鼬的拥挤程度随猎物多少伸缩：没有猎物就住不下，猎物越多越宽松', () => {
+    const species = ['vole', 'weasel'].map((id) => deriveSpecies(byId(id), cell));
+    const prey = preyMatrix(species);
+    const { blockOf, cellsIn } = crowdingBlocks(8, 8);
+    const crowding = (voles: number): number => {
+      const empty = (): Population => ({
+        juveniles: Array.from({ length: JUVENILE_STAGES }, () => new Int32Array(64)),
+        adults: new Int32Array(64),
+      });
+      const populations = [empty(), empty()];
+      populations[0]!.adults[0] = voles;
+      populations[1]!.adults[0] = 2;
+      return crowdingByBlock({ species, prey, populations, blockOf, cellsIn })[1]![0]!;
+    };
+    expect(crowding(0)).toBe(Number.POSITIVE_INFINITY);
+    expect(crowding(100)).toBeGreaterThan(crowding(1000));
+    expect(crowding(1000)).toBeGreaterThan(0);
   });
 
   it('一次捕获能用上的肉量有上限：白鼬吃不完一只兔子，吃得完一只田鼠', () => {
