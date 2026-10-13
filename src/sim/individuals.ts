@@ -9,6 +9,7 @@ import {
   NEST_STAGES,
   SATIATION,
   isActive,
+  juvenileStageAt,
   sizeSuitability,
   type DerivedSpecies,
 } from './physiology';
@@ -66,13 +67,14 @@ function ensureCapacity(ind: Individuals, n: number): void {
   }
 }
 
-function isJuvenile(sp: DerivedSpecies, age: number): boolean {
-  return age < sp.maturityDays;
+/** 第 day 天、age 天大的个体是否还是幼体（和格子里的传送带同一条规则）。 */
+export function isJuvenileAt(sp: DerivedSpecies, age: number, day: number): boolean {
+  return juvenileStageAt(sp, age, day) < JUVENILE_STAGES;
 }
 
 /** 个体按体型折算：幼体算半只（食量、作为猎物的体重）。 */
-function sizeOf(sp: DerivedSpecies, age: number): number {
-  return isJuvenile(sp, age) ? JUVENILE_SIZE_FACTOR : 1;
+function sizeOf(sp: DerivedSpecies, age: number, day: number): number {
+  return isJuvenileAt(sp, age, day) ? JUVENILE_SIZE_FACTOR : 1;
 }
 
 function push(
@@ -122,17 +124,13 @@ function compact(ind: Individuals, removed: Uint8Array): void {
 
 // ---------------------------------------------------------------- 展开与收拢
 
-/** 幼体年龄落在哪个年龄段。 */
-function stageOf(sp: DerivedSpecies, age: number): number {
-  return Math.min(JUVENILE_STAGES - 1, Math.floor((age * JUVENILE_STAGES) / sp.maturityDays));
-}
-
 /**
  * 把一格里某物种的计数全部展开成个体，计数清零。
  * dayElapsed 是当天已经过去的比例：一天中途展开的个体，当作已经按时吃过这么多
  * （否则晚上结算时会按"一整天没吃"挨饿，镜头放大的时间点就会影响死亡数）。
- * 年龄按年龄段抽：第 k 段幼体在 [k·m/段数, (k+1)·m/段数) 内（m 为性成熟天数）；
- * 成体在 [性成熟, 性成熟 + 两倍平均成体寿命) 内，不超过最长寿命。收拢时按年龄放回同一段。
+ * 年龄按传送带反推：第 k 段的幼体出生在"传送带最近第 k 次挪段"那一段时间里，
+ * 在其中均匀抽出生日；成体出生在第 段数 次挪段之前，往前再抽两倍平均成体寿命的范围。
+ * 收拢时用 juvenileStageAt 放回同一段，所以展开再收拢逐段相同。
  */
 export function expandCell(
   ind: Individuals,
@@ -141,6 +139,7 @@ export function expandCell(
   width: number,
   c: number,
   rng: Rng,
+  day: number,
   dayElapsed = 0,
 ): void {
   const cx = c % width;
@@ -150,22 +149,24 @@ export function expandCell(
     const pop = populations[s]!;
     const na = pop.adults[c]!;
     if (countAt(pop, c) === 0) continue;
-    const adultSpan = Math.max(
-      1,
-      Math.min(Math.round(2 / sp.adultDailyMortality), sp.maxAgeDays - sp.maturityDays),
-    );
+    const sd = sp.stageDays;
+    const fd = Math.floor(day / sd);
     for (let k = 0; k < JUVENILE_STAGES; k++) {
       const n = pop.juveniles[k]![c]!;
-      // 这一段的年龄区间 [lo, hi)，保证 stageOf 落回同一段。
-      const lo = Math.ceil((k * sp.maturityDays) / JUVENILE_STAGES);
-      const hi = Math.max(lo + 1, Math.ceil(((k + 1) * sp.maturityDays) / JUVENILE_STAGES));
+      // 第 k 段：出生日在 [(fd−k)·sd, (fd−k+1)·sd) 内，且不晚于今天。
+      const bLo = (fd - k) * sd;
+      const bHi = Math.min(day, (fd - k + 1) * sd - 1);
       for (let j = 0; j < n; j++) {
-        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), lo + rng.nextInt(hi - lo), sp.maxReserveDays / 2, dayElapsed);
+        const born = bLo + rng.nextInt(bHi - bLo + 1);
+        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), day - born, sp.maxReserveDays / 2, dayElapsed);
       }
       pop.juveniles[k]![c] = 0;
     }
+    // 成体：出生日不晚于 (fd − 段数 + 1)·sd − 1。
+    const minAdultAge = day - ((fd - JUVENILE_STAGES + 1) * sd - 1);
+    const adultSpan = Math.max(1, Math.min(Math.round(2 / sp.adultDailyMortality), sp.maxAgeDays - minAdultAge));
     for (let k = 0; k < na; k++) {
-      const age = sp.maturityDays + rng.nextInt(adultSpan);
+      const age = minAdultAge + rng.nextInt(adultSpan);
       push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), age, sp.maxReserveDays / 2, dayElapsed);
     }
     pop.adults[c] = 0;
@@ -183,14 +184,15 @@ function collapseOne(
   populations: Population[],
   width: number,
   i: number,
+  day: number,
 ): void {
   const s = ind.species[i]!;
   const c = Math.floor(ind.y[i]!) * width + Math.floor(ind.x[i]!);
   const pop = populations[s]!;
   const sp = species[s]!;
-  const age = ind.age[i]!;
-  if (isJuvenile(sp, age)) {
-    const stage = pop.juveniles[stageOf(sp, age)]!;
+  const k = juvenileStageAt(sp, ind.age[i]!, day);
+  if (k < JUVENILE_STAGES) {
+    const stage = pop.juveniles[k]!;
     stage[c] = stage[c]! + 1;
   } else {
     pop.adults[c] = pop.adults[c]! + 1;
@@ -211,12 +213,13 @@ export function applyFocus(
   from: FocusRect | null,
   to: FocusRect | null,
   rng: Rng,
+  day: number,
   dayElapsed = 0,
 ): void {
   const removed = new Uint8Array(ind.count);
   for (let i = 0; i < ind.count; i++) {
     if (!inFocus(to, Math.floor(ind.x[i]!), Math.floor(ind.y[i]!))) {
-      collapseOne(ind, species, collapseInto, grid.width, i);
+      collapseOne(ind, species, collapseInto, grid.width, i, day);
       removed[i] = 1;
     }
   }
@@ -224,7 +227,7 @@ export function applyFocus(
   if (!to) return;
   for (let y = to.y0; y < to.y1; y++) {
     for (let x = to.x0; x < to.x1; x++) {
-      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng, dayElapsed);
+      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng, day, dayElapsed);
     }
   }
 }
@@ -237,6 +240,7 @@ export function absorbImmigrants(
   grid: Grid,
   focus: FocusRect | null,
   rng: Rng,
+  day: number,
 ): void {
   if (!focus) return;
   for (let y = focus.y0; y < focus.y1; y++) {
@@ -244,7 +248,7 @@ export function absorbImmigrants(
       const c = y * grid.width + x;
       let has = false;
       for (const p of populations) if (countAt(p, c) > 0) has = true;
-      if (has) expandCell(ind, species, populations, grid.width, c, rng);
+      if (has) expandCell(ind, species, populations, grid.width, c, rng, day);
     }
   }
 }
@@ -264,6 +268,8 @@ export interface HourlyContext {
   grid: Grid;
   focus: FocusRect;
   hour: number;
+  /** 今天是第几天（判断成年用）。 */
+  day: number;
   cellAreaM2: number;
   floorBiomass: number;
   rng: Rng;
@@ -291,7 +297,7 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     const sp = species[s]!;
 
     // 窝里的幼崽不走动（和格子模型里前几个年龄段不扩散一致），但照样吃东西。
-    const nested = ind.age[i]! < (sp.maturityDays * NEST_STAGES) / JUVENILE_STAGES;
+    const nested = juvenileStageAt(sp, ind.age[i]!, ctx.day) < NEST_STAGES;
     if (nested) {
       if (sp.herbivore) graze(ind, i, sp, grid, ctx);
       continue;
@@ -322,7 +328,7 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     ind.vy[i] = vy;
 
     if (nx < x0 || nx >= x1 || ny < y0 || ny >= y1) {
-      collapseOne(ind, species, ctx.emigrants, grid.width, i);
+      collapseOne(ind, species, ctx.emigrants, grid.width, i, ctx.day);
       removed[i] = 1;
       continue;
     }
@@ -337,7 +343,7 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
 /** 食草个体吃这一小时的份额（不超过所在格能啃的量）。 */
 function graze(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: HourlyContext): void {
   const c = Math.floor(ind.y[i]!) * grid.width + Math.floor(ind.x[i]!);
-  const need = sp.dailyIntakeG * sizeOf(sp, ind.age[i]!);
+  const need = sp.dailyIntakeG * sizeOf(sp, ind.age[i]!, ctx.day);
   const available = Math.max(0, grid.vegetation[c]! - ctx.floorBiomass) * ctx.cellAreaM2 * MAX_GRAZE_FRACTION;
   const eaten = Math.min(need / sp.activeHours, available);
   grid.vegetation[c] = grid.vegetation[c]! - eaten / ctx.cellAreaM2;
@@ -374,8 +380,8 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
     if (removed[p]) continue;
     const ps = ind.species[p]!;
     const pred = species[ps]!;
-    const predMass = pred.bodyMassG * sizeOf(pred, ind.age[p]!);
-    const need = pred.dailyIntakeG * sizeOf(pred, ind.age[p]!);
+    const predMass = pred.bodyMassG * sizeOf(pred, ind.age[p]!, ctx.day);
+    const need = pred.dailyIntakeG * sizeOf(pred, ind.age[p]!, ctx.day);
     const px = ind.x[p]!;
     const py = ind.y[p]!;
     const lx = Math.floor(px) - focus.x0;
@@ -393,7 +399,7 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           const ddy = ind.y[q]! - py;
           if (ddx * ddx + ddy * ddy > r2) continue;
           const prey = species[qs]!;
-          const preyMass = prey.bodyMassG * sizeOf(prey, ind.age[q]!);
+          const preyMass = prey.bodyMassG * sizeOf(prey, ind.age[q]!, ctx.day);
           const chance = sizeSuitability(preyMass / predMass) * CATCH_SUCCESS;
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
@@ -410,6 +416,8 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
 export interface IndividualDailyContext {
   species: readonly DerivedSpecies[];
   width: number;
+  /** 今天是第几天（判断成年用）。 */
+  day: number;
   /** 当月各物种的繁殖期系数。 */
   breeding: readonly number[];
   /** 各物种各区块的拥挤程度。 */
@@ -432,7 +440,7 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     const s = ind.species[i]!;
     const sp = species[s]!;
     const age = ind.age[i]!;
-    const juvenile = isJuvenile(sp, age);
+    const juvenile = isJuvenileAt(sp, age, ctx.day);
 
     const reserve = Math.max(-1, Math.min(sp.maxReserveDays, ind.reserve[i]! + ind.fed[i]! - 1));
     ind.reserve[i] = reserve;

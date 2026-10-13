@@ -22,7 +22,7 @@ describe('展开与收拢守恒', () => {
     const { derived } = deriveAll(state.config.species, state.config.world.cellSizeM);
     const rng = Rng.fromSeed(1);
 
-    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, null, FOCUS, rng);
+    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, null, FOCUS, rng, sim.day);
     // 关注区里的计数全部清零，变成个体。
     let leftInFocus = 0;
     for (let y = FOCUS.y0; y < FOCUS.y1; y++)
@@ -31,7 +31,7 @@ describe('展开与收拢守恒', () => {
     expect(leftInFocus).toBe(0);
     expect(state.individuals.count).toBeGreaterThan(100);
 
-    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, FOCUS, null, rng);
+    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, FOCUS, null, rng, sim.day);
     expect(state.individuals.count).toBe(0);
     expect(cellCounts(state)).toBe(before);
   });
@@ -56,7 +56,7 @@ describe('展开与收拢守恒', () => {
     const totalsBefore = sim.totals();
 
     const { derived } = deriveAll(st.config.species, st.config.world.cellSizeM);
-    applyFocus(st.individuals, derived, st.populations, st.emigrants, st.grid, st.focus, to, Rng.fromSeed(2));
+    applyFocus(st.individuals, derived, st.populations, st.emigrants, st.grid, st.focus, to, Rng.fromSeed(2), sim.day);
     expect(overlap(st)).toEqual(before);
 
     const totalAfter = st.populations.map((p, s) => {
