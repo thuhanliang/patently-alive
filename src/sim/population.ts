@@ -111,10 +111,13 @@ export interface DailyContext {
   scratch: Int32Array;
   /** 各物种各区块的拥挤程度（见 crowdingByBlock），当天开始时算好。 */
   crowding: Float64Array[];
+  /** 每格属于哪个拥挤区块（预先算好）。 */
+  blockOf: Int32Array;
 }
 
 /**
- * 一天的种群推演，逐格进行：捕食 → 进食 → 出生 → 死亡 → 长大，最后整张图一起扩散。
+ * 一天的种群推演，逐格进行：捕食 → 进食 → 出生 → 死亡，最后整张图一起扩散。
+ * （长大由传送带在这之前统一挪段，见 shiftStages。）
  * 先捕食：今天被吃掉的动物不再分走植被。
  * 返回各物种当天的账目。
  */
@@ -123,15 +126,12 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   const stats = species.map(() => emptyDayStats());
   const cells = grid.width * grid.height;
   const fed = new Float64Array(species.length);
-  const crowding = ctx.crowding;
-  const bw = Math.ceil(grid.width / CROWDING_BLOCK_CELLS);
+  const { crowding, blockOf } = ctx;
 
   for (let c = 0; c < cells; c++) {
     hunt(ctx, c, fed, stats);
     graze(ctx, c, fed);
-    const block =
-      Math.floor(Math.floor(c / grid.width) / CROWDING_BLOCK_CELLS) * bw +
-      Math.floor((c % grid.width) / CROWDING_BLOCK_CELLS);
+    const block = blockOf[c]!;
     for (let s = 0; s < species.length; s++) {
       if (countAt(populations[s]!, c) > 0) {
         lifeCycle(ctx, s, c, fed[s]!, crowding[s]![block]!, stats[s]!);
@@ -155,9 +155,39 @@ export function crowdingBlockOf(width: number, x: number, y: number): number {
   return Math.floor(y / CROWDING_BLOCK_CELLS) * bw + Math.floor(x / CROWDING_BLOCK_CELLS);
 }
 
+/** 每格属于哪个区块，以及每个区块有几格（边缘区块不满）。地图建好后算一次。 */
+export function crowdingBlocks(width: number, height: number): { blockOf: Int32Array; cellsIn: Float64Array } {
+  const bw = Math.ceil(width / CROWDING_BLOCK_CELLS);
+  const bh = Math.ceil(height / CROWDING_BLOCK_CELLS);
+  const blockOf = new Int32Array(width * height);
+  const cellsIn = new Float64Array(bw * bh);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const b = crowdingBlockOf(width, x, y);
+      blockOf[y * width + x] = b;
+      cellsIn[b] = cellsIn[b]! + 1;
+    }
+  }
+  return { blockOf, cellsIn };
+}
+
+/**
+ * 幼体传送带挪一段：最后一段并入成体，其余各段往后挪，第 0 段清空。
+ * 只交换数组和做一次加法，不抽随机数。
+ */
+export function shiftStages(pop: Population): void {
+  const stages = pop.juveniles;
+  const last = stages[stages.length - 1]!;
+  for (let c = 0; c < last.length; c++) pop.adults[c] = pop.adults[c]! + last[c]!;
+  last.fill(0);
+  for (let k = stages.length - 1; k > 0; k--) stages[k] = stages[k - 1]!;
+  stages[0] = last;
+}
+
 /** 格子计数之外、也要算进拥挤度的动物：展开的个体（按位置）和待合并的计数。 */
 export interface CrowdingExtras {
-  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array };
+  /** 展开的个体，带地图宽度（个体坐标换算格子下标用）。 */
+  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array; width: number };
   pending?: readonly Population[];
 }
 
@@ -166,28 +196,32 @@ export interface CrowdingExtras {
  * 当天开始时统计一次（区块边缘不满 8×8 时按实际格数算）。
  */
 export function crowdingByBlock(
-  ctx: Pick<DailyContext, 'grid' | 'species' | 'populations'>,
+  ctx: Pick<DailyContext, 'species' | 'populations' | 'blockOf'> & { cellsIn: Float64Array },
   extras: CrowdingExtras = {},
 ): Float64Array[] {
-  const { width, height } = ctx.grid;
-  const B = CROWDING_BLOCK_CELLS;
-  const bw = Math.ceil(width / B);
-  const bh = Math.ceil(height / B);
-  const cellsIn = new Float64Array(bw * bh);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) cellsIn[Math.floor(y / B) * bw + Math.floor(x / B)]! += 1;
+  const { blockOf, cellsIn } = ctx;
   return ctx.species.map((sp, s) => {
     const pop = ctx.populations[s]!;
-    const out = new Float64Array(bw * bh);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const c = y * width + x;
-        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += countAt(pop, c) + (extras.pending ? countAt(extras.pending[s]!, c) : 0);
+    const pending = extras.pending?.[s];
+    const out = new Float64Array(cellsIn.length);
+    const add = (counts: Int32Array): void => {
+      for (let c = 0; c < counts.length; c++) {
+        const n = counts[c]!;
+        if (n !== 0) out[blockOf[c]!] = out[blockOf[c]!]! + n;
       }
+    };
+    add(pop.adults);
+    for (const st of pop.juveniles) add(st);
+    if (pending) {
+      add(pending.adults);
+      for (const st of pending.juveniles) add(st);
     }
     const ind = extras.individuals;
     if (ind) {
       for (let i = 0; i < ind.count; i++) {
-        if (ind.species[i] === s) out[Math.floor(ind.y[i]! / B) * bw + Math.floor(ind.x[i]! / B)]! += 1;
+        if (ind.species[i] !== s) continue;
+        const b = blockOf[Math.floor(ind.y[i]!) * ind.width + Math.floor(ind.x[i]!)]!;
+        out[b] = out[b]! + 1;
       }
     }
     for (let b = 0; b < out.length; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;
@@ -299,14 +333,7 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
     stage[c] = stage[c]! - dieOff(rng, stage[c]!, sp.juvenileDailyMortality, starve, st);
   }
 
-  // 长大：从最后一段往前推，每只一天最多走一段；最后一段长成成体。
-  for (let k = stages.length - 1; k >= 0; k--) {
-    const moved = binomial(rng, stages[k]![c]!, sp.maturationRate);
-    if (moved === 0) continue;
-    stages[k]![c] = stages[k]![c]! - moved;
-    if (k === stages.length - 1) adults += moved;
-    else stages[k + 1]![c] = stages[k + 1]![c]! + moved;
-  }
+  // 长大由传送带负责（见 shiftStages）；新生的进第 0 段。
   stages[0]![c] = stages[0]![c]! + born;
 
   pop.adults[c] = adults;
@@ -338,9 +365,12 @@ function disperse(ctx: DailyContext, s: number, counts: Int32Array): void {
   const r = sp.moveRadius;
   const span = 2 * r + 1;
 
+  const cellsInSpan = span * span;
   const move = (c: number, x: number, y: number, k: number): void => {
-    const dx = rng.nextInt(span) - r;
-    const dy = rng.nextInt(span) - r;
+    // 一次抽出落点在 span×span 方块里的位置，等价于分别抽横纵偏移。
+    const o = rng.nextInt(cellsInSpan);
+    const dx = (o % span) - r;
+    const dy = Math.floor(o / span) - r;
     const nx = x + dx;
     const ny = y + dy;
     if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) return;

@@ -5,8 +5,10 @@ import { createGrid, growVegetation, type Grid } from './grid';
 import { deriveAll, type DerivedSpecies } from './physiology';
 import {
   createPopulation,
+  crowdingBlocks,
   crowdingByBlock,
   dailyPopulation,
+  shiftStages,
   emptyDayStats,
   emptyPopulation,
   mergeInto,
@@ -92,12 +94,14 @@ export class Sim {
   private readonly derived: DerivedSpecies[];
   private readonly prey: number[][];
   private readonly scratch: Int32Array;
+  private readonly blocks: { blockOf: Int32Array; cellsIn: Float64Array };
 
   constructor(state: SimState) {
     this.s = cloneData(state);
     this.rng = Rng.fromState(this.s.rng);
     ({ derived: this.derived, prey: this.prey } = deriveAll(this.s.config.species, this.s.config.world.cellSizeM));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
+    this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height);
   }
 
   static create(config: SimConfig): Sim {
@@ -169,6 +173,7 @@ export class Sim {
         width,
         c,
         this.rng,
+        this.day,
         (this.s.tick % TICKS_PER_DAY) / TICKS_PER_DAY,
       );
       this.s.rng = this.rng.state();
@@ -181,7 +186,17 @@ export class Sim {
     return this.s.populations.map((p, i) => populationTotal(p) + populationTotal(this.s.emigrants[i]!) + ind[i]!);
   }
 
+  /**
+   * 传送带的当前日：最近一次每日结算所在的天（tick / 24 向下取整）。
+   * 一天里的 24 个小时都属于这一天，直到下一次每日结算；判断幼体、成体统一用它。
+   */
+  get day(): number {
+    return Math.floor(this.s.tick / TICKS_PER_DAY);
+  }
+
   step(): void {
+    // 这一小时属于"推进之前"的那一天：第 24 个小时也还没到下一次每日结算。
+    const hourDay = this.day;
     if (!sameFocus(this.s.focus, this.s.requestedFocus)) {
       // 今天已经过去的小时数。刚换天（还没有任何个体行动过）时收拢的直接回格子计数，
       // 一天中途收拢的进待合并计数；中途展开的当作已经按时吃过。
@@ -195,6 +210,7 @@ export class Sim {
         this.s.focus,
         this.s.requestedFocus,
         this.rng,
+        this.day,
         hoursDone / TICKS_PER_DAY,
       );
       this.s.focus = this.s.requestedFocus ? { ...this.s.requestedFocus } : null;
@@ -207,6 +223,7 @@ export class Sim {
         grid: this.s.grid,
         focus: this.s.focus,
         hour: calendar(this.s.tick).hour,
+        day: hourDay,
         cellAreaM2: cellArea(this.s.config),
         floorBiomass: this.s.config.world.vegetation.floorBiomass,
         rng: this.rng,
@@ -237,10 +254,19 @@ export class Sim {
     const decay = monthlyCurve(world.vegetation.decayByMonth, dayOfYear);
     growVegetation(this.s.grid, world, growth, decay);
 
+    // 幼体传送带：到了挪段的日子，格子计数和待合并计数一起挪（个体按同一规则自动成年）。
+    const day = this.day;
+    this.derived.forEach((sp, s) => {
+      if (day % sp.stageDays === 0) {
+        shiftStages(this.s.populations[s]!);
+        shiftStages(this.s.emigrants[s]!);
+      }
+    });
+
     const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
     const crowding = crowdingByBlock(
-      { grid: this.s.grid, species: this.derived, populations: this.s.populations },
-      { individuals: this.s.individuals, pending: this.s.emigrants },
+      { species: this.derived, populations: this.s.populations, ...this.blocks },
+      { individuals: { ...this.s.individuals, width: this.s.grid.width }, pending: this.s.emigrants },
     );
 
     const cellStats = dailyPopulation({
@@ -254,19 +280,22 @@ export class Sim {
       rng: this.rng,
       scratch: this.scratch,
       crowding,
+      blockOf: this.blocks.blockOf,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {
       species: this.derived,
       width: this.s.grid.width,
+      day,
       breeding,
       crowding,
+      blockOf: this.blocks.blockOf,
       rng: this.rng,
       stats: acc,
     });
     // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
     this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
-    absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng);
+    absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng, day);
 
     const totals = this.totals();
     this.s.lastDay = cellStats.map((c, s) => ({

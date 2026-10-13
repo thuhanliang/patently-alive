@@ -25,11 +25,13 @@ const CROWDING_FACTOR = 20;
 /** 拥挤程度按多大的区块统计（格）。动物会在几格之间走动，单格计数太跳。 */
 export const CROWDING_BLOCK_CELLS = 8;
 /**
- * 幼体在格子里分成几个年龄段，每天按概率往下一段走，最后一段长成成体。
- * 只有一段时成熟时间是指数分布，有一部分刚出生几天就成年、开始繁殖，种群长得偏快；
- * 分成几段后成熟时间集中在性成熟年龄附近，和个体（按年龄成熟）对得上。
+ * 幼体的"传送带"：格子里的幼体分成几个年龄段，每个物种每隔 stageDays 天（性成熟天数 ÷ 段数）
+ * 整体往前挪一段，最后一段并入成体。挪段只是交换数组，不用抽随机数。
+ * stageDays = ⌊性成熟天数 / 段数⌋，成熟时间落在 (段数−1)·stageDays+1 到 段数·stageDays 天之间，
+ * 不晚于性状给的性成熟年龄；个体用同一条规则判断是否成年
+ * （见 juvenileStageAt），所以展开、收拢严格对得上。
  */
-export const JUVENILE_STAGES = 8;
+export const JUVENILE_STAGES = 4;
 /** 前这么多个年龄段的幼体还在窝里、跟着母亲，不自己扩散（个体里对应年龄不到性成熟一半的幼崽不走动）。 */
 export const NEST_STAGES = JUVENILE_STAGES / 2;
 /** 幼体按成体的这个比例算食量和体重（从刚出生到长成的平均）。 */
@@ -61,8 +63,8 @@ export interface DerivedSpecies {
   readonly adultDailyMortality: number;
   readonly juvenileDailyMortality: number;
   readonly starvationRate: number;
-  /** 幼体每天进入下一个年龄段（最后一段则长成成体）的概率。 */
-  readonly maturationRate: number;
+  /** 幼体传送带每隔几天挪一段。 */
+  readonly stageDays: number;
   /** 繁殖期内每只雌性每天产一窝的概率。 */
   readonly litterRate: number;
   /** 平均每格住到这么多只就不再繁殖（按区块统计）。 */
@@ -76,7 +78,6 @@ export interface DerivedSpecies {
   readonly activeHours: number;
   /** 个体：体内储备上限（天）。 */
   readonly maxReserveDays: number;
-  readonly maturityDays: number;
   readonly maxAgeDays: number;
 }
 
@@ -97,7 +98,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     adultDailyMortality,
     juvenileDailyMortality: Math.min(1, adultDailyMortality * JUVENILE_MORTALITY_FACTOR),
     starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
-    maturationRate: Math.min(1, JUVENILE_STAGES / p.reproduction.ageAtMaturityDays),
+    stageDays: Math.max(1, Math.floor(p.reproduction.ageAtMaturityDays / JUVENILE_STAGES)),
     litterRate: breedingDays > 0 ? 1 / Math.min(p.reproduction.litterIntervalDays, breedingDays) : 0,
     crowdingCapacity: typicalPerKm2 * CROWDING_FACTOR * cellKm2,
     moveProb: Math.min(0.5, cellsPerDay / 2),
@@ -105,7 +106,6 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
     activeHours: activeHoursPerDay(p.activity),
     maxReserveDays: RESERVE_COEF * detPow(p.bodyMassKg, 0.25),
-    maturityDays: p.reproduction.ageAtMaturityDays,
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
   };
 }
@@ -131,6 +131,17 @@ export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number):
 } {
   const derived = species.map((s) => deriveSpecies(s, cellSizeM));
   return { derived, prey: preyMatrix(derived) };
+}
+
+/**
+ * 第 born 天出生的个体，到第 day 天时在传送带上的哪一段：0..JUVENILE_STAGES−1 是幼体，
+ * JUVENILE_STAGES 表示已成年。等于它出生以来传送带挪过几次
+ * （每个 day % stageDays === 0 的日子挪一次，在那天的出生之前挪）。
+ * day 指"传送带最近一次可能挪段的那一天"，即最近一次每日结算所在的天（见 Sim.day）。
+ */
+export function juvenileStageAt(sp: Pick<DerivedSpecies, 'stageDays'>, born: number, day: number): number {
+  const shifts = Math.floor(day / sp.stageDays) - Math.floor(born / sp.stageDays);
+  return Math.min(JUVENILE_STAGES, shifts);
 }
 
 type Activity = SpeciesParams['activity'];

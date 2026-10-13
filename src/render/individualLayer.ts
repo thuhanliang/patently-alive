@@ -1,5 +1,5 @@
 import { Container, Graphics, Particle, ParticleContainer, Texture } from 'pixi.js';
-import type { DerivedSpecies, SimState } from '../sim';
+import { TICKS_PER_DAY, isJuvenileAt, type DerivedSpecies, type SimState } from '../sim';
 import { CELL_PX } from './projection';
 
 /** 灰盒：每个物种一个灰度，按体重给大小（格的比例）。幼体小一圈。 */
@@ -31,6 +31,7 @@ export class IndividualLayer {
   draw(state: Readonly<SimState>): void {
     const ind = state.individuals;
     const n = ind.count;
+    const day = Math.floor(state.tick / TICKS_PER_DAY);
     while (this.pool.length < n) {
       const p = new Particle({ texture: Texture.WHITE, anchorX: 0.5, anchorY: 0.5 });
       this.pool.push(p);
@@ -44,7 +45,7 @@ export class IndividualLayer {
       const s = ind.species[i]!;
       const sp = this.species[s]!;
       const p = this.pool[i]!;
-      const juvenile = ind.age[i]! < sp.maturityDays;
+      const juvenile = isJuvenileAt(sp, ind.born[i]!, day);
       // 按贴图的实际宽度换算成世界坐标里的边长。
       const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / Texture.WHITE.width;
       p.x = ind.x[i]! * CELL_PX;

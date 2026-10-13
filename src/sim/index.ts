@@ -8,6 +8,6 @@ export { countAt, populationTotal, type Population, type DayStats } from './popu
 export { type DerivedSpecies } from './physiology';
 export * from './time';
 export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type FocusRect } from './focus';
-export { type Individuals } from './individuals';
+export { isJuvenileAt, type Individuals } from './individuals';
 export { OpSchema, OpLogSchema, costOf, type Op, type OpLog, type LogEntry, type Cost } from './ops';
 export { Session, type SubmitResult, type Resources } from './session';
