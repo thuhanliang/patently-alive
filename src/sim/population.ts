@@ -19,6 +19,7 @@ import {
 } from './physiology';
 import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
+import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
 
 /**
  * 按格子的种群：每个物种每格存幼体（分 juvenileStages 个年龄段，见 physiology 的 conveyor）和成体的整数计数。
@@ -128,6 +129,8 @@ export interface DailyContext {
   shrubFloor?: number | undefined;
   /** 陆地格的下标，从小到大（见 landCells）。 */
   land: Int32Array;
+  /** 死因账本：每笔死亡记在这里（见 ledger.ts）。 */
+  ledger: DeathLedger;
 }
 
 /** 陆地格的下标，从小到大。地图建好后算一次；没有水的地图就是全部格子。 */
@@ -197,6 +200,11 @@ function combineFed(sp: DerivedSpecies, fed: FedByFood, s: number): number {
 export function crowdingBlockOf(width: number, x: number, y: number): number {
   const bw = Math.ceil(width / CROWDING_BLOCK_CELLS);
   return Math.floor(y / CROWDING_BLOCK_CELLS) * bw + Math.floor(x / CROWDING_BLOCK_CELLS);
+}
+
+/** 区块一共有几个（和 crowdingBlocks 的布局一致）。 */
+export function crowdingBlockCount(width: number, height: number): number {
+  return Math.ceil(width / CROWDING_BLOCK_CELLS) * Math.ceil(height / CROWDING_BLOCK_CELLS);
 }
 
 /**
@@ -540,6 +548,7 @@ function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | nu
       const ka = binomial(rng, pop.adults[c]!, pMobile);
       pop.adults[c] = pop.adults[c]! - ka;
       stats[j]!.deathsPredation += ka;
+      recordDeaths(ctx.ledger, j, CAUSE.predation(s), b, ka);
       const ns = species[j]!.nestStages;
       const stages = pop.juveniles;
       for (let k = 0; k < stages.length; k++) {
@@ -547,6 +556,9 @@ function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | nu
         const kj = binomial(rng, stage[c]!, k < ns ? pNest : pMobile);
         stage[c] = stage[c]! - kj;
         stats[j]!.deathsPredation += kj;
+        // 写了窝类型的物种，窝里的被吃算"巢失败"；阶段 0 的物种没有窝的概念，都算被捕食。
+        const nested = k < ns && species[j]!.nest !== null;
+        recordDeaths(ctx.ledger, j, nested ? CAUSE.nest(s) : CAUSE.predation(s), b, kj);
       }
     }
   }
@@ -579,10 +591,11 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
 
   // 死亡：基础死亡（衰老、疾病、意外）+ 饥饿。先抽总数，再按比例分死因。
   const starve = sp.starvationRate * Math.max(0, 1 - fedRatio / FED_SUFFICIENT);
-  adults -= dieOff(rng, adults, sp.adultDailyMortality, starve, st);
+  const block = ctx.blockOf[c]!;
+  adults -= dieOff(ctx, s, block, adults, sp.adultDailyMortality, starve, st);
   const stages = pop.juveniles;
   for (const stage of stages) {
-    stage[c] = stage[c]! - dieOff(rng, stage[c]!, sp.juvenileDailyMortality, starve, st);
+    stage[c] = stage[c]! - dieOff(ctx, s, block, stage[c]!, sp.juvenileDailyMortality, starve, st);
   }
 
   // 长大由传送带负责（见 shiftStages）；新生的进第 0 段。
@@ -591,8 +604,9 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
   pop.adults[c] = adults;
 }
 
-function dieOff(rng: Rng, n: number, base: number, starve: number, st: DayStats): number {
+function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: number, starve: number, st: DayStats): number {
   if (n === 0) return 0;
+  const rng = ctx.rng;
   const p = Math.min(1, base + starve);
   const dead = binomial(rng, n, p);
   if (dead > 0) {
@@ -600,6 +614,8 @@ function dieOff(rng: Rng, n: number, base: number, starve: number, st: DayStats)
     const starved = starve > 0 ? binomial(rng, dead, starve / (base + starve)) : 0;
     st.deathsStarvation += starved;
     st.deathsOther += dead - starved;
+    recordDeaths(ctx.ledger, s, CAUSE.starvation, block, starved);
+    recordDeaths(ctx.ledger, s, CAUSE.other, block, dead - starved);
   }
   return dead;
 }

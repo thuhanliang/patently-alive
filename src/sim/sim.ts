@@ -3,9 +3,11 @@ import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
 import { createGrid, growVegetation, type Grid } from './grid';
 import { isLand } from './terrain';
+import { closeLedgerDay, createLedger, decayLedger, type DeathLedger } from './ledger';
 import { deriveAll, type DerivedSpecies, type PreyWeights } from './physiology';
 import {
   createPopulation,
+  crowdingBlockCount,
   crowdingBlocks,
   landCells,
   crowdingByBlock,
@@ -57,6 +59,8 @@ export interface SimState {
   emigrants: Population[];
   /** 当天到目前为止的账目（个体每小时被捕食的计入这里），换天时并入 lastDay。 */
   dayAccum: DayStats[];
+  /** 死因账本（见 ledger.ts）。 */
+  deaths: DeathLedger;
 }
 
 function cellArea(config: SimConfig): number {
@@ -83,6 +87,7 @@ export function createInitialState(config: SimConfig): SimState {
     individuals: createIndividuals(),
     emigrants: populations.map(emptyPopulation),
     dayAccum: populations.map(() => emptyDayStats()),
+    deaths: createLedger(derived.length, crowdingBlockCount(grid.width, grid.height)),
   };
 }
 
@@ -241,6 +246,8 @@ export class Sim {
         shrubFloor: this.shrubFloor,
         rng: this.rng,
         stats: this.s.dayAccum,
+        ledger: this.s.deaths,
+        blockOf: this.blocks.blockOf,
       });
     }
     if (this.s.tick % TICKS_PER_DAY === 0) this.daily();
@@ -296,6 +303,7 @@ export class Sim {
       crowding,
       blockOf: this.blocks.blockOf,
       land: this.land,
+      ledger: this.s.deaths,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {
@@ -307,6 +315,7 @@ export class Sim {
       blockOf: this.blocks.blockOf,
       rng: this.rng,
       stats: acc,
+      ledger: this.s.deaths,
     });
     // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
     this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
@@ -322,5 +331,8 @@ export class Sim {
       released: acc[s]!.released,
     }));
     this.s.dayAccum = this.derived.map(() => emptyDayStats());
+    // 死因账本：今天的合计存进 lastDay，旧账（含今天的）衰减一天。
+    closeLedgerDay(this.s.deaths);
+    decayLedger(this.s.deaths);
   }
 }

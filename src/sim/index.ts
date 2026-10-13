@@ -11,3 +11,4 @@ export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type Foc
 export { isJuvenileAt, type Individuals } from './individuals';
 export { OpSchema, OpLogSchema, costOf, type Op, type OpLog, type LogEntry, type Cost } from './ops';
 export { Session, type SubmitResult, type Resources } from './session';
+export { CAUSE, causeName, recentByCause, type DeathLedger } from './ledger';

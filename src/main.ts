@@ -7,6 +7,7 @@ import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
+import { DeathPanel } from './ui/deathPanel';
 import { bindLayerControls } from './ui/layerControls';
 import { bindTimeControls } from './ui/timeControls';
 import { bindToolControls } from './ui/toolControls';
@@ -52,6 +53,7 @@ async function main(): Promise<void> {
   const clock = new FixedStepClock({ stepMs: 50, maxStepsPerFrame: TICKS_PER_DAY * 2 });
   const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
+  const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
@@ -78,6 +80,7 @@ async function main(): Promise<void> {
     session = next;
     clock.reset();
     hud.reset();
+    deaths.reset();
     history.clear();
     history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
@@ -167,6 +170,7 @@ async function main(): Promise<void> {
     advance(clock.advance(ticker.deltaMS));
     view.draw(session.sim.state);
     hud.update(session.sim.state, session.speed, session.entries.length);
+    deaths.update(session.sim.state);
     chart.draw();
     syncCamera();
     syncTime();
