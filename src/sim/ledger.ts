@@ -11,7 +11,10 @@ import { detPow } from './detmath';
  *
  * 地点按区块而不是逐格：逐格按物种、死因存要几百万个数，快照太大；区块的分辨率（400 米）已经够看"哪一片死得多"。
  * 时间：按天的全岛合计（today / lastDay），加上按区块、随时间衰减的近期死亡（recent，半衰期 RECENT_HALF_LIFE_DAYS 天），
- * 所以区块里的数是"最近"的而不是累计的。尸检要用的新鲜尸体第 5 步再加。
+ * 所以区块里的数是"最近"的而不是累计的。
+ *
+ * 新鲜尸体（fresh）：最近 FRESH_DAYS 天里死在各区块的尸体，按天分槽存，过了这几天就腐烂、找不到了。
+ * 尸检只能找新鲜尸体；被兽医队移除的不留在野外，不算。尸检找到一具就从这里拿走一具。
  */
 export const CAUSE = {
   starvation: 0,
@@ -29,6 +32,9 @@ export function causeCount(species: number): number {
 export const RECENT_HALF_LIFE_DAYS = 30;
 const RECENT_KEEP = detPow(0.5, 1 / RECENT_HALF_LIFE_DAYS);
 
+/** 尸体保持新鲜、还能尸检的天数（含死的那天）。假设值，见 docs/MODEL.md。 */
+export const FRESH_DAYS = 3;
+
 export interface DeathLedger {
   species: number;
   causes: number;
@@ -39,6 +45,9 @@ export interface DeathLedger {
   today: Float64Array;
   /** [物种][死因]，最近一次每日结算那一天的全天合计。 */
   lastDay: Float64Array;
+  /** [天槽][物种][死因][区块]，新鲜尸体；freshSlot 是今天的槽。 */
+  fresh: Float64Array;
+  freshSlot: number;
 }
 
 export function createLedger(species: number, blocks: number): DeathLedger {
@@ -50,6 +59,8 @@ export function createLedger(species: number, blocks: number): DeathLedger {
     recent: new Float64Array(species * causes * blocks),
     today: new Float64Array(species * causes),
     lastDay: new Float64Array(species * causes),
+    fresh: new Float64Array(FRESH_DAYS * species * causes * blocks),
+    freshSlot: 0,
   };
 }
 
@@ -60,6 +71,20 @@ export function recordDeaths(ledger: DeathLedger, s: number, cause: number, bloc
   ledger.recent[i] = ledger.recent[i]! + n;
   const t = s * ledger.causes + cause;
   ledger.today[t] = ledger.today[t]! + n;
+  if (cause !== CAUSE.removed) {
+    const f = freshIndex(ledger, ledger.freshSlot, s, cause, block);
+    ledger.fresh[f] = ledger.fresh[f]! + n;
+  }
+}
+
+/** 新鲜尸体数组里的下标。 */
+export function freshIndex(ledger: DeathLedger, slot: number, s: number, cause: number, block: number): number {
+  return ((slot * ledger.species + s) * ledger.causes + cause) * ledger.blocks + block;
+}
+
+/** 死了几天的那一槽（0 = 今天）。 */
+export function freshSlotAgo(ledger: DeathLedger, daysAgo: number): number {
+  return (ledger.freshSlot - daysAgo + FRESH_DAYS) % FRESH_DAYS;
 }
 
 /**
@@ -75,6 +100,10 @@ export function decayLedger(ledger: DeathLedger): void {
 export function closeLedgerDay(ledger: DeathLedger): void {
   ledger.lastDay.set(ledger.today);
   ledger.today.fill(0);
+  // 最老的一槽腐烂了，腾出来记明天的尸体。
+  ledger.freshSlot = (ledger.freshSlot + 1) % FRESH_DAYS;
+  const size = ledger.species * ledger.causes * ledger.blocks;
+  ledger.fresh.fill(0, ledger.freshSlot * size, (ledger.freshSlot + 1) * size);
 }
 
 /** 物种 s 在全图（或某个区块）的近期死亡，按死因列出。 */

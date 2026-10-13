@@ -1,6 +1,6 @@
 import { grassland, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
 import { FixedStepClock, OpLogSchema, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
-import { worldToCell } from './render/projection';
+import { worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
 import { bindCameraControls } from './ui/cameraControls';
@@ -142,15 +142,21 @@ async function main(): Promise<void> {
     el('field-tools'),
     toolData,
     session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    world.cellSizeM,
     () => tools.stopReleasing(),
   );
 
   const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'), (screen) => {
-    const cell = worldToCell(view.camera.screenToWorld(screen));
+    const pos = view.camera.screenToWorld(screen);
+    const cell = worldToCell(pos);
     if (field.isPlacing()) {
-      const op = field.opAt(cell.x, cell.y);
+      const op = field.click(cell, worldToCorner(pos));
+      if (!op) {
+        status.textContent = '围栏起点已定，再点终点';
+        return;
+      }
       if (submit(op)) {
-        status.textContent = op.type === 'trap' ? `在 (${cell.x}, ${cell.y}) 布了陷阱，${op.nights} 晚` : `今晚在 (${cell.x}, ${cell.y}) 一带搜捕`;
+        status.textContent = placedText(op);
         field.stop();
       }
       return;
@@ -197,6 +203,7 @@ async function main(): Promise<void> {
       clock.speed = session.speed;
     }
     advance(clock.advance(ticker.deltaMS));
+    view.setFenceStart(field.fenceStart());
     view.draw(session.sim.state);
     hud.update(session);
     deaths.update(session.sim.state);
@@ -205,6 +212,22 @@ async function main(): Promise<void> {
     syncCamera();
     syncTime();
   });
+}
+
+/** 放置成功后状态栏的说明。 */
+function placedText(op: Op): string {
+  switch (op.type) {
+    case 'trap':
+      return `在 (${op.x}, ${op.y}) 布了陷阱，${op.nights} 晚`;
+    case 'cull':
+      return `今晚在 (${op.x}, ${op.y}) 一带搜捕`;
+    case 'necropsy':
+      return `今天在 (${op.x}, ${op.y}) 一带找尸体，傍晚带回来`;
+    case 'fence':
+      return `开始架围栏 (${op.x0}, ${op.y0})–(${op.x1}, ${op.y1})`;
+    default:
+      return '';
+  }
 }
 
 void main();

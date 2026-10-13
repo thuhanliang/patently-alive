@@ -14,7 +14,7 @@
   },
   "survival": { "adultAnnual": 0.25 },
   "maxLifespanYears": 10,
-  "movement": { "dailyRangeM": 800, "homeRangeKm2": 0.07, "territorial": false },
+  "movement": { "dailyRangeM": 800, "homeRangeKm2": 0.07, "territorial": false, "climbs": true },
   "initialDensityPerHa": 0.13,
-  "source": "已核对（docs/DATA_CHECK.md）。体重取 PanTHERIA 1.0（Jones et al. 2009）的 AdultBodyMass（78 克）；妊娠期、性成熟在 PanTHERIA 与 AnAge Build 15（Tacutu et al. 2018）的范围内；最长寿命取 PanTHERIA 的 MaxLongevity（120 个月，圈养记录）；开局密度取 PanTHERIA 的 PopulationDensity（12.9 只/平方公里）。与两库不同的：两窝间隔两库是全年平均（一年约一窝），伶鼬在田鼠多的年份一季可两窝，模型按田鼠多的那一侧取 60 天；窝仔数取 6，在文献 4–8 的范围内，略高于两库的平均 5。家域面积取 PanTHERIA 的 HomeRange（0.07 平方公里）；伶鼬的领地随田鼠密度伸缩，田鼠多的年份领地缩小、相互重叠（Erlinge 1974；King & Powell 2007），不按固定领地算。日活动范围是'每天走多远'，比家域折算的直径大。野外成体年存活率、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。"
+  "source": "已核对（docs/DATA_CHECK.md）。体重取 PanTHERIA 1.0（Jones et al. 2009）的 AdultBodyMass（78 克）；妊娠期、性成熟在 PanTHERIA 与 AnAge Build 15（Tacutu et al. 2018）的范围内；最长寿命取 PanTHERIA 的 MaxLongevity（120 个月，圈养记录）；开局密度取 PanTHERIA 的 PopulationDensity（12.9 只/平方公里）。与两库不同的：两窝间隔两库是全年平均（一年约一窝），伶鼬在田鼠多的年份一季可两窝，模型按田鼠多的那一侧取 60 天；窝仔数取 6，在文献 4–8 的范围内，略高于两库的平均 5。家域面积取 PanTHERIA 的 HomeRange（0.07 平方公里）；伶鼬的领地随田鼠密度伸缩，田鼠多的年份领地缩小、相互重叠（Erlinge 1974；King & Powell 2007），不按固定领地算。日活动范围是'每天走多远'，比家域折算的直径大。野外成体年存活率、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。伶鼬能爬树、钻缝。"
 }

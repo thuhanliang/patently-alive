@@ -21,7 +21,8 @@ import {
   type Population,
 } from './population';
 import { FOCUS_BLOCK, FOCUS_MAX_CELLS, inFocus, sameFocus, type FocusRect } from './focus';
-import { runJobs, type Capture, type Job } from './jobs';
+import { runJobs, type Capture, type Job, type NecropsySearch } from './jobs';
+import { buildBarriers, fenceLengthCells, type Barrier, type Fence } from './fence';
 import {
   compact,
   absorbImmigrants,
@@ -69,6 +70,10 @@ export interface SimState {
   nextJobId: number;
   /** 最近的捕获记录。 */
   captures: Capture[];
+  /** 最近的找尸体结果。 */
+  necropsies: NecropsySearch[];
+  /** 已经完工的围栏。 */
+  fences: Fence[];
 }
 
 function cellArea(config: SimConfig): number {
@@ -99,6 +104,8 @@ export function createInitialState(config: SimConfig): SimState {
     jobs: [],
     nextJobId: 1,
     captures: [],
+    necropsies: [],
+    fences: [],
   };
 }
 
@@ -115,6 +122,9 @@ export class Sim {
   private readonly scratch: Int32Array;
   private readonly blocks: { blockOf: Int32Array; cellsIn: Float64Array; blocksWide: number };
   private readonly land: Int32Array;
+  /** 围栏挡住的格边，由 state.fences 推出（不进快照）。 */
+  private barriers: { adult: (Barrier | null)[]; juvenile: (Barrier | null)[] } | undefined;
+  private barrierCount = 0;
 
   constructor(state: SimState) {
     this.s = cloneData(state);
@@ -123,6 +133,17 @@ export class Sim {
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
     this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height, this.s.grid.terrain);
     this.land = landCells(this.s.grid);
+    this.rebuildBarriers();
+  }
+
+  private rebuildBarriers(): void {
+    const { fences } = this.s;
+    this.barrierCount = fences.length;
+    const types = this.s.config.tools?.fences;
+    this.barriers =
+      fences.length > 0 && types
+        ? buildBarriers(fences, types, this.derived, this.s.grid.width, this.s.grid.height)
+        : undefined;
   }
 
   /** 灌丛啃不到的下限；世界里没有灌丛参数时为 undefined。 */
@@ -233,6 +254,32 @@ export class Sim {
     return id;
   }
 
+  /** 找尸体：在 (x, y) 一带搜一天，species 为 −1 时不限物种。只该由统一操作接口调用。 */
+  necropsy(species: number, x: number, y: number): number {
+    if (!this.s.config.tools) throw new RangeError('这片世界没有兽医工具');
+    if (species !== -1 && !this.derived[species]) throw new RangeError(`没有这个物种：${species}`);
+    this.checkLand(x, y);
+    const id = this.s.nextJobId++;
+    this.s.jobs.push({ kind: 'necropsy', id, x, y, nightsLeft: 1, species });
+    return id;
+  }
+
+  /**
+   * 架一段围栏：端点在格子的角上（0..width、0..height 的整数），days 天后完工、开始挡动物。
+   * 只该由统一操作接口调用。
+   */
+  buildFence(type: number, x0: number, y0: number, x1: number, y1: number, days: number): number {
+    const types = this.s.config.tools?.fences;
+    if (!types || !types[type]) throw new RangeError(`没有这种围栏：${type}`);
+    const { width, height } = this.s.grid;
+    const ok = [x0, y0, x1, y1].every(Number.isInteger) && [x0, x1].every((v) => v >= 0 && v <= width) && [y0, y1].every((v) => v >= 0 && v <= height);
+    if (!ok || fenceLengthCells({ x0, y0, x1, y1 }) < 1) throw new RangeError(`围栏端点不合法：(${x0}, ${y0})–(${x1}, ${y1})`);
+    if (!Number.isInteger(days) || days < 1) throw new RangeError(`工期不合法：${days}`);
+    const id = this.s.nextJobId++;
+    this.s.jobs.push({ kind: 'fence', id, x: x0, y: y0, nightsLeft: days, fence: { id, type, x0, y0, x1, y1 } });
+    return id;
+  }
+
   private checkLand(x: number, y: number): void {
     const { width, height, terrain } = this.s.grid;
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height || !isLand(terrain[y * width + x]!)) {
@@ -291,6 +338,7 @@ export class Sim {
         stats: this.s.dayAccum,
         ledger: this.s.deaths,
         blockOf: this.blocks.blockOf,
+        barriers: this.barriers,
       });
     }
     if (this.s.tick % TICKS_PER_DAY === 0) this.daily();
@@ -313,6 +361,7 @@ export class Sim {
       species: this.derived,
       traps: tools?.traps ?? [],
       cull: tools?.cull,
+      necropsy: tools?.necropsy,
       populations: this.s.populations,
       individuals: this.s.individuals,
       grid: this.s.grid,
@@ -323,9 +372,13 @@ export class Sim {
       ledger: this.s.deaths,
       blockOf: this.blocks.blockOf,
       captures: this.s.captures,
+      necropsies: this.s.necropsies,
+      blockCells: this.blocks.cellsIn,
+      fences: this.s.fences,
       removedIndividuals,
     });
     compact(this.s.individuals, removedIndividuals);
+    if (this.s.fences.length !== this.barrierCount) this.rebuildBarriers();
   }
 
   private daily(): void {
@@ -369,6 +422,7 @@ export class Sim {
       blockOf: this.blocks.blockOf,
       land: this.land,
       ledger: this.s.deaths,
+      barriers: this.barriers,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {

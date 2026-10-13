@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SimConfigSchema } from './config';
 import type { Tools } from '../data/schema/tools';
+import { fenceLengthCells } from './fence';
 
 /**
  * 玩家操作。所有会改变推演或时间流速的操作都写成这里的数据，
@@ -37,6 +38,17 @@ export const OpSchema = z.discriminatedUnion('type', [
   }),
   /** 夜间搜捕：在一处移除一种动物。占一支兽医队一天，扑杀本身降低满意度。 */
   z.object({ type: z.literal('cull'), species: z.string(), x: z.number().int(), y: z.number().int() }),
+  /** 找尸体做尸检：在一处搜一天；species 为 null 时什么物种的都要。 */
+  z.object({ type: z.literal('necropsy'), species: z.string().nullable(), x: z.number().int(), y: z.number().int() }),
+  /** 架一段直围栏：端点在格子的角上。工期按长度算，完工后才挡得住动物。 */
+  z.object({
+    type: z.literal('fence'),
+    fence: z.string(),
+    x0: z.number().int(),
+    y0: z.number().int(),
+    x1: z.number().int(),
+    y1: z.number().int(),
+  }),
 ]);
 
 export type Op = z.infer<typeof OpSchema>;
@@ -85,7 +97,7 @@ export const OpLogSchema = z
   .object({
     format: z.literal('patently-alive/oplog'),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(3),
+    version: z.literal(4),
     config: SimConfigSchema,
     rules: RulesSchema,
     entries: z.array(LogEntrySchema),
@@ -115,9 +127,9 @@ export const FREE: Cost = { budget: 0, staff: 0, days: 0, satisfaction: 0 };
 
 /**
  * 每种操作的花费。调速、关注区、沙盒里的投放不花钱；兽医工具按工具数据定价。
- * 价格来自推演配置里的工具数据（config.tools），回放时和当时一样。
+ * 价格来自推演配置里的工具数据（config.tools），回放时和当时一样。围栏按长度计价，要知道一格多少米。
  */
-export function costOf(op: Op, tools: Tools | undefined): Cost {
+export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number): Cost {
   switch (op.type) {
     case 'trap': {
       const t = tools?.traps.find((x) => x.id === op.trap);
@@ -126,7 +138,20 @@ export function costOf(op: Op, tools: Tools | undefined): Cost {
     }
     case 'cull':
       return tools ? { budget: tools.cull.cost, staff: 1, days: 1, satisfaction: tools.cull.satisfaction } : FREE;
+    case 'necropsy':
+      return tools ? { budget: tools.necropsy.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
+    case 'fence': {
+      const f = tools?.fences.find((x) => x.id === op.fence);
+      if (!f) return FREE;
+      const km = (fenceLengthCells(op) * cellSizeM) / 1000;
+      return { budget: Math.round(f.costPerKm * km), staff: 1, days: fenceDays(km, f.kmPerDay), satisfaction: 0 };
+    }
     default:
       return FREE;
   }
+}
+
+/** 架 km 公里围栏要几天（至少一天）。 */
+export function fenceDays(km: number, kmPerDay: number): number {
+  return Math.max(1, Math.ceil(km / kmPerDay - 1e-9));
 }

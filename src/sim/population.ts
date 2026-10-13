@@ -1,5 +1,6 @@
 import type { Grid } from './grid';
-import { TERRAIN, crossesWater } from './terrain';
+import { TERRAIN } from './terrain';
+import { pathBlocked, type Barrier } from './fence';
 import {
   CROWDING_BLOCK_CELLS,
   FED_SUFFICIENT,
@@ -133,6 +134,8 @@ export interface DailyContext {
   land: Int32Array;
   /** 死因账本：每笔死亡记在这里（见 ledger.ts）。 */
   ledger: DeathLedger;
+  /** 围栏挡住的格边（见 fence.ts），按物种；成体和出了窝的幼体各一套。没有围栏时可以不给。 */
+  barriers?: { adult: readonly (Barrier | null)[]; juvenile: readonly (Barrier | null)[] } | undefined;
 }
 
 /** 陆地格的下标，从小到大。地图建好后算一次；没有水的地图就是全部格子。 */
@@ -169,10 +172,11 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   }
 
   for (let s = 0; s < species.length; s++) {
-    disperse(ctx, s, populations[s]!.adults);
+    disperse(ctx, s, populations[s]!.adults, ctx.barriers?.adult[s] ?? null);
     // 窝里的幼崽不扩散。
     const stages = populations[s]!.juveniles;
-    for (let k = species[s]!.nestStages; k < stages.length; k++) disperse(ctx, s, stages[k]!);
+    const juvBarrier = ctx.barriers?.juvenile[s] ?? null;
+    for (let k = species[s]!.nestStages; k < stages.length; k++) disperse(ctx, s, stages[k]!, juvBarrier);
     stats[s]!.total = populationTotal(populations[s]!);
   }
   return stats;
@@ -623,11 +627,11 @@ function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: nu
 }
 
 /**
- * 扩散：每格有一部分个体离开，落到半径 r 内的随机一格；落到地图外、水里，或者路上要过水，就留在原地。
+ * 扩散：每格有一部分个体离开，落到半径 r 内的随机一格；落到地图外、水里，或者路上要过水、过挡得住它的围栏，就留在原地。
  * 所以离岸小岛和主岛之间，靠扩散是过不去的（以后要做"会游泳"的性状再改）。
  * 先把移动量写进暂存数组，最后一起加回去，结果与遍历顺序无关。
  */
-function disperse(ctx: DailyContext, s: number, counts: Int32Array): void {
+function disperse(ctx: DailyContext, s: number, counts: Int32Array, barrier: Barrier | null): void {
   const sp = ctx.species[s]!;
   const { width, height, terrain } = ctx.grid;
   const rng = ctx.rng;
@@ -645,7 +649,7 @@ function disperse(ctx: DailyContext, s: number, counts: Int32Array): void {
     const nx = x + dx;
     const ny = y + dy;
     if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) return;
-    if (crossesWater(terrain, width, x + 0.5, y + 0.5, nx + 0.5, ny + 0.5)) return;
+    if (pathBlocked(terrain, barrier, width, x + 0.5, y + 0.5, nx + 0.5, ny + 0.5)) return;
     counts[c] = counts[c]! - k;
     incoming[ny * width + nx] = incoming[ny * width + nx]! + k;
   };

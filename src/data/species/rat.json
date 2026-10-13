@@ -16,7 +16,7 @@
   },
   "survival": { "adultAnnual": 0.15 },
   "maxLifespanYears": 4.2,
-  "movement": { "dailyRangeM": 200, "homeRangeKm2": 0.0023, "territorial": true },
+  "movement": { "dailyRangeM": 200, "homeRangeKm2": 0.0023, "territorial": true, "climbs": true },
   "initialDensityPerHa": 5,
-  "source": "体重取 PanTHERIA 1.0（Jones et al. 2009，143 克）与 AnAge Build 15（Tacutu et al. 2018，200 克）之间；窝仔数取 PanTHERIA（5.9）；妊娠期（22 天）、两窝间隔（36 天）、断奶（26 天，作窝里天数）、雌性性成熟（90 天）、最长寿命（4.2 年）取 AnAge；家域面积取 PanTHERIA（0.0023 平方公里），按固定家域限定能挤多密（约 9 只/公顷，和岛上船鼠的高密度相当；按体重的一般上限会到每公顷七八十只）。开局密度取每公顷 5 只：PanTHERIA 的 26 只/公顷是高密度生境的口径，岛上的船鼠常见几只每公顷。以下为文献常见范围内的估计：食谱以种子、果实和其他植物为主（约七成），昆虫约两成，蛋、雏鸟约一成；成体年存活率约 0.15；温暖月份繁殖最多（见 docs/MODEL.md）。"
+  "source": "体重取 PanTHERIA 1.0（Jones et al. 2009，143 克）与 AnAge Build 15（Tacutu et al. 2018，200 克）之间；窝仔数取 PanTHERIA（5.9）；妊娠期（22 天）、两窝间隔（36 天）、断奶（26 天，作窝里天数）、雌性性成熟（90 天）、最长寿命（4.2 年）取 AnAge；家域面积取 PanTHERIA（0.0023 平方公里），按固定家域限定能挤多密（约 9 只/公顷，和岛上船鼠的高密度相当；按体重的一般上限会到每公顷七八十只）。开局密度取每公顷 5 只：PanTHERIA 的 26 只/公顷是高密度生境的口径，岛上的船鼠常见几只每公顷。以下为文献常见范围内的估计：食谱以种子、果实和其他植物为主（约七成），昆虫约两成，蛋、雏鸟约一成；成体年存活率约 0.15；温暖月份繁殖最多（见 docs/MODEL.md）。船鼠（黑家鼠）善于攀爬，常在树上筑巢。"
 }

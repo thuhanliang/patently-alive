@@ -1,15 +1,16 @@
-import type { CullParams, TrapType } from '../data/schema/tools';
+import type { CullParams, NecropsyParams, TrapType } from '../data/schema/tools';
+import type { Fence } from './fence';
 import type { Grid } from './grid';
 import type { Individuals } from './individuals';
 import { JUVENILE_SIZE_FACTOR, juvenileStageAt, type DerivedSpecies } from './physiology';
 import type { DayStats, Population } from './population';
-import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
+import { CAUSE, FRESH_DAYS, freshIndex, freshSlotAgo, recordDeaths, type DeathLedger } from './ledger';
 import type { Rng } from './rng';
 import { binomial } from './sample';
 import { TERRAIN } from './terrain';
 
 /**
- * 兽医队在野外的活：陷阱线、夜间搜捕。每晚（每日结算开始时）执行一次。
+ * 兽医队在野外的活：陷阱线、夜间搜捕、找尸体、架围栏。每晚（每日结算结束前）执行一次。
  *
  * 陷阱抓到谁由性状推出：
  * - 动物在陷阱附近多大范围内会碰上它：每天走的距离的一半（catchmentRadius），猫远、鼠近；
@@ -28,6 +29,8 @@ export const TRAP_ENCOUNTER = 1;
 export const MAX_CATCHMENT_CELLS = 25;
 /** 捕获记录最多留多少条（最近的）。 */
 export const CAPTURE_LOG = 300;
+/** 尸检记录最多留多少次搜寻（最近的）。 */
+export const NECROPSY_LOG = 50;
 
 export interface TrapJob {
   kind: 'trap';
@@ -50,7 +53,49 @@ export interface CullJob {
   species: number;
 }
 
-export type Job = TrapJob | CullJob;
+/** 找尸体：在 (x, y) 一带搜一天；species 为 −1 时什么物种的都要。 */
+export interface NecropsyJob {
+  kind: 'necropsy';
+  id: number;
+  x: number;
+  y: number;
+  nightsLeft: number;
+  species: number;
+}
+
+/** 架围栏：最后一晚完工，之后才挡得住动物。 */
+export interface FenceJob {
+  kind: 'fence';
+  id: number;
+  /** 批注画在起点。 */
+  x: number;
+  y: number;
+  nightsLeft: number;
+  fence: Fence;
+}
+
+export type Job = TrapJob | CullJob | NecropsyJob | FenceJob;
+
+/** 找到的一具尸体：哪个物种、死因（引擎记账，见 ledger.ts）、在哪一格、死了几天。 */
+export interface Carcass {
+  species: number;
+  cause: number;
+  x: number;
+  y: number;
+  /** 0 = 当天死的。 */
+  daysDead: number;
+}
+
+/** 一次找尸体的结果（可能一具也没找到）。 */
+export interface NecropsySearch {
+  day: number;
+  job: number;
+  x: number;
+  y: number;
+  /** 要找的物种，−1 = 不限。 */
+  species: number;
+  found: Carcass[];
+}
 
 /** 一条捕获记录：哪天、哪组陷阱、抓到什么、怎么处理的。 */
 export interface Capture {
@@ -70,6 +115,7 @@ export interface JobContext {
   species: readonly DerivedSpecies[];
   traps: readonly TrapType[];
   cull: CullParams | undefined;
+  necropsy: NecropsyParams | undefined;
   populations: Population[];
   individuals: Individuals;
   grid: Grid;
@@ -80,6 +126,11 @@ export interface JobContext {
   ledger: DeathLedger;
   blockOf: Int32Array;
   captures: Capture[];
+  necropsies: NecropsySearch[];
+  /** 每个区块有几格陆地。 */
+  blockCells: Float64Array;
+  /** 完工的围栏加进这里。 */
+  fences: Fence[];
   /** 被移除的个体在这里标记，调用方负责压缩。 */
   removedIndividuals: Uint8Array;
 }
@@ -127,7 +178,9 @@ function landWithin(grid: Grid, x: number, y: number, r: number): number[] {
 export function runJobs(jobs: Job[], ctx: JobContext): Job[] {
   for (const job of jobs) {
     if (job.kind === 'trap') trapNight(job, ctx);
-    else cullNight(job, ctx);
+    else if (job.kind === 'cull') cullNight(job, ctx);
+    else if (job.kind === 'necropsy') necropsyDay(job, ctx);
+    else if (job.nightsLeft === 1) ctx.fences.push({ ...job.fence });
     job.nightsLeft -= 1;
   }
   return jobs.filter((j) => j.nightsLeft > 0);
@@ -238,4 +291,63 @@ function cullNight(job: CullJob, ctx: JobContext): void {
       recordDeaths(ctx.ledger, s, CAUSE.removed, ctx.blockOf[Math.floor(ind.y[i]!) * grid.width + Math.floor(ind.x[i]!)]!, 1);
     }
   }
+}
+
+/**
+ * 找尸体：范围里每具新鲜尸体以 detection 的概率被找到，最多带回 maxCarcasses 具（多了随机挑）。
+ * 尸体按区块记账，范围只盖住区块的一部分时按盖住的陆地格比例算；找到的那具在区块和范围重叠的格子里随机定一格。
+ * 带回来的从新鲜尸体里拿走。
+ */
+function necropsyDay(job: NecropsyJob, ctx: JobContext): void {
+  const params = ctx.necropsy;
+  if (!params) return;
+  const { ledger, grid, rng } = ctx;
+  // 范围里的陆地格按区块分组（区块编号从小到大，结果与遍历顺序无关）。
+  const byBlock = new Map<number, number[]>();
+  for (const c of landWithin(grid, job.x, job.y, params.radiusCells)) {
+    const b = ctx.blockOf[c]!;
+    const list = byBlock.get(b);
+    if (list) list.push(c);
+    else byBlock.set(b, [c]);
+  }
+  const blocks = [...byBlock.keys()].sort((a, b) => a - b);
+
+  const seen: { s: number; cause: number; block: number; ago: number; n: number }[] = [];
+  for (const block of blocks) {
+    const p = params.detection * Math.min(1, byBlock.get(block)!.length / ctx.blockCells[block]!);
+    for (let s = 0; s < ledger.species; s++) {
+      if (job.species >= 0 && s !== job.species) continue;
+      for (let cause = 0; cause < ledger.causes; cause++) {
+        if (cause === CAUSE.removed) continue;
+        for (let ago = 0; ago < FRESH_DAYS; ago++) {
+          const n = Math.floor(ledger.fresh[freshIndex(ledger, freshSlotAgo(ledger, ago), s, cause, block)]!);
+          const k = n > 0 ? binomial(rng, n, p) : 0;
+          if (k > 0) seen.push({ s, cause, block, ago, n: k });
+        }
+      }
+    }
+  }
+
+  const found: Carcass[] = [];
+  let total = seen.reduce((a, v) => a + v.n, 0);
+  while (found.length < params.maxCarcasses && total > 0) {
+    let pick = rng.nextInt(total);
+    let v = seen[0]!;
+    for (const cand of seen) {
+      if (pick < cand.n) {
+        v = cand;
+        break;
+      }
+      pick -= cand.n;
+    }
+    v.n -= 1;
+    total -= 1;
+    const i = freshIndex(ledger, freshSlotAgo(ledger, v.ago), v.s, v.cause, v.block);
+    ledger.fresh[i] = ledger.fresh[i]! - 1;
+    const cells = byBlock.get(v.block)!;
+    const c = cells[rng.nextInt(cells.length)]!;
+    found.push({ species: v.s, cause: v.cause, x: c % grid.width, y: Math.floor(c / grid.width), daysDead: v.ago });
+  }
+  ctx.necropsies.push({ day: ctx.day, job: job.id, x: job.x, y: job.y, species: job.species, found });
+  if (ctx.necropsies.length > NECROPSY_LOG) ctx.necropsies.splice(0, ctx.necropsies.length - NECROPSY_LOG);
 }

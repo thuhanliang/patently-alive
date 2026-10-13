@@ -2,6 +2,7 @@ import { SimConfigSchema, type SimConfig } from './config';
 import { cloneData } from './data';
 import { costOf, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
 import { Sim } from './sim';
+import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
 import { TICKS_PER_DAY } from './time';
 
@@ -95,7 +96,7 @@ export class Session {
     const problem = this.check(op);
     if (problem) return { ok: false, reason: problem };
 
-    const cost = costOf(op, this.config.tools);
+    const cost = costOf(op, this.config.tools, this.config.world.cellSizeM);
     if (cost.budget > this.res.budget) return { ok: false, reason: `预算不够：要 ${cost.budget} 元，还剩 ${this.res.budget} 元` };
     if (cost.staff > this.freeStaff()) return { ok: false, reason: `人手不够：要 ${cost.staff} 支兽医队，空闲 ${this.freeStaff()} 支` };
 
@@ -109,7 +110,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: 'patently-alive/oplog',
-      version: 3,
+      version: 4,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
@@ -185,6 +186,21 @@ export class Session {
         if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
+      case 'necropsy': {
+        if (!this.config.tools) return '这片世界没有兽医工具';
+        if (op.species !== null && !this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        return this.landProblem(op.x, op.y);
+      }
+      case 'fence': {
+        const tools = this.config.tools;
+        if (!tools) return '这片世界没有兽医工具';
+        if (!tools.fences.some((f) => f.id === op.fence)) return `没有这种围栏：${op.fence}`;
+        const { width, height } = this.simulation.state.grid;
+        const inside = [op.x0, op.x1].every((v) => v >= 0 && v <= width) && [op.y0, op.y1].every((v) => v >= 0 && v <= height);
+        if (!inside) return '围栏的端点要在地图内';
+        if (fenceLengthCells(op) < 1) return '围栏太短（至少一格长）';
+        return null;
+      }
     }
   }
 
@@ -227,6 +243,16 @@ export class Session {
       case 'cull':
         this.simulation.cull(this.speciesIndex(op.species), op.x, op.y);
         return;
+      case 'necropsy':
+        this.simulation.necropsy(op.species === null ? -1 : this.speciesIndex(op.species), op.x, op.y);
+        return;
+      case 'fence': {
+        const tools = this.config.tools!;
+        const type = tools.fences.findIndex((f) => f.id === op.fence);
+        const days = costOf(op, tools, this.config.world.cellSizeM).days;
+        this.simulation.buildFence(type, op.x0, op.y0, op.x1, op.y1, days);
+        return;
+      }
     }
   }
 }

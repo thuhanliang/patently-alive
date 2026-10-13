@@ -186,19 +186,3 @@ function keepLargestComponent(land: Uint8Array, width: number, height: number): 
   for (let i = 0; i < land.length; i++) if (land[i] && label[i] !== best) land[i] = 0;
 }
 
-/**
- * 从 (x0, y0) 到 (x1, y1) 的直线是否经过水（坐标单位是格，可以是小数）。
- * 按半格的步长取点，起点不算。动物不会游泳：格子扩散的一跳、个体一小时的一步都不能越过水面，
- * 哪怕落点是对岸的陆地。
- */
-export function crossesWater(terrain: Uint8Array, width: number, x0: number, y0: number, x1: number, y1: number): boolean {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 2));
-  for (let k = 1; k <= steps; k++) {
-    const x = Math.floor(x0 + (dx * k) / steps);
-    const y = Math.floor(y0 + (dy * k) / steps);
-    if (terrain[y * width + x] === TERRAIN.water) return true;
-  }
-  return false;
-}
