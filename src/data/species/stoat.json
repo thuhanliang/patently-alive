@@ -16,5 +16,5 @@
   "maxLifespanYears": 6,
   "movement": { "dailyRangeM": 1500 },
   "initialDensityPerHa": 0.06,
-  "source": "【未核对】体重、窝仔、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。白鼬有延迟着床，这里的妊娠期只算着床之后；雌性几周大即在巢中交配，性成熟按雌性取。野外成体年存活率、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。"
+  "source": "已核对（docs/DATA_CHECK.md）。体重、窝仔数、两窝间隔、性成熟、最长寿命、种群密度都在 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）的范围内。妊娠期与两库不同：白鼬有延迟着床，两库的 66 / 43 天含着床前的停滞期，模型不模拟延迟着床，这里只算着床之后约 4 周；雌性几周大即在巢中交配，性成熟按雌性取。日活动范围是'每天走多远'（雄性一夜常走 1–2 公里），比 PanTHERIA 家域折算的直径大，允许偏离。野外成体年存活率、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。"
 }

@@ -38,10 +38,12 @@ function loadPantheria() {
 }
 
 /**
- * AnAge：优先读已经解压好的 data-raw/anage/anage_data.txt（手动解压的情况）；
- * 没有才从 zip 解压（先清空目录，避免读到旧文件）。
+ * AnAge：优先读仓库里已解压好的 data-external/anage/anage_data.txt（随仓库分发，不需要 unzip）；
+ * 没有才从 zip 解压到 data-raw/anage/（scratch，先清空目录，避免读到旧文件）。
  */
 function loadAnage() {
+  const committed = join(dirs.external, 'anage', 'anage_data.txt');
+  if (existsSync(committed)) return readTsv(readFileSync(committed, 'utf8'));
   const outDir = join(dirs.raw, 'anage');
   const txt = join(outDir, 'anage_data.txt');
   if (!existsSync(txt)) {

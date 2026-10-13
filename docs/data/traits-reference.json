@@ -1,0 +1,354 @@
+{
+  "说明": "外部数据库里与本游戏物种（及后续阶段物种）对应的记录摘录，由 scripts/data/check-traits.mjs 生成，勿手改。只是参考资料，游戏运行时不读它。",
+  "sources": [
+    {
+      "id": "pantheria",
+      "name": "PanTHERIA 1.0（MSW05 分类）",
+      "citation": "Jones, K.E. et al. (2009) PanTHERIA: a species-level database of life history, ecology, and geography of extant and recently extinct mammals. Ecology 90:2648. Ecological Archives E090-184.",
+      "license": "CC BY 4.0。ESA Ecological Archives 版权页：\"Except where otherwise noted, Ecological Archives are covered under the Creative Commons Attribution (CC BY 4.0) license.\"。整份文件放进仓库，署名见 data-external/README.md。",
+      "url": "https://esapubs.org/archive/ecol/E090/184/PanTHERIA_1-0_WR05_Aug2008.txt",
+      "sha256": "36e64314cae0394a966a63b949504d1975ac5c5629e05e36c1b139b3348f044a"
+    },
+    {
+      "id": "anage",
+      "name": "AnAge: The Animal Ageing and Longevity Database",
+      "citation": "Tacutu, R. et al. (2018) Human Ageing Genomic Resources: new and updated databases. Nucleic Acids Research 46:D1083–D1090. 另见 de Magalhães, J. P. et al. (2024) Nucleic Acids Research 52(D1):D900–D908.",
+      "license": "CC BY 3.0。HAGR 版权页（legal.html）：\"HAGR may be freely used for all purposes … provided you mention the use of HAGR\"，页面标注 Creative Commons Attribution 3.0 Unported。整份 zip 与解压后的数据放进仓库，署名见 data-external/README.md。",
+      "url": "https://genomics.senescence.info/species/dataset.zip",
+      "sha256": "e3ddb66e32e973a79932859ba53013e8f60d957c6ec01c6eb573e3ea3018d630"
+    }
+  ],
+  "species": {
+    "rabbit": {
+      "scientificName": "Oryctolagus cuniculus",
+      "pantheria": {
+        "adultBodyMassG": 1590.57,
+        "litterSize": 5.24,
+        "littersPerYear": 4.5,
+        "gestationDays": 30.45,
+        "interbirthIntervalDays": 29,
+        "sexualMaturityDays": 185.61,
+        "maxLongevityMonths": 216,
+        "homeRangeKm2": 0.04,
+        "populationDensityPerKm2": 357.9,
+        "activityCycle": 2
+      },
+      "anage": {
+        "adultWeightG": 1800,
+        "litterSize": 5,
+        "littersPerYear": 4.3,
+        "gestationDays": 30,
+        "interLitterDays": 29,
+        "femaleMaturityDays": 730,
+        "maxLongevityYears": 13,
+        "dataQuality": "acceptable",
+        "sampleSize": "large"
+      }
+    },
+    "stoat": {
+      "scientificName": "Mustela erminea",
+      "pantheria": {
+        "adultBodyMassG": 284.5,
+        "litterSize": 6.74,
+        "littersPerYear": null,
+        "gestationDays": 66.35,
+        "interbirthIntervalDays": 365,
+        "sexualMaturityDays": 93.09,
+        "maxLongevityMonths": 85.23,
+        "homeRangeKm2": 0.11,
+        "populationDensityPerKm2": 6.25,
+        "activityCycle": 2
+      },
+      "anage": {
+        "adultWeightG": 110.3,
+        "litterSize": 6.77,
+        "littersPerYear": 1,
+        "gestationDays": 43,
+        "interLitterDays": 365,
+        "femaleMaturityDays": 95,
+        "maxLongevityYears": 12.5,
+        "dataQuality": "acceptable",
+        "sampleSize": "small"
+      }
+    },
+    "vole": {
+      "scientificName": "Microtus agrestis",
+      "pantheria": {
+        "adultBodyMassG": 35.87,
+        "litterSize": 4.65,
+        "littersPerYear": 3.5,
+        "gestationDays": 20.72,
+        "interbirthIntervalDays": 20.26,
+        "sexualMaturityDays": 38.27,
+        "maxLongevityMonths": 39.6,
+        "homeRangeKm2": 0.000683908,
+        "populationDensityPerKm2": 1948.7,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 46,
+        "litterSize": 4.4,
+        "littersPerYear": 3.6,
+        "gestationDays": 21,
+        "interLitterDays": 20,
+        "femaleMaturityDays": 36,
+        "maxLongevityYears": 4.8,
+        "dataQuality": "acceptable",
+        "sampleSize": "small"
+      }
+    },
+    "weasel": {
+      "scientificName": "Mustela nivalis",
+      "pantheria": {
+        "adultBodyMassG": 78.45,
+        "litterSize": 5.07,
+        "littersPerYear": 1,
+        "gestationDays": 36.49,
+        "interbirthIntervalDays": 273.75,
+        "sexualMaturityDays": 169.99,
+        "maxLongevityMonths": 120,
+        "homeRangeKm2": 0.07,
+        "populationDensityPerKm2": 12.89,
+        "activityCycle": 2
+      },
+      "anage": {
+        "adultWeightG": 46.9,
+        "litterSize": 5,
+        "littersPerYear": 1.5,
+        "gestationDays": 36,
+        "interLitterDays": 200,
+        "femaleMaturityDays": 120,
+        "maxLongevityYears": 9.1,
+        "dataQuality": "acceptable",
+        "sampleSize": "small"
+      }
+    }
+  },
+  "extraTaxa": {
+    "Felis catus": {
+      "group": "阶段 1（野猫与鸟岛）",
+      "scientificName": "Felis catus",
+      "pantheria": {
+        "adultBodyMassG": 2884.8,
+        "litterSize": null,
+        "littersPerYear": null,
+        "gestationDays": 62.99,
+        "interbirthIntervalDays": null,
+        "sexualMaturityDays": 296.98,
+        "maxLongevityMonths": 408,
+        "homeRangeKm2": 1.41,
+        "populationDensityPerKm2": 3.47,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 3900,
+        "litterSize": 4,
+        "littersPerYear": null,
+        "gestationDays": 65,
+        "interLitterDays": null,
+        "femaleMaturityDays": 289,
+        "maxLongevityYears": 30,
+        "dataQuality": "questionable",
+        "sampleSize": "large"
+      }
+    },
+    "Rattus rattus": {
+      "group": "阶段 1（野猫与鸟岛）",
+      "scientificName": "Rattus rattus",
+      "pantheria": {
+        "adultBodyMassG": 142.68,
+        "litterSize": 5.88,
+        "littersPerYear": 3.75,
+        "gestationDays": 23.45,
+        "interbirthIntervalDays": 31.25,
+        "sexualMaturityDays": 115.29,
+        "maxLongevityMonths": 50.4,
+        "homeRangeKm2": 0.00231795,
+        "populationDensityPerKm2": 2640.54,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 200,
+        "litterSize": 7.3,
+        "littersPerYear": 4.3,
+        "gestationDays": 22,
+        "interLitterDays": 36,
+        "femaleMaturityDays": 90,
+        "maxLongevityYears": 4.2,
+        "dataQuality": "acceptable",
+        "sampleSize": "large"
+      }
+    },
+    "Rattus norvegicus": {
+      "group": "阶段 1（野猫与鸟岛）",
+      "scientificName": "Rattus norvegicus",
+      "pantheria": {
+        "adultBodyMassG": 282.89,
+        "litterSize": 8.99,
+        "littersPerYear": 3.5,
+        "gestationDays": 21.74,
+        "interbirthIntervalDays": null,
+        "sexualMaturityDays": 55.23,
+        "maxLongevityMonths": null,
+        "homeRangeKm2": 0.002927936,
+        "populationDensityPerKm2": null,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 300,
+        "litterSize": 9.9,
+        "littersPerYear": 3.7,
+        "gestationDays": 21,
+        "interLitterDays": null,
+        "femaleMaturityDays": 90,
+        "maxLongevityYears": 3.8,
+        "dataQuality": "acceptable",
+        "sampleSize": "large"
+      }
+    },
+    "Rattus exulans": {
+      "group": "阶段 1（野猫与鸟岛）",
+      "scientificName": "Rattus exulans",
+      "pantheria": {
+        "adultBodyMassG": 50.63,
+        "litterSize": 3.7,
+        "littersPerYear": 3.9,
+        "gestationDays": 21.34,
+        "interbirthIntervalDays": 74,
+        "sexualMaturityDays": 57.41,
+        "maxLongevityMonths": null,
+        "homeRangeKm2": 0.000935769,
+        "populationDensityPerKm2": 7154.76,
+        "activityCycle": null
+      },
+      "anage": null
+    },
+    "Mus musculus": {
+      "group": "阶段 1（野猫与鸟岛）",
+      "scientificName": "Mus musculus",
+      "pantheria": {
+        "adultBodyMassG": 19.3,
+        "litterSize": 5.54,
+        "littersPerYear": 4.5,
+        "gestationDays": 19.6,
+        "interbirthIntervalDays": null,
+        "sexualMaturityDays": 64.71,
+        "maxLongevityMonths": 72,
+        "homeRangeKm2": 0.0005162,
+        "populationDensityPerKm2": 4981.53,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 20.5,
+        "litterSize": 7,
+        "littersPerYear": 5.4,
+        "gestationDays": 19,
+        "interLitterDays": 30,
+        "femaleMaturityDays": 42,
+        "maxLongevityYears": 4,
+        "dataQuality": "high",
+        "sampleSize": "large"
+      }
+    },
+    "Herpestes auropunctatus": {
+      "group": "阶段 2（档案馆与引种）",
+      "scientificName": "Herpestes auropunctatus",
+      "pantheria": null,
+      "anage": null
+    },
+    "Mustela furo": {
+      "group": "阶段 2（档案馆与引种）",
+      "scientificName": "Mustela furo",
+      "pantheria": null,
+      "anage": null
+    },
+    "Vulpes vulpes": {
+      "group": "阶段 2（档案馆与引种）",
+      "scientificName": "Vulpes vulpes",
+      "pantheria": {
+        "adultBodyMassG": 4820.36,
+        "litterSize": 4.59,
+        "littersPerYear": null,
+        "gestationDays": 52.5,
+        "interbirthIntervalDays": 365,
+        "sexualMaturityDays": 321.07,
+        "maxLongevityMonths": 180,
+        "homeRangeKm2": 3.5,
+        "populationDensityPerKm2": 1.1,
+        "activityCycle": 1
+      },
+      "anage": {
+        "adultWeightG": 4131.7,
+        "litterSize": 5,
+        "littersPerYear": 1,
+        "gestationDays": 52,
+        "interLitterDays": 365,
+        "femaleMaturityDays": 304,
+        "maxLongevityYears": 21.3,
+        "dataQuality": "acceptable",
+        "sampleSize": "medium"
+      }
+    },
+    "Trichosurus vulpecula": {
+      "group": "阶段 2（档案馆与引种）",
+      "scientificName": "Trichosurus vulpecula",
+      "pantheria": {
+        "adultBodyMassG": 2685.39,
+        "litterSize": 1.02,
+        "littersPerYear": 1.5,
+        "gestationDays": 17.5,
+        "interbirthIntervalDays": 273.87,
+        "sexualMaturityDays": 420.91,
+        "maxLongevityMonths": 176.4,
+        "homeRangeKm2": 0.03,
+        "populationDensityPerKm2": 124,
+        "activityCycle": 1
+      },
+      "anage": {
+        "adultWeightG": 2395,
+        "litterSize": 1,
+        "littersPerYear": 1.5,
+        "gestationDays": 17,
+        "interLitterDays": 274,
+        "femaleMaturityDays": 315,
+        "maxLongevityYears": 15.9,
+        "dataQuality": "acceptable",
+        "sampleSize": "medium"
+      }
+    },
+    "Apteryx mantelli": {
+      "group": "鸟类（只有 AnAge 有）",
+      "scientificName": "Apteryx mantelli",
+      "pantheria": null,
+      "anage": null
+    },
+    "Philesturnus carunculatus": {
+      "group": "鸟类（只有 AnAge 有）",
+      "scientificName": "Philesturnus carunculatus",
+      "pantheria": null,
+      "anage": null
+    },
+    "Strigops habroptilus": {
+      "group": "鸟类（只有 AnAge 有）",
+      "scientificName": "Strigops habroptilus",
+      "pantheria": null,
+      "anage": null
+    },
+    "Gallirallus australis": {
+      "group": "鸟类（只有 AnAge 有）",
+      "scientificName": "Gallirallus australis",
+      "pantheria": null,
+      "anage": {
+        "adultWeightG": 899.3,
+        "litterSize": null,
+        "littersPerYear": null,
+        "gestationDays": null,
+        "interLitterDays": null,
+        "femaleMaturityDays": 363,
+        "maxLongevityYears": 13.8,
+        "dataQuality": "acceptable",
+        "sampleSize": "small"
+      }
+    }
+  }
+}

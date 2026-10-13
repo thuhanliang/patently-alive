@@ -221,3 +221,12 @@ export function preyMatrix(species: readonly DerivedSpecies[]): number[][] {
     }),
   );
 }
+
+/**
+ * 捕食者抓到一只 preyMassG 克的猎物，能派上用场的肉量：最多吃掉一天的需求 needG、再存满体内储备，
+ * 多出来的浪费掉（小型鼬抓到一只兔子也吃不完）。格子模型和个体模型都按这个算，两边才一致。
+ * needG 是这只捕食者自己的日需求（幼体按体型打折；格子模型按成体算）。
+ */
+export function usableMeal(pred: DerivedSpecies, needG: number, preyMassG: number): number {
+  return Math.min(preyMassG, needG * (1 + pred.maxReserveDays));
+}

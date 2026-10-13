@@ -9,12 +9,12 @@
     "litterSize": 5,
     "gestationDays": 30,
     "litterIntervalDays": 35,
-    "ageAtMaturityDays": 120,
+    "ageAtMaturityDays": 186,
     "breedingByMonth": [1, 1, 1, 1, 0.8, 0.5, 0.3, 0, 0, 0, 0, 0.4]
   },
   "survival": { "adultAnnual": 0.45 },
-  "maxLifespanYears": 9,
+  "maxLifespanYears": 13,
   "movement": { "dailyRangeM": 150 },
-  "initialDensityPerHa": 6,
-  "source": "【未核对】体重、窝仔、妊娠期、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。野外成体年存活率（约 0.3–0.5）、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。"
+  "initialDensityPerHa": 3.6,
+  "source": "已核对（docs/DATA_CHECK.md）。体重、窝仔数、妊娠期与 PanTHERIA 1.0（Jones et al. 2009）、AnAge Build 15（Tacutu et al. 2018）一致；性成熟取 PanTHERIA 的 SexualMaturityAge（186 天；AnAge 的 730 天与野外记录差太远，不取）；最长寿命取 AnAge（13 年）；开局密度取 PanTHERIA 的 PopulationDensity（358 只/平方公里）。两窝间隔取 35 天，比两库的 29 天略长：模型里窝间隔就是繁殖季内的平均间隔，不含产后发情的极端值。日活动范围是'每天走多远'，不是家域，比 PanTHERIA 家域折算的直径小。野外成体年存活率（约 0.3–0.5）、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。"
 }

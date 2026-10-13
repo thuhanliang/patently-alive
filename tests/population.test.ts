@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { grasslandSpecies, speciesLibrary } from '../src/data';
 import { TICKS_PER_DAY, populationTotal } from '../src/sim';
-import { deriveSpecies, preyMatrix, sizeSuitability } from '../src/sim/physiology';
+import { deriveSpecies, preyMatrix, sizeSuitability, usableMeal } from '../src/sim/physiology';
 import { makeSim, smallWorld } from './helpers';
 
 const byId = (id: string) => {
@@ -72,6 +72,16 @@ describe('从性状推导的参数', () => {
     expect(m[vole]!.every((x) => x === 0)).toBe(true);
     expect(m[rabbit]!.every((x) => x === 0)).toBe(true);
   });
+
+  it('一次捕获能用上的肉量有上限：白鼬吃不完一只兔子，吃得完一只田鼠', () => {
+    const stoat = deriveSpecies(byId('stoat'), cell);
+    const need = stoat.dailyIntakeG;
+    expect(usableMeal(stoat, need, 30)).toBe(30);
+    expect(usableMeal(stoat, need, 1600)).toBeCloseTo(need * (1 + stoat.maxReserveDays));
+    expect(usableMeal(stoat, need, 1600)).toBeLessThan(400);
+    // 幼体捕食者需求减半，上限也减半。
+    expect(usableMeal(stoat, need / 2, 1600)).toBeCloseTo(usableMeal(stoat, need, 1600) / 2);
+  });
 });
 
 describe('按格子的种群推演', () => {
@@ -86,6 +96,20 @@ describe('按格子的种群推演', () => {
         expect(after).toBe(before[s]! + d.births - d.deathsPredation - d.deathsStarvation - d.deathsOther);
       });
     }
+  });
+
+  it('捕食者在家域（拥挤区块）里捕猎：同一区块里另一格的猎物也会被抓', () => {
+    const sim = makeSim(1);
+    const idx = (id: string) => sim.species.findIndex((s) => s.params.id === id);
+    const w = sim.state.grid.width;
+    for (const p of sim.state.populations) {
+      p.adults.fill(0);
+      for (const st of p.juveniles) st.fill(0);
+    }
+    sim.state.populations[idx('stoat')]!.adults[0] = 3; // (0,0)
+    sim.state.populations[idx('vole')]!.adults[5 * w + 5] = 200; // (5,5)，同一个 8×8 区块
+    sim.stepN(TICKS_PER_DAY);
+    expect(sim.state.lastDay[idx('vole')]!.deathsPredation).toBeGreaterThan(0);
   });
 
   it('计数永远是非负整数', () => {

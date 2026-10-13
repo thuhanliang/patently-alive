@@ -12,6 +12,7 @@ import {
   juvenileStageAt,
   sizeSuitability,
   type DerivedSpecies,
+  usableMeal,
 } from './physiology';
 import { countAt, type DayStats, type Population } from './population';
 import type { Rng } from './rng';
@@ -405,7 +406,8 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
           ctx.stats[qs]!.deathsPredation += 1;
-          ind.fed[p] = ind.fed[p]! + preyMass / need;
+          // 吃不完的浪费掉，按个体自己的需求折算。
+          ind.fed[p] = ind.fed[p]! + usableMeal(pred, need, preyMass) / need;
         }
       }
     }
