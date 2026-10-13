@@ -5,15 +5,15 @@
       "id": "pantheria",
       "name": "PanTHERIA 1.0（MSW05 分类）",
       "citation": "Jones, K.E. et al. (2009) PanTHERIA: a species-level database of life history, ecology, and geography of extant and recently extinct mammals. Ecology 90:2648. Ecological Archives E090-184.",
-      "license": "CC0（作者放弃全部版权及相关权利），整份文件放进仓库",
+      "license": "CC BY 4.0。ESA Ecological Archives 版权页：\"Except where otherwise noted, Ecological Archives are covered under the Creative Commons Attribution (CC BY 4.0) license.\"。整份文件放进仓库，署名见 data-external/README.md。",
       "url": "https://esapubs.org/archive/ecol/E090/184/PanTHERIA_1-0_WR05_Aug2008.txt",
       "sha256": "36e64314cae0394a966a63b949504d1975ac5c5629e05e36c1b139b3348f044a"
     },
     {
       "id": "anage",
       "name": "AnAge: The Animal Ageing and Longevity Database",
-      "citation": "Tacutu, R. et al. (2018) Human Ageing Genomic Resources: new and updated databases. Nucleic Acids Research 46:D1083–D1090.",
-      "license": "使用时须引用；再分发条款未确认，仓库里只保存用到的物种的摘录",
+      "citation": "Tacutu, R. et al. (2018) Human Ageing Genomic Resources: new and updated databases. Nucleic Acids Research 46:D1083–D1090. 另见 de Magalhães, J. P. et al. (2024) Nucleic Acids Research 52(D1):D900–D908.",
+      "license": "CC BY 3.0。HAGR 版权页（legal.html）：\"HAGR may be freely used for all purposes … provided you mention the use of HAGR\"，页面标注 Creative Commons Attribution 3.0 Unported。整份 zip 与解压后的数据放进仓库，署名见 data-external/README.md。",
       "url": "https://genomics.senescence.info/species/dataset.zip",
       "sha256": "e3ddb66e32e973a79932859ba53013e8f60d957c6ec01c6eb573e3ea3018d630"
     }
