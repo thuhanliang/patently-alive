@@ -154,11 +154,15 @@ describe('个体模型和格子模型的一致性', () => {
 
 describe('个体模型和格子模型的一致性（鸟岛）', () => {
   it('同一座岛全部展开成个体，30 天后鼠、兔、鸟的总数与格子模型相差不到 15%', () => {
-    // 鼠吃蛋、兔子啃灌丛、鸟吃虫、窝的掩护：两边按同一套规则。猫太少，不比。
+    // 鼠吃蛋、兔子啃灌丛、鸟吃虫、窝的掩护：两边按同一套规则。
+    // 不放猫：32×32 的小岛上只有几只猫，展开后常常饿死（个体要自己跑遍家域找猎物），
+    // 猫的有无会把鸟的差别带偏，这里只比鼠、兔、鸟这一层。
     const island = worldFor(scenarioLibrary.get('bird-island')!);
     const world = { ...island, width: 32, height: 32, terrain: { ...island.terrain!, islets: { ...island.terrain!.islets, count: 0 } } };
-    const results = [3, 4, 5].map((seed) => {
-      const config = { seed, world, species: speciesFor(world) };
+    // 鸟只有二三十只，单个种子的偶然性很大（窝被找到是一窝一窝地丢），所以多跑几个种子。
+    const results = [3, 4, 5, 6, 7, 8, 9, 10, 11].map((seed) => {
+      const species = speciesFor(world).map((sp) => (sp.id === 'cat' ? { ...sp, initialDensityPerHa: 0 } : sp));
+      const config = { seed, world, species };
       const cells = Sim.create(config);
       const expanded = Sim.create(config);
       expanded.setFocus({ x0: 0, y0: 0, x1: 32, y1: 32 });
@@ -166,13 +170,13 @@ describe('个体模型和格子模型的一致性（鸟岛）', () => {
       expanded.stepN(TICKS_PER_DAY * 30);
       return { ids: cells.species.map((s) => s.params.id), a: cells.totals(), b: expanded.totals() };
     });
-    // 三个种子加起来比，减小偶然性。
+    // 几个种子加起来比，减小偶然性。
     const sum = (k: 'a' | 'b', s: number): number => results.reduce((t, r) => t + r[k][s]!, 0);
     results[0]!.ids.forEach((id, s) => {
       if (id === 'cat') return;
       expect(Math.abs(sum('b', s) - sum('a', s)) / sum('a', s), id).toBeLessThan(0.15);
     });
-  }, 120_000);
+  }, 300_000);
 });
 
 describe('关注区的校验和时机', () => {

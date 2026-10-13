@@ -20,6 +20,7 @@ import {
 } from './physiology';
 import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
+import { detExp } from './detmath';
 import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
 
 /**
@@ -344,10 +345,12 @@ export function crowdingByBlock(
     const r = sp.crowdingRadiusBlocks;
     const bw = ctx.blocksWide;
     const counts = r > 0 ? windowSum(out, bw, r) : out;
+    let territory: Float64Array | null = null;
     if (!sp.carnivore || sp.territorial) {
       const cells = r > 0 ? windowSum(cellsIn, bw, r) : cellsIn;
-      for (let b = 0; b < blocks; b++) out[b] = counts[b]! / cells[b]! / sp.crowdingCapacity;
-      return out;
+      territory = new Float64Array(blocks);
+      for (let b = 0; b < blocks; b++) territory[b] = counts[b]! / cells[b]! / sp.crowdingCapacity;
+      if (!sp.carnivore) return territory;
     }
     const meals = preyMeals(sp, species);
     const mob = ctx.prey.mobile[s]!;
@@ -371,6 +374,8 @@ export function crowdingByBlock(
       }
       // 没有猎物：住不下（breedingRoom 为 0）。用有限的大数，免得以后参与运算出 NaN。
       out[b] = stocks[b]! > 0 ? (counts[b]! * perPredator) / stocks[b]! : NO_ROOM;
+      // 守固定领地的食肉动物：领地占满或领地里的猎物不够，都不再繁殖。
+      if (territory) out[b] = Math.max(out[b]!, territory[b]!);
     }
     return out;
   });
@@ -464,16 +469,24 @@ function forage(ctx: DailyContext, c: number, fed: Float64Array): void {
 
 /** 一个捕食者物种在各区块的捕猎结果。 */
 interface BlockHunting {
-  /** 每只可捕猎物（适合度为 1 时）今天被抓的概率。 */
+  /** 会跑的猎物：每只（适合度为 1 时）今天被抓的概率。 */
   kill: Float64Array;
+  /** 窝的搜寻强度：每格的捕食者只数 × 一只一天搜过的面积（见 nestSearchCells）。 */
+  search: Float64Array;
+  /** 找到的窝里幼体超过捕食者的食量时，按这个比例只吃掉一部分（吃饱了就不再找）。 */
+  nestScale: Float64Array;
   /** 捕食者吃饱的比例。 */
   fed: Float64Array;
 }
 
 /**
- * 捕食（II 型功能反应，带捕食者之间的分摊），按拥挤区块统计：
- *   可捕生物量 B = Σ 适合度 × 数量 × 一只能用上的肉量；需求 D = 捕食者数 × 日需求
- *   捕获量 = D · B / (B + 半饱和天数 · D)
+ * 捕食，按拥挤区块统计，分两部分：
+ * - 窝里的幼体（写了窝类型的物种）：不会跑，靠碰。每只今天被找到的概率 = 1 − exp(−搜寻强度 × 窝权重)，
+ *   搜寻强度随捕食者密度上升（见 nestSearchCells），和个体模型"走到窝边才可能发现"一致。
+ *   找到的超过食量时按比例少吃（nestScale）。
+ * - 会跑的猎物：II 型功能反应，带捕食者之间的分摊，用吃完窝以后剩下的需求 D′：
+ *   可捕生物量 B = Σ 适合度 × 数量 × 一只能用上的肉量；捕获量 = D′ · B / (B + 半饱和天数 · D′)
+ *   （没写窝类型的阶段 0 物种，窝里的幼体也按这一条算。）
  * 一个区块 8×8 格（50 米一格时 0.16 平方公里），和鼬类的家域相当（PanTHERIA：白鼬约 0.11、伶鼬约 0.07 平方公里）。
  * 捕食者一天要跑遍家域，只看自己那一格会让它在猎物稀疏时饿死，和展开后的个体对不上。
  * 捕食者吃饱的程度按期望捕获量算：一天抓到几只是随机的，但动物有体内储备，
@@ -485,6 +498,7 @@ function huntingByBlock(ctx: DailyContext, blocks: number): (BlockHunting | null
   return species.map((pred, s) => {
     if (!pred.predator) return null;
     const hunters = new Float64Array(blocks);
+    const cells = new Float64Array(blocks);
     const available = new Float64Array(blocks);
     const mob = prey.mobile[s]!;
     const nst = prey.nest[s]!;
@@ -494,6 +508,7 @@ function huntingByBlock(ctx: DailyContext, blocks: number): (BlockHunting | null
     for (const c of ctx.land) {
       const b = blockOf[c]!;
       hunters[b] = hunters[b]! + sizeWeighted(populations[s]!, c);
+      cells[b] = cells[b]! + 1;
       let avail = 0;
       for (let j = 0; j < species.length; j++) {
         if (mob[j] === 0 && nst[j] === 0) continue;
@@ -507,27 +522,55 @@ function huntingByBlock(ctx: DailyContext, blocks: number): (BlockHunting | null
           else mobile += stages[k]![c]!;
         }
         avail += mob[j]! * (pop.adults[c]! * adultMeal[j]! + mobile * juvenileMeal[j]!);
-        avail += nestWeight(ctx, s, j, c) * nested * juvenileMeal[j]!;
+        if (species[j]!.nest === null) avail += nestWeight(ctx, s, j, c) * nested * juvenileMeal[j]!;
       }
       available[b] = available[b]! + avail;
     }
+    const search = new Float64Array(blocks);
+    for (let b = 0; b < blocks; b++) if (cells[b]! > 0) search[b] = (hunters[b]! / cells[b]!) * pred.nestSearchCells;
+    // 第二遍：按搜寻强度，各区块能找到的窝里幼体（折成肉量）。
+    const nestFound = new Float64Array(blocks);
+    for (const c of ctx.land) {
+      const b = blockOf[c]!;
+      if (search[b] === 0) continue;
+      let found = 0;
+      for (let j = 0; j < species.length; j++) {
+        if (nst[j] === 0 || species[j]!.nest === null) continue;
+        const stages = populations[j]!.juveniles;
+        let nested = 0;
+        for (let k = 0; k < species[j]!.nestStages; k++) nested += stages[k]![c]!;
+        if (nested > 0) found += nested * nestFindProb(search[b]!, nestWeight(ctx, s, j, c)) * juvenileMeal[j]!;
+      }
+      nestFound[b] = nestFound[b]! + found;
+    }
     const kill = new Float64Array(blocks);
+    const nestScale = new Float64Array(blocks);
     const fed = new Float64Array(blocks);
     for (let b = 0; b < blocks; b++) {
       const demand = hunters[b]! * pred.vertebrateIntakeG;
-      const avail = available[b]!;
       if (demand === 0) {
         fed[b] = 1;
         continue;
       }
-      if (avail <= 0) continue;
-      // 捕获量不会超过区块里实际可捕的猎物。
-      const captured = Math.min(avail, (demand * avail) / (avail + PREDATION_HALF_SATURATION_DAYS * demand));
-      kill[b] = captured / avail;
-      fed[b] = captured / demand;
+      const fromNests = Math.min(nestFound[b]!, demand);
+      nestScale[b] = nestFound[b]! > 0 ? fromNests / nestFound[b]! : 0;
+      const rest = demand - fromNests;
+      const avail = available[b]!;
+      let captured = 0;
+      if (avail > 0 && rest > 0) {
+        // 捕获量不会超过区块里实际可捕的猎物。
+        captured = Math.min(avail, (rest * avail) / (avail + PREDATION_HALF_SATURATION_DAYS * rest));
+        kill[b] = captured / avail;
+      }
+      fed[b] = (fromNests + captured) / demand;
     }
-    return { kill, fed };
+    return { kill, search, nestScale, fed };
   });
+}
+
+/** 窝里一只幼体今天被找到的概率：搜寻强度 × 窝权重，按泊松碰面算。 */
+function nestFindProb(search: number, weight: number): number {
+  return weight > 0 ? 1 - detExp(-search * weight) : 0;
 }
 
 /** 捕食者 s 对第 c 格里猎物 j 窝里幼体的捕食权重：地面浅窝再乘这一格的暴露程度。 */
@@ -545,14 +588,15 @@ function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | nu
     if (!h) continue;
     fed[s] = h.fed[b]!;
     const kill = h.kill[b]!;
-    if (kill === 0) continue;
+    const search = h.search[b]! * (h.nestScale[b]! > 0 ? 1 : 0);
+    if (kill === 0 && search === 0) continue;
     const mob = prey.mobile[s]!;
     for (let j = 0; j < species.length; j++) {
       const wn = nestWeight(ctx, s, j, c);
       if (mob[j] === 0 && wn === 0) continue;
-      // 每只该种猎物今天被抓的概率：会跑的按 mobile，窝里的按 nest。
+      // 每只该种猎物今天被抓的概率：会跑的按 mobile；窝里的按搜寻强度（阶段 0 没写窝类型的物种和会跑的一样按 kill）。
       const pMobile = Math.min(1, kill * mob[j]!);
-      const pNest = Math.min(1, kill * wn);
+      const pNest = species[j]!.nest === null ? Math.min(1, kill * wn) : nestFindProb(search, wn) * h.nestScale[b]!;
       const pop = populations[j]!;
       const ka = binomial(rng, pop.adults[c]!, pMobile);
       pop.adults[c] = pop.adults[c]! - ka;

@@ -22,6 +22,6 @@
     ]
   },
   "sentiment": { "cat": 0.5, "rabbit": 0.02, "rat": 0, "dotterel": 5 },
-  "goal": { "target": "dotterel", "recovery": 1.5, "native": ["dotterel"], "years": 3, "quarterlyBudget": 30000 },
+  "goal": { "target": "dotterel", "recovery": 1.3, "native": ["dotterel"], "years": 3, "quarterlyBudget": 30000 },
   "resources": { "budget": 200000, "staff": 3, "satisfaction": 70 }
 }

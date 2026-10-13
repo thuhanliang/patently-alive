@@ -64,7 +64,8 @@ export class AnnotationLayer {
       const cy = (job.y + 0.5) * CELL_PX;
       let unit = '晚';
       if (job.kind === 'trap') {
-        const half = CELL_PX * 1.5;
+        // 方框是笼子摊开的范围（单点的陷阱画 3×3 格）。
+        const half = CELL_PX * (1.5 + (this.tools?.traps[job.trap]?.spreadCells ?? 0));
         this.marks.rect(cx - half, cy - half, half * 2, half * 2).stroke({ width: 2, color: BLUEPRINT });
         this.marks.rect(cx - half / 3, cy - half / 3, (half * 2) / 3, (half * 2) / 3).fill({ color: BLUEPRINT, alpha: 0.6 });
       } else if (job.kind === 'cull') {

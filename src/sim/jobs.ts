@@ -17,7 +17,8 @@ import { TERRAIN } from './terrain';
  * - 动物在陷阱附近多大范围内会碰上它：每天走的距离的一半（catchmentRadius），猫远、鼠近；
  * - 一晚找到陷阱的概率：TRAP_ENCOUNTER / 吸引范围的半径——走得远的动物附近只数多，但每只路过陷阱的机会小；
  * - 找到之后进不进笼：诱饵的吸引力（按食谱）× 能不能触发机关（体重在范围内）；
- * - 一个笼子一晚最多关一只，进笼的比笼子多时随机挑。
+ * - 一个笼子一晚最多关一只，进笼的比笼子多时随机挑；
+ * - 笼子摊开成网（spreadCells）时，网里每处都有笼子：碰上的范围是网的半径加上动物自己的吸引范围，碰上的概率不变。
  * 抓到的按玩家给的名单处理：名单上的物种移除（记作"人为移除"），其余当场放生，都记进捕获记录。
  */
 
@@ -207,11 +208,12 @@ function trapNight(job: TrapJob, ctx: JobContext): void {
     if (appeal <= 0) return;
     const r = catchmentRadius(sp, ctx.cellSizeM);
     const p = Math.min(1, (TRAP_ENCOUNTER * appeal) / r);
+    const reach = r + trap.spreadCells;
     const adultP = fitsTrap(trap, sp.params.bodyMassKg) ? p : 0;
     const juvP = fitsTrap(trap, sp.params.bodyMassKg * JUVENILE_SIZE_FACTOR) ? p : 0;
     if (adultP === 0 && juvP === 0) return;
     const pop = populations[s]!;
-    for (const c of landWithin(grid, job.x, job.y, r)) {
+    for (const c of landWithin(grid, job.x, job.y, reach)) {
       // 窝里的幼体不出窝，碰不上陷阱。
       const na = binomial(rng, pop.adults[c]!, adultP);
       if (na > 0) visitors.push({ s, c, stage: -1, ind: -1, n: na });
@@ -225,7 +227,7 @@ function trapNight(job: TrapJob, ctx: JobContext): void {
       if (ind.species[i] !== s || ctx.removedIndividuals[i]) continue;
       const dx = ind.x[i]! - (job.x + 0.5);
       const dy = ind.y[i]! - (job.y + 0.5);
-      if (dx * dx + dy * dy > r * r) continue;
+      if (dx * dx + dy * dy > reach * reach) continue;
       const k = juvenileStageAt(sp, ind.born[i]!, ctx.day);
       if (k < sp.nestStages) continue;
       const pi = k >= sp.juvenileStages ? adultP : juvP;
