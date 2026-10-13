@@ -241,18 +241,18 @@ export function preyMatrix(species: readonly DerivedSpecies[]): number[][] {
   return species.map((pred, i) =>
     species.map((prey, j) => {
       if (pred.herbivore || i === j) return 0;
-      return catchSuitability(prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity);
+      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity);
     }),
   );
 }
 
 /**
- * 捕食者能不能抓这种猎物（体重比 → [0, 1]）。
- * 食草动物按体型适合度；别的食肉动物会还手，只有比自己轻的才抓得了
- * （白鼬会吃伶鼬，伶鼬不会去抓白鼬）。
+ * 捕食者能不能抓这种猎物（这一只和那一只的体重比 → [0, 1]）。
+ * 食草动物按体型适合度；别的食肉动物会还手，只抓成体比自己物种轻的
+ * （白鼬会吃伶鼬，伶鼬不会去抓白鼬）。这条按物种的成体体重判断，格子模型和个体模型才一致。
  */
-export function catchSuitability(prey: DerivedSpecies, preyToPredatorMass: number): number {
-  if (!prey.herbivore && preyToPredatorMass >= 1) return 0;
+export function catchSuitability(pred: DerivedSpecies, prey: DerivedSpecies, preyToPredatorMass: number): number {
+  if (!prey.herbivore && prey.bodyMassG >= pred.bodyMassG) return 0;
   return sizeSuitability(preyToPredatorMass);
 }
 

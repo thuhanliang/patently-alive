@@ -403,7 +403,7 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (ddx * ddx + ddy * ddy > r2) continue;
           const prey = species[qs]!;
           const preyMass = prey.bodyMassG * sizeOf(prey, ind.born[q]!, ctx.day);
-          const chance = catchSuitability(prey, preyMass / predMass) * CATCH_SUCCESS;
+          const chance = catchSuitability(pred, prey, preyMass / predMass) * CATCH_SUCCESS;
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
           ctx.stats[qs]!.deathsPredation += 1;

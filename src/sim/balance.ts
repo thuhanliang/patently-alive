@@ -14,6 +14,8 @@ export interface SpeciesReport {
   max: number;
   /** 第几天灭绝（总数变成 0）；没灭绝为 null。 */
   extinctDay: number | null;
+  /** 每年的日均数量。 */
+  yearlyMeans: number[];
   /** 第二年以后年均值的变异系数，衡量"起伏"。 */
   yearlyCv: number;
   /** 第二年以后，日总数相对最大值的跌幅峰值（0–1）：越大说明有过大起大落。 */
@@ -56,14 +58,16 @@ export function balanceCheck(config: SimConfig, years: number, t: BalanceThresho
     if (extinct >= 0 && extinct < t.earlyExtinctionYears * DAYS_PER_YEAR) {
       alarms.push(`${id} 在第 ${Math.floor(extinct / DAYS_PER_YEAR) + 1} 年第 ${(extinct % DAYS_PER_YEAR) + 1} 天灭绝`);
     }
-    if (max > start[s]! * t.explosionFactor) {
+    // 开局为 0 的物种（后来投放的）没有"开局的几倍"可言，不报爆炸。
+    if (start[s]! > 0 && max > start[s]! * t.explosionFactor) {
       alarms.push(`${id} 最多到 ${max} 只，是开局（${start[s]}）的 ${(max / Math.max(1, start[s]!)).toFixed(0)} 倍`);
     }
-    const yearly: number[] = [];
-    for (let y = 1; y < years; y++) {
+    const yearlyMeans: number[] = [];
+    for (let y = 0; y < years; y++) {
       const slice = series.slice(y * DAYS_PER_YEAR, (y + 1) * DAYS_PER_YEAR);
-      yearly.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+      yearlyMeans.push(slice.reduce((a, b) => a + b, 0) / slice.length);
     }
+    const yearly = yearlyMeans.slice(1);
     const mean = yearly.reduce((a, b) => a + b, 0) / Math.max(1, yearly.length);
     const sd = Math.sqrt(yearly.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, yearly.length));
     let peak = 0;
@@ -78,6 +82,7 @@ export function balanceCheck(config: SimConfig, years: number, t: BalanceThresho
       min,
       max,
       extinctDay: extinct >= 0 ? extinct : null,
+      yearlyMeans,
       yearlyCv: mean > 0 ? sd / mean : 0,
       maxDrawdown: drawdown,
     };

@@ -11,10 +11,17 @@ import { DAYS_PER_YEAR } from '../src/sim';
 import { balanceCheck } from '../src/sim/balance';
 
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const SEEDS = Number(env.SEEDS ?? 8);
-const YEARS = Number(env.YEARS ?? 10);
-const SIZE = Number(env.SIZE ?? 64);
-const SEED0 = Number(env.SEED0 ?? 1);
+/** 读正整数环境变量；写错了直接报错，免得什么都没跑却显示"0 条报警"。 */
+function intEnv(name: string, fallback: number, min: number): number {
+  const raw = env[name];
+  const v = raw === undefined || raw === '' ? fallback : Number(raw);
+  if (!Number.isInteger(v) || v < min) throw new Error(`${name} 要是不小于 ${min} 的整数，现在是 ${raw}`);
+  return v;
+}
+const SEEDS = intEnv('SEEDS', 8, 1);
+const YEARS = intEnv('YEARS', 10, 1);
+const SIZE = intEnv('SIZE', 64, 8);
+const SEED0 = intEnv('SEED0', 1, 0);
 
 it(`sweep ${SEEDS} seeds × ${YEARS} years @ ${SIZE}²`, () => {
   const world = { ...grassland, width: SIZE, height: SIZE };
@@ -24,10 +31,7 @@ it(`sweep ${SEEDS} seeds × ${YEARS} years @ ${SIZE}²`, () => {
     const r = balanceCheck({ seed, world, species: speciesFor(world) }, YEARS);
     alarms += r.alarms.length;
     const cols = r.species.map((s) => {
-      const yearlyMeans = Array.from({ length: YEARS }, (_, y) => {
-        const slice = s.daily.slice(y * DAYS_PER_YEAR, (y + 1) * DAYS_PER_YEAR);
-        return Math.round(slice.reduce((a, b) => a + b, 0) / slice.length);
-      });
+      const yearlyMeans = s.yearlyMeans.map(Math.round);
       const ext = s.extinctDay === null ? '' : ` 灭绝@${(s.extinctDay / DAYS_PER_YEAR).toFixed(1)}y`;
       return `${s.id}: cv=${s.yearlyCv.toFixed(2)} dd=${s.maxDrawdown.toFixed(2)}${ext} [${yearlyMeans.join(' ')}]`;
     });

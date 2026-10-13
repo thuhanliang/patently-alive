@@ -156,8 +156,11 @@ export class PopulationChart {
       legend(`${history.labels[s]} ${now}`, STYLES[s % STYLES.length]!);
     }
     legend(history.labels[species]!, VEG_STYLE);
+    // 纵轴说明放在图例右边；放不下（窄屏）就放到右下角。
+    const hint = this.scale === 'log' ? '对数纵轴（点图切换）' : '各自最高值 = 100%（点图切换）';
     ctx.fillStyle = '#777';
     ctx.textAlign = 'right';
-    ctx.fillText(this.scale === 'log' ? '对数纵轴（点图切换）' : '各自最高值 = 100%（点图切换）', pad.l + pw, 13);
+    const fits = lx + ctx.measureText(hint).width < pad.l + pw;
+    ctx.fillText(hint, pad.l + pw, fits ? 13 : pad.t + ph - 4);
   }
 }

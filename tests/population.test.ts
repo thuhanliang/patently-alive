@@ -112,7 +112,7 @@ describe('从性状推导的参数', () => {
       populations[1]!.adults[0] = 2;
       return crowdingByBlock({ species, prey, populations, blockOf, cellsIn })[1]![0]!;
     };
-    expect(crowding(0)).toBe(Number.POSITIVE_INFINITY);
+    expect(crowding(0)).toBeGreaterThan(1e6);
     expect(crowding(100)).toBeGreaterThan(crowding(1000));
     expect(crowding(1000)).toBeGreaterThan(0);
   });
