@@ -7,5 +7,5 @@ export { cellIndex, type Grid } from './grid';
 export { countAt, populationTotal, type Population, type DayStats } from './population';
 export { type DerivedSpecies } from './physiology';
 export * from './time';
-export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, type FocusRect } from './focus';
+export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type FocusRect } from './focus';
 export { type Individuals } from './individuals';

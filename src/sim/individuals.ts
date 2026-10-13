@@ -83,6 +83,7 @@ function push(
   y: number,
   age: number,
   reserve: number,
+  fed = 0,
 ): void {
   ensureCapacity(ind, ind.count + 1);
   const i = ind.count++;
@@ -94,7 +95,7 @@ function push(
   ind.age[i] = age;
   ind.female[i] = rng.nextInt(2);
   ind.reserve[i] = reserve;
-  ind.fed[i] = 0;
+  ind.fed[i] = fed;
 }
 
 /**
@@ -128,6 +129,8 @@ function stageOf(sp: DerivedSpecies, age: number): number {
 
 /**
  * 把一格里某物种的计数全部展开成个体，计数清零。
+ * dayElapsed 是当天已经过去的比例：一天中途展开的个体，当作已经按时吃过这么多
+ * （否则晚上结算时会按"一整天没吃"挨饿，镜头放大的时间点就会影响死亡数）。
  * 年龄按年龄段抽：第 k 段幼体在 [k·m/段数, (k+1)·m/段数) 内（m 为性成熟天数）；
  * 成体在 [性成熟, 性成熟 + 两倍平均成体寿命) 内，不超过最长寿命。收拢时按年龄放回同一段。
  */
@@ -138,6 +141,7 @@ export function expandCell(
   width: number,
   c: number,
   rng: Rng,
+  dayElapsed = 0,
 ): void {
   const cx = c % width;
   const cy = Math.floor(c / width);
@@ -156,19 +160,23 @@ export function expandCell(
       const lo = Math.ceil((k * sp.maturityDays) / JUVENILE_STAGES);
       const hi = Math.max(lo + 1, Math.ceil(((k + 1) * sp.maturityDays) / JUVENILE_STAGES));
       for (let j = 0; j < n; j++) {
-        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), lo + rng.nextInt(hi - lo), sp.maxReserveDays / 2);
+        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), lo + rng.nextInt(hi - lo), sp.maxReserveDays / 2, dayElapsed);
       }
       pop.juveniles[k]![c] = 0;
     }
     for (let k = 0; k < na; k++) {
       const age = sp.maturityDays + rng.nextInt(adultSpan);
-      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), age, sp.maxReserveDays / 2);
+      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), age, sp.maxReserveDays / 2, dayElapsed);
     }
     pop.adults[c] = 0;
   }
 }
 
-/** 把第 i 个个体收拢回它所在格的计数（按年龄归入幼体或成体）。不删除，调用方负责。 */
+/**
+ * 把第 i 个个体收拢进 into（按所在格和年龄归入幼体某一段或成体）。不删除，调用方负责。
+ * 一天中途收拢的个体当天已经以个体身份吃过、捕过猎，收进"待合并"计数，
+ * 等格子模型算完当天再并回去，免得同一天算两遍。
+ */
 function collapseOne(
   ind: Individuals,
   species: readonly DerivedSpecies[],
@@ -190,32 +198,33 @@ function collapseOne(
 }
 
 /**
- * 换关注区：新关注区外的个体收拢回计数；新关注区里、旧关注区外的格子展开。
+ * 换关注区：新关注区外的个体收拢进 collapseInto；新关注区里、旧关注区外的格子展开。
  * 两边都在的格子里的个体原样保留（年龄、储备、位置都不丢）。
+ * dayElapsed 是当天已经过去的比例（见 expandCell）。
  */
 export function applyFocus(
   ind: Individuals,
   species: readonly DerivedSpecies[],
   populations: Population[],
+  collapseInto: Population[],
   grid: Grid,
   from: FocusRect | null,
   to: FocusRect | null,
   rng: Rng,
+  dayElapsed = 0,
 ): void {
   const removed = new Uint8Array(ind.count);
-  let any = false;
   for (let i = 0; i < ind.count; i++) {
     if (!inFocus(to, Math.floor(ind.x[i]!), Math.floor(ind.y[i]!))) {
-      collapseOne(ind, species, populations, grid.width, i);
+      collapseOne(ind, species, collapseInto, grid.width, i);
       removed[i] = 1;
-      any = true;
     }
   }
-  if (any) compact(ind, removed);
+  compact(ind, removed);
   if (!to) return;
   for (let y = to.y0; y < to.y1; y++) {
     for (let x = to.x0; x < to.x1; x++) {
-      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng);
+      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng, dayElapsed);
     }
   }
 }
@@ -240,16 +249,6 @@ export function absorbImmigrants(
   }
 }
 
-/** 按格统计个体数，给拥挤度用。 */
-export function countByCell(ind: Individuals, speciesCount: number, cells: number, width: number): Int32Array[] {
-  const out = Array.from({ length: speciesCount }, () => new Int32Array(cells));
-  for (let i = 0; i < ind.count; i++) {
-    const c = Math.floor(ind.y[i]!) * width + Math.floor(ind.x[i]!);
-    out[ind.species[i]!]![c] = out[ind.species[i]!]![c]! + 1;
-  }
-  return out;
-}
-
 export function countBySpecies(ind: Individuals, speciesCount: number): number[] {
   const out = new Array<number>(speciesCount).fill(0);
   for (let i = 0; i < ind.count; i++) out[ind.species[i]!]! += 1;
@@ -260,7 +259,8 @@ export function countBySpecies(ind: Individuals, speciesCount: number): number[]
 
 export interface HourlyContext {
   species: readonly DerivedSpecies[];
-  populations: Population[];
+  /** 走出关注区的个体收进这里（待合并计数），当天格子模型算完后再并回去。 */
+  emigrants: Population[];
   grid: Grid;
   focus: FocusRect;
   hour: number;
@@ -278,7 +278,6 @@ export interface HourlyContext {
 export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
   const { species, grid, focus, hour, rng } = ctx;
   const removed = new Uint8Array(ind.count);
-  let any = false;
   // 按物种预先算好这一小时的量，内层循环只查表。
   const active = Uint8Array.from(species, (sp) => (isActive(sp.params.activity, hour) ? 1 : 0));
   const xs = ind.x;
@@ -323,9 +322,8 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     ind.vy[i] = vy;
 
     if (nx < x0 || nx >= x1 || ny < y0 || ny >= y1) {
-      collapseOne(ind, species, ctx.populations, grid.width, i);
+      collapseOne(ind, species, ctx.emigrants, grid.width, i);
       removed[i] = 1;
-      any = true;
       continue;
     }
 
@@ -333,8 +331,7 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
   }
 
   hunt(ind, ctx, removed, active);
-  for (let i = 0; i < ind.count; i++) if (removed[i]) any = true;
-  if (any) compact(ind, removed);
+  compact(ind, removed);
 }
 
 /** 食草个体吃这一小时的份额（不超过所在格能啃的量）。 */
@@ -422,7 +419,8 @@ export interface IndividualDailyContext {
 }
 
 /**
- * 一天：结算储备、死亡（基础、饥饿、衰老）、出生、长一岁。
+ * 一天：结算储备、死亡（基础、饥饿）、出生、长一岁。
+ * 和格子模型一样没有"到最长寿命必死"：死亡率不随年龄变化，最长寿命只用来限制展开时分配的年龄。
  * 储备 = 上限内的（昨天储备 + 今天吃到的 − 1 天的需求）；低于 0 时按缺口挨饿。
  */
 export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext): void {
@@ -442,11 +440,6 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
 
     const base = juvenile ? sp.juvenileDailyMortality : sp.adultDailyMortality;
     const starve = reserve < 0 ? sp.starvationRate * Math.min(1, -reserve) : 0;
-    if (age >= sp.maxAgeDays) {
-      removed[i] = 1;
-      stats[s]!.deathsOther += 1;
-      continue;
-    }
     if (rng.nextFloat() < base + starve) {
       removed[i] = 1;
       // 和格子模型一样按两种死因的比重拆分。
@@ -458,10 +451,8 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     // 出生：繁殖期内的成年雌性；越拥挤、越饿生得越少。
     const breeding = ctx.breeding[s]!;
     if (!juvenile && ind.female[i] && breeding > 0) {
-      const c = Math.floor(ind.y[i]!) * ctx.width + Math.floor(ind.x[i]!);
-      const by = Math.floor(c / ctx.width);
-      const bx = c % ctx.width;
-      const room = 1 - ctx.crowding[s]![crowdingBlockOf(ctx.width, bx, by)]!;
+      const block = crowdingBlockOf(ctx.width, Math.floor(ind.x[i]!), Math.floor(ind.y[i]!));
+      const room = 1 - ctx.crowding[s]![block]!;
       const condition = reserve >= 0 ? 1 : 0.5;
       if (room > 0 && rng.nextFloat() < breeding * sp.litterRate * room * condition) {
         const size = sp.params.reproduction.litterSize;

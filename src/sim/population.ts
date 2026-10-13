@@ -52,6 +52,25 @@ function sizeWeighted(p: Population, c: number): number {
   return p.adults[c]! + JUVENILE_SIZE_FACTOR * juvenilesAt(p, c);
 }
 
+/** 一个和 like 同样大小、全为 0 的种群计数。 */
+export function emptyPopulation(like: Population): Population {
+  return {
+    juveniles: like.juveniles.map((st) => new Int32Array(st.length)),
+    adults: new Int32Array(like.adults.length),
+  };
+}
+
+/** 把 from 的计数加进 into，然后清零 from。 */
+export function mergeInto(into: Population, from: Population): void {
+  for (let i = 0; i < into.adults.length; i++) into.adults[i] = into.adults[i]! + from.adults[i]!;
+  from.adults.fill(0);
+  into.juveniles.forEach((st, k) => {
+    const src = from.juveniles[k]!;
+    for (let i = 0; i < st.length; i++) st[i] = st[i]! + src[i]!;
+    src.fill(0);
+  });
+}
+
 export function populationTotal(p: Population): number {
   let t = 0;
   for (let i = 0; i < p.adults.length; i++) t += countAt(p, i);
@@ -134,14 +153,19 @@ export function crowdingBlockOf(width: number, x: number, y: number): number {
   return Math.floor(y / CROWDING_BLOCK_CELLS) * bw + Math.floor(x / CROWDING_BLOCK_CELLS);
 }
 
+/** 格子计数之外、也要算进拥挤度的动物：展开的个体（按位置）和待合并的计数。 */
+export interface CrowdingExtras {
+  individuals?: { count: number; species: Uint8Array; x: Float64Array; y: Float64Array };
+  pending?: readonly Population[];
+}
+
 /**
  * 各物种在每个区块里的拥挤程度：区块平均每格只数 / 拥挤上限。
  * 当天开始时统计一次（区块边缘不满 8×8 时按实际格数算）。
- * extra 是格子计数之外、按格统计的个体数（关注区里展开的个体），一起算。
  */
 export function crowdingByBlock(
   ctx: Pick<DailyContext, 'grid' | 'species' | 'populations'>,
-  extra?: readonly Int32Array[],
+  extras: CrowdingExtras = {},
 ): Float64Array[] {
   const { width, height } = ctx.grid;
   const B = CROWDING_BLOCK_CELLS;
@@ -155,7 +179,13 @@ export function crowdingByBlock(
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const c = y * width + x;
-        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += countAt(pop, c) + (extra ? extra[s]![c]! : 0);
+        out[Math.floor(y / B) * bw + Math.floor(x / B)]! += countAt(pop, c) + (extras.pending ? countAt(extras.pending[s]!, c) : 0);
+      }
+    }
+    const ind = extras.individuals;
+    if (ind) {
+      for (let i = 0; i < ind.count; i++) {
+        if (ind.species[i] === s) out[Math.floor(ind.y[i]! / B) * bw + Math.floor(ind.x[i]! / B)]! += 1;
       }
     }
     for (let b = 0; b < out.length; b++) out[b] = out[b]! / cellsIn[b]! / sp.crowdingCapacity;

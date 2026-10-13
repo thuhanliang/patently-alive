@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { SimState } from '../sim';
+import { countAt, type SimState } from '../sim';
 import { CELL_PX, mapWorldSize } from './projection';
 
 /** 数据图层：植被，或某个物种的密度。一次只开一层。 */
@@ -48,6 +48,9 @@ export class GridLayer {
       max = 1;
       counts.set(pop.adults);
       for (const stage of pop.juveniles) for (let i = 0; i < counts.length; i++) counts[i] = counts[i]! + stage[i]!;
+      // 当天从个体收拢回来、还没并进计数的也要算。
+      const pending = state.emigrants[layer.index]!;
+      for (let i = 0; i < counts.length; i++) counts[i] = counts[i]! + countAt(pending, i);
       // 关注区里的动物已经展开成个体，也要算进密度。
       const ind = state.individuals;
       for (let k = 0; k < ind.count; k++) {

@@ -8,15 +8,16 @@ import {
   crowdingByBlock,
   dailyPopulation,
   emptyDayStats,
+  emptyPopulation,
+  mergeInto,
   populationTotal,
   type DayStats,
   type Population,
 } from './population';
-import { sameFocus, type FocusRect } from './focus';
+import { FOCUS_BLOCK, FOCUS_MAX_CELLS, sameFocus, type FocusRect } from './focus';
 import {
   absorbImmigrants,
   applyFocus,
-  countByCell,
   countBySpecies,
   createIndividuals,
   individualsDaily,
@@ -44,6 +45,11 @@ export interface SimState {
   requestedFocus: FocusRect | null;
   /** 关注区里的个体。 */
   individuals: Individuals;
+  /**
+   * 当天从个体收拢回来、还没并进格子计数的动物（它们今天已经以个体身份吃过、捕过猎），
+   * 换天时格子模型算完后再并回去。
+   */
+  emigrants: Population[];
   /** 当天到目前为止的账目（个体每小时被捕食的计入这里），换天时并入 lastDay。 */
   dayAccum: DayStats[];
 }
@@ -69,6 +75,7 @@ export function createInitialState(config: SimConfig): SimState {
     focus: null,
     requestedFocus: null,
     individuals: createIndividuals(),
+    emigrants: populations.map(emptyPopulation),
     dayAccum: populations.map(() => emptyDayStats()),
   };
 }
@@ -115,25 +122,53 @@ export class Sim {
    * 关注区会影响推演结果，第 5 步改成写进操作日志的操作。
    */
   setFocus(focus: FocusRect | null): void {
+    if (focus) {
+      const { width, height } = this.s.grid;
+      const { x0, y0, x1, y1 } = focus;
+      const ok =
+        [x0, y0, x1, y1].every(Number.isInteger) &&
+        x0 >= 0 && y0 >= 0 && x1 <= width && y1 <= height &&
+        x0 < x1 && y0 < y1 &&
+        x1 - x0 <= FOCUS_MAX_CELLS && y1 - y0 <= FOCUS_MAX_CELLS &&
+        x0 % FOCUS_BLOCK === 0 && y0 % FOCUS_BLOCK === 0;
+      if (!ok) {
+        throw new RangeError(
+          `关注区不合法：${JSON.stringify(focus)}（要在地图内、左上角对齐到 ${FOCUS_BLOCK} 格、边长不超过 ${FOCUS_MAX_CELLS} 格）`,
+        );
+      }
+    }
     this.s.requestedFocus = focus ? { ...focus } : null;
   }
 
-  /** 每个物种的总数：格子计数 + 展开的个体。 */
+  /** 每个物种的总数：格子计数 + 待合并计数 + 展开的个体。 */
   totals(): number[] {
     const ind = countBySpecies(this.s.individuals, this.derived.length);
-    return this.s.populations.map((p, i) => populationTotal(p) + ind[i]!);
+    return this.s.populations.map((p, i) => populationTotal(p) + populationTotal(this.s.emigrants[i]!) + ind[i]!);
   }
 
   step(): void {
     if (!sameFocus(this.s.focus, this.s.requestedFocus)) {
-      applyFocus(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.s.requestedFocus, this.rng);
+      // 今天已经过去的小时数。刚换天（还没有任何个体行动过）时收拢的直接回格子计数，
+      // 一天中途收拢的进待合并计数；中途展开的当作已经按时吃过。
+      const hoursDone = this.s.tick % TICKS_PER_DAY;
+      applyFocus(
+        this.s.individuals,
+        this.derived,
+        this.s.populations,
+        hoursDone === 0 ? this.s.populations : this.s.emigrants,
+        this.s.grid,
+        this.s.focus,
+        this.s.requestedFocus,
+        this.rng,
+        hoursDone / TICKS_PER_DAY,
+      );
       this.s.focus = this.s.requestedFocus ? { ...this.s.requestedFocus } : null;
     }
     this.s.tick += 1;
     if (this.s.focus) {
       individualsHourly(this.s.individuals, {
         species: this.derived,
-        populations: this.s.populations,
+        emigrants: this.s.emigrants,
         grid: this.s.grid,
         focus: this.s.focus,
         hour: calendar(this.s.tick).hour,
@@ -168,13 +203,9 @@ export class Sim {
     growVegetation(this.s.grid, world, growth, decay);
 
     const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
-    const cells = this.s.grid.width * this.s.grid.height;
-    const extra = this.s.individuals.count > 0
-      ? countByCell(this.s.individuals, this.derived.length, cells, this.s.grid.width)
-      : undefined;
     const crowding = crowdingByBlock(
       { grid: this.s.grid, species: this.derived, populations: this.s.populations },
-      extra,
+      { individuals: this.s.individuals, pending: this.s.emigrants },
     );
 
     const cellStats = dailyPopulation({
@@ -198,6 +229,8 @@ export class Sim {
       rng: this.rng,
       stats: acc,
     });
+    // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
+    this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
     absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng);
 
     const totals = this.totals();

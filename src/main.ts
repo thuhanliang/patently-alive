@@ -1,5 +1,5 @@
 import { grassland, grasslandSpecies } from './data';
-import { FixedStepClock, Sim, TICKS_PER_DAY, focusAround, type FocusRect } from './sim';
+import { FixedStepClock, Sim, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect } from './sim';
 import { GreyboxView } from './render/view';
 import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
@@ -54,9 +54,7 @@ async function main(): Promise<void> {
       const v = view.visibleCells();
       want = focusAround(v.cx, v.cy, v.w, v.h, sim.state.grid.width, sim.state.grid.height);
     }
-    const cur = sim.state.requestedFocus;
-    const same = want === null || cur === null ? want === cur : want.x0 === cur.x0 && want.y0 === cur.y0 && want.x1 === cur.x1 && want.y1 === cur.y1;
-    if (!same) sim.setFocus(want);
+    if (!sameFocus(want, sim.state.requestedFocus)) sim.setFocus(want);
   };
 
   view.ticker.add((ticker) => {

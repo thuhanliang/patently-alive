@@ -22,7 +22,7 @@ describe('展开与收拢守恒', () => {
     const { derived } = deriveAll(state.config.species, state.config.world.cellSizeM);
     const rng = Rng.fromSeed(1);
 
-    applyFocus(state.individuals, derived, state.populations, state.grid, null, FOCUS, rng);
+    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, null, FOCUS, rng);
     // 关注区里的计数全部清零，变成个体。
     let leftInFocus = 0;
     for (let y = FOCUS.y0; y < FOCUS.y1; y++)
@@ -31,7 +31,7 @@ describe('展开与收拢守恒', () => {
     expect(leftInFocus).toBe(0);
     expect(state.individuals.count).toBeGreaterThan(100);
 
-    applyFocus(state.individuals, derived, state.populations, state.grid, FOCUS, null, rng);
+    applyFocus(state.individuals, derived, state.populations, state.populations, state.grid, FOCUS, null, rng);
     expect(state.individuals.count).toBe(0);
     expect(cellCounts(state)).toBe(before);
   });
@@ -56,12 +56,12 @@ describe('展开与收拢守恒', () => {
     const totalsBefore = sim.totals();
 
     const { derived } = deriveAll(st.config.species, st.config.world.cellSizeM);
-    applyFocus(st.individuals, derived, st.populations, st.grid, st.focus, to, Rng.fromSeed(2));
+    applyFocus(st.individuals, derived, st.populations, st.emigrants, st.grid, st.focus, to, Rng.fromSeed(2));
     expect(overlap(st)).toEqual(before);
 
     const totalAfter = st.populations.map((p, s) => {
       let t = 0;
-      for (let c = 0; c < p.adults.length; c++) t += countAt(p, c);
+      for (let c = 0; c < p.adults.length; c++) t += countAt(p, c) + countAt(st.emigrants[s]!, c);
       for (let i = 0; i < st.individuals.count; i++) if (st.individuals.species[i] === s) t += 1;
       return t;
     });
@@ -148,5 +148,26 @@ describe('个体模型和格子模型的一致性', () => {
       if (!sp.herbivore) return;
       expect(Math.abs(b[s]! - a[s]!) / a[s]!, sp.params.id).toBeLessThan(0.15);
     });
+  });
+});
+
+describe('关注区的校验和时机', () => {
+  it('不合法的关注区直接拒绝', () => {
+    const sim = makeSim(1);
+    const bad: FocusRect[] = [
+      { x0: 24, y0: 0, x1: 40, y1: 16 }, // 超出地图（宽 32）
+      { x0: 8, y0: 8, x1: 8, y1: 16 }, // 宽为 0
+      { x0: 3, y0: 0, x1: 11, y1: 8 }, // 没对齐
+      { x0: 0, y0: 0, x1: 40, y1: 8 }, // 太宽
+    ];
+    for (const f of bad) expect(() => sim.setFocus(f)).toThrow(RangeError);
+  });
+
+  it('一天中途展开不会让个体当晚挨饿', () => {
+    const sim = makeSim(4);
+    sim.stepN(TICKS_PER_DAY * 20 + 20); // 晚上 8 点
+    sim.setFocus(FOCUS);
+    sim.stepN(TICKS_PER_DAY - 20); // 到换天
+    expect(sim.state.lastDay.reduce((a, d) => a + d.deathsStarvation, 0)).toBe(0);
   });
 });
