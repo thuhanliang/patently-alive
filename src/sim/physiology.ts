@@ -184,16 +184,18 @@ export function activityOverlap(a: Activity, b: Activity): number {
 
 /**
  * 体型适合度：猎物体重 / 捕食者体重之比 → [0, 1]。
- * 太小不值得抓，和自己差不多大或更大就越来越难抓。分段线性。
+ * 太小不值得抓；比自己大得越多越难抓，到 12 倍就抓不动了。分段线性。
  */
 const SIZE_RATIO_POINTS: Array<[number, number]> = [
   [0.005, 0],
   [0.02, 0.5],
   [0.05, 1],
   [0.5, 1],
-  [1, 0.6],
-  [3, 0.3],
-  [8, 0],
+  [1, 0.7],
+  // 鼬科能放倒比自己重好几倍的猎物：兔子（约为白鼬体重的 6 倍）是英国、新西兰白鼬的主要猎物。
+  [3, 0.5],
+  [8, 0.15],
+  [12, 0],
 ];
 
 export function sizeSuitability(preyToPredatorMass: number): number {
