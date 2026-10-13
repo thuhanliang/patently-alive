@@ -1,10 +1,11 @@
-import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
-import { FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, scenarioRules, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { bindCameraControls } from './ui/cameraControls';
+import { CommissionCards } from './ui/commission';
 import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
@@ -39,9 +40,9 @@ document.addEventListener('click', (e) => {
  */
 const DEFAULT_SCENARIO = 'bird-island';
 
-function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; problem: string } {
+function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; problem: string; scenario: Scenario | null } {
   const params = new URLSearchParams(location.search);
-  if (params.get('world') === 'grassland') return { world: grassland, seed: 1, rules: SANDBOX_RULES, problem: '' };
+  if (params.get('world') === 'grassland') return { world: grassland, seed: 1, rules: SANDBOX_RULES, problem: '', scenario: null };
   const id = params.get('scenario') ?? DEFAULT_SCENARIO;
   const scenario = scenarioLibrary.get(id) ?? scenarioLibrary.get(DEFAULT_SCENARIO)!;
   const known = [...scenarioLibrary.keys()].join('、');
@@ -49,12 +50,13 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
   const rules: Rules =
     params.get('sandbox') === '1'
       ? { ...SANDBOX_RULES, scenario: scenario.id }
-      : { scenario: scenario.id, ...scenario.resources, allowRelease: false, sentiment: scenario.sentiment };
-  return { world: worldFor(scenario), seed: scenario.seed, rules, problem };
+      : scenarioRules(scenario);
+  // 沙盒没有委托（rules.goal 为 null），不显示历史卡和结算。
+  return { world: worldFor(scenario), seed: scenario.seed, rules, problem, scenario: rules.goal ? scenario : null };
 }
 
 async function main(): Promise<void> {
-  const { world, seed: defaultSeed, rules, problem } = chosenWorld();
+  const { world, seed: defaultSeed, rules, problem, scenario } = chosenWorld();
   const species = speciesFor(world);
   const newSession = (seed: number): Session => new Session({ seed, world, species, tools: toolData }, rules);
   let session = newSession(intParam('seed', defaultSeed, 0xffff_ffff));
@@ -71,6 +73,10 @@ async function main(): Promise<void> {
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
+  // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演不走。
+  const cards = scenario ? new CommissionCards(el('modal'), scenario, session.sim.species.map((s) => s.params.id)) : null;
+  let shownQuarters = 0;
+  cards?.briefing(names);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(
     el<HTMLCanvasElement>('chart'),
@@ -103,6 +109,9 @@ async function main(): Promise<void> {
     captures.reset();
     alertBanner.reset();
     alertDay = -1;
+    // 载入的局已经结算过的季度不再弹出。
+    shownQuarters = next.quarters.length;
+    cards?.close();
     history.clear();
     history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
@@ -195,6 +204,8 @@ async function main(): Promise<void> {
     for (let i = 0; i < ticks; i++) {
       session.advance(1);
       if (session.sim.tick % TICKS_PER_DAY === 0) history.record(session.sim.tick / TICKS_PER_DAY, session.sim.state);
+      // 刚结算了一季：停在这里，让结算单在季末那一刻弹出（不让高倍速跑过头）。
+      if (cards && session.quarters.length > shownQuarters) break;
     }
   };
   history.record(0, session.sim.state);
@@ -202,7 +213,9 @@ async function main(): Promise<void> {
     el('time-bar'),
     () => session.speed,
     (speed) => submit({ type: 'setSpeed', speed }),
-    () => advance(TICKS_PER_DAY - (session.sim.tick % TICKS_PER_DAY)),
+    () => {
+      if (!cards?.isOpen) advance(TICKS_PER_DAY - (session.sim.tick % TICKS_PER_DAY));
+    },
   );
 
   // 镜头放大到地块档时，以画面中心为准请求关注区；拉远时全部收拢。
@@ -223,7 +236,13 @@ async function main(): Promise<void> {
       clock.reset();
       clock.speed = session.speed;
     }
-    advance(clock.advance(ticker.deltaMS));
+    if (cards?.isOpen) clock.reset();
+    else advance(clock.advance(ticker.deltaMS));
+    // 新的季度结算：弹出结算单（一帧里结算了好几季时只弹最新的）。
+    if (cards && session.quarters.length > shownQuarters) {
+      shownQuarters = session.quarters.length;
+      cards.quarter(session.quarters.at(-1)!, session, names);
+    }
     view.setFenceStart(field.fenceStart());
     syncAlerts();
     view.draw(session.sim.state);

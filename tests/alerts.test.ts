@@ -69,6 +69,16 @@ describe('警报', () => {
     for (let i = 1; i < list.length; i++) expect(list[i - 1]!.severity).toBeGreaterThanOrEqual(list[i]!.severity);
   });
 
+  it('给了本地物种时，外来物种减少不报警', () => {
+    const now = flat(100);
+    now[1] = 5;
+    now[2] = 60;
+    const native = Array.from({ length: n }, (_, s) => s === 0);
+    expect(alerts(withTotals(sim.snapshot(), flat(100), flat(100), now), { blockOf, native })).toEqual([]);
+    now[0] = 60;
+    expect(alerts(withTotals(sim.snapshot(), flat(100), flat(100), now), { blockOf, native }).map((a) => a.species)).toEqual([0]);
+  });
+
   it('骤减的地点是这个物种近期死得最多的区块', () => {
     const state = sim.snapshot();
     const l = state.deaths;

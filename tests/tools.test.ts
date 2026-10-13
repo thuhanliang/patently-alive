@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { scenarioLibrary, speciesFor, speciesLibrary, tools, worldFor, type WorldParams } from '../src/data';
-import { CAUSE, SANDBOX_RULES, Session, TICKS_PER_DAY, checksum, type Rules } from '../src/sim';
+import { CAUSE, SANDBOX_RULES, Session, TICKS_PER_DAY, checksum, scenarioRules, type Rules } from '../src/sim';
 import { baitAppeal, catchmentRadius, fitsTrap } from '../src/sim/jobs';
 import { deriveSpecies } from '../src/sim/physiology';
 import { TERRAIN } from '../src/sim/terrain';
@@ -8,7 +8,7 @@ import { TERRAIN } from '../src/sim/terrain';
 const scenario = scenarioLibrary.get('bird-island')!;
 const island = worldFor(scenario);
 const small: WorldParams = { ...island, width: 64, height: 64 };
-const rules: Rules = { scenario: scenario.id, ...scenario.resources, allowRelease: false, sentiment: scenario.sentiment };
+const rules: Rules = scenarioRules(scenario);
 const catCage = tools.traps.find((t) => t.id === 'cat-cage')!;
 const ratCage = tools.traps.find((t) => t.id === 'rat-cage')!;
 

@@ -37,6 +37,8 @@ export interface Alert {
 export interface AlertInputs {
   /** 每格属于哪个区块（和死因账本同一套区块）。 */
   blockOf: Int32Array;
+  /** 各物种是不是本地物种（情景的委托目标给出）。给了的话，濒临消失和骤减只报本地物种：外来物种减少是好事。 */
+  native?: readonly boolean[] | undefined;
   /** 当前资源；沙盒里可以不给。 */
   resources?: { budget: number; satisfaction: number; cheapestTool: number } | undefined;
 }
@@ -55,12 +57,13 @@ export function alerts(state: Readonly<SimState>, inputs: AlertInputs): Alert[] 
   for (let s = 0; s < totals.length; s++) {
     const total = totals[s]!;
     const start = first?.totals[s] ?? 0;
-    if (start > 0 && total < start * NEAR_EXTINCT_FRACTION) {
+    const watched = !inputs.native || inputs.native[s] === true;
+    if (watched && start > 0 && total < start * NEAR_EXTINCT_FRACTION) {
       out.push({ kind: 'nearExtinct', severity: 0.9 + 0.1 * (1 - total / (start * NEAR_EXTINCT_FRACTION)), species: s, value: total, at: hotspot(state, s, inputs.blockOf) });
       continue;
     }
     const before = past?.totals[s] ?? 0;
-    if (past && before > 0) {
+    if (watched && past && before > 0) {
       const drop = 1 - total / before;
       if (drop >= DECLINE_ALERT) {
         out.push({ kind: 'decline', severity: Math.min(0.89, 0.4 + drop * 0.6), species: s, value: drop, at: hotspot(state, s, inputs.blockOf) });

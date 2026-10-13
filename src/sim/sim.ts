@@ -309,8 +309,8 @@ export class Sim {
   }
 
   /** 当前的警报（最响的在前），见 alerts.ts。资源由统一操作接口那边传入。 */
-  alerts(resources?: AlertInputs['resources']): Alert[] {
-    return alerts(this.s, { blockOf: this.blocks.blockOf, resources });
+  alerts(resources?: AlertInputs['resources'], native?: readonly boolean[]): Alert[] {
+    return alerts(this.s, { blockOf: this.blocks.blockOf, resources, native });
   }
 
   /** 每个物种的总数：格子计数 + 待合并计数 + 展开的个体。 */
