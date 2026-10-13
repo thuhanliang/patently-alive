@@ -28,7 +28,7 @@ npm run data:fetch -- --pin
 npm run data:check
 
 # 3. 提交并推送
-git add scripts/data/sources.json data-external/ src/data/reference/traits-reference.json docs/DATA_CHECK.md
+git add scripts/data/sources.json data-external/ docs/data/traits-reference.json docs/DATA_CHECK.md
 git commit -m "数据：下载 PanTHERIA、AnAge 并生成物种核对表"
 git push -u origin human/001-trait-data
 ```
@@ -45,13 +45,14 @@ git push -u origin human/001-trait-data
 如果 AnAge 的地址变了，在 https://genomics.senescence.info/species/ 页面找 "Download" 的完整数据集（zip，里面是 `anage_data.txt`）。
 下载到的文件名不同就改成上表的名字。
 
-如果 `unzip` 不可用：把 zip 手动解压到 `data-raw/anage/`（确保里面有 `anage_data.txt`），再运行第 2 步。
+如果 `unzip` 不可用：把 zip 手动解压到 `data-raw/anage/`（确保里面有 `anage_data.txt`），再运行第 2 步；脚本会优先读解压好的文件。
+如果第 1 步提示"可能是报错网页"或"下载不完整"：删掉那个文件，用浏览器重新下载。
 
 ## 产出（只提交这些）
 
 - `scripts/data/sources.json`：填好了两个 `sha256`
 - `data-external/PanTHERIA_1-0_WR05_Aug2008.txt`：PanTHERIA 整份（CC0，可以放进仓库，约 2.6 MB）
-- `src/data/reference/traits-reference.json`：四个物种 + 后续阶段物种的数据库摘录
+- `docs/data/traits-reference.json`：四个物种 + 后续阶段物种的数据库摘录
 - `docs/DATA_CHECK.md`：核对表
 
 **不要提交** `data-raw/`（已在 `.gitignore` 里；AnAge 的再分发条款没确认，只提交摘录）。

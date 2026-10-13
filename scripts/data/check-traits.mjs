@@ -1,13 +1,15 @@
 // 用外部数据库核对物种数据：抽出 src/data/species 里每个物种在 PanTHERIA、AnAge 中的记录，
 // 和我们用的值逐字段对照，写出：
-//   src/data/reference/traits-reference.json   四个物种的数据库摘录（带出处），可以进仓库
-//   docs/DATA_CHECK.md                         核对表（差得多的标出来）
+//   docs/data/traits-reference.json   本游戏物种和后续阶段物种的数据库摘录（带出处），进仓库供查阅
+//   docs/DATA_CHECK.md                核对表（差得多的标出来）
+// 摘录只是参考资料，不是游戏运行时读取的数据。
 // 先运行 npm run data:fetch 下载数据库。
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const here = new URL('.', import.meta.url).pathname;
+const here = fileURLToPath(new URL('.', import.meta.url));
 const root = join(here, '..', '..');
 const dirs = { external: join(root, 'data-external'), raw: join(root, 'data-raw') };
 const manifest = JSON.parse(readFileSync(join(here, 'sources.json'), 'utf8'));
@@ -35,15 +37,30 @@ function loadPantheria() {
   return readTsv(readFileSync(path, 'latin1'));
 }
 
+/**
+ * AnAge：优先读已经解压好的 data-raw/anage/anage_data.txt（手动解压的情况）；
+ * 没有才从 zip 解压（先清空目录，避免读到旧文件）。
+ */
 function loadAnage() {
-  const zip = join(dirs[srcOf('anage').dir], srcOf('anage').file);
-  if (!existsSync(zip)) return null;
   const outDir = join(dirs.raw, 'anage');
-  mkdirSync(outDir, { recursive: true });
-  execFileSync('unzip', ['-o', '-q', zip, '-d', outDir]);
-  const txt = readdirSync(outDir).find((f) => /anage.*\.txt$/i.test(f));
-  if (!txt) throw new Error('AnAge 压缩包里没找到数据文件');
-  return readTsv(readFileSync(join(outDir, txt), 'latin1'));
+  const txt = join(outDir, 'anage_data.txt');
+  if (!existsSync(txt)) {
+    const zip = join(dirs[srcOf('anage').dir], srcOf('anage').file);
+    if (!existsSync(zip)) return null;
+    rmSync(outDir, { recursive: true, force: true });
+    mkdirSync(outDir, { recursive: true });
+    try {
+      execFileSync('unzip', ['-o', '-q', zip, '-d', outDir]);
+    } catch {
+      console.error(`解压失败（可能没有 unzip）。请手动把 ${zip} 解压到 ${outDir}，确保里面有 anage_data.txt，再运行一次。`);
+      process.exit(1);
+    }
+    if (!existsSync(txt)) {
+      console.error(`压缩包里没有 anage_data.txt，看看 ${outDir} 里实际是什么文件，改名后再运行。`);
+      process.exit(1);
+    }
+  }
+  return readTsv(readFileSync(txt, 'utf8'));
 }
 
 /** 取某列的数值：按列名里包含的关键字找列；缺失（-999、空）返回 null。 */
@@ -57,22 +74,22 @@ function num(row, ...keys) {
 
 const pantheria = loadPantheria();
 const anage = loadAnage();
-if (!pantheria && !anage) {
-  console.error('找不到数据库文件，先运行 npm run data:fetch');
+// 两个都要有：缺一个就生成的核对表会悄悄少一列。
+if (!pantheria || !anage) {
+  console.error(`缺少数据库文件：${[!pantheria && 'PanTHERIA', !anage && 'AnAge'].filter(Boolean).join('、')}。先运行 npm run data:fetch`);
   process.exit(1);
 }
 
 const PAN_ACTIVITY = { 1: '夜行', 2: '夜行 / 晨昏 / 全天 / 昼行混合', 3: '昼行' };
 
-// ---------- 逐物种抽取
-const reference = {};
-for (const sp of species) {
-  const [genus, epithet] = sp.scientificName.split(' ');
-  const p = pantheria?.find((r) => r.MSW05_Binomial === sp.scientificName) ?? null;
-  const a = anage?.find((r) => r.Genus === genus && r.Species === epithet) ?? null;
+// ---------- 抽取：两个数据库各取用得到的字段（不整行复制）
+function extract(scientificName) {
+  const [genus, epithet] = scientificName.split(' ');
+  const p = pantheria.find((r) => r.MSW05_Binomial === scientificName) ?? null;
+  const a = anage.find((r) => r.Genus === genus && r.Species === epithet) ?? null;
   const homeRangeKm2 = num(p, 'HomeRange_km2');
-  reference[sp.id] = {
-    scientificName: sp.scientificName,
+  return {
+    scientificName,
     pantheria: p && {
       adultBodyMassG: num(p, 'AdultBodyMass_g'),
       litterSize: num(p, 'LitterSize'),
@@ -99,27 +116,23 @@ for (const sp of species) {
   };
 }
 
-// 后续阶段要用的物种：原样摘录两个数据库里的整行（PanTHERIA 整份已在 data-external/，这里只为查阅方便）。
+const reference = {};
+for (const sp of species) reference[sp.id] = extract(sp.scientificName);
+
+// 后续阶段要用的物种：同样只取上面这些字段。
 const extra = {};
 for (const [group, names] of Object.entries(manifest.extraTaxa ?? {})) {
   if (!Array.isArray(names)) continue;
-  for (const name of names) {
-    const [genus, epithet] = name.split(' ');
-    extra[name] = {
-      group,
-      pantheria: pantheria?.find((r) => r.MSW05_Binomial === name) ?? null,
-      anage: anage?.find((r) => r.Genus === genus && r.Species === epithet) ?? null,
-    };
-  }
+  for (const name of names) extra[name] = { group, ...extract(name) };
 }
 
-const refDir = join(root, 'src', 'data', 'reference');
+const refDir = join(root, 'docs', 'data');
 mkdirSync(refDir, { recursive: true });
 writeFileSync(
   join(refDir, 'traits-reference.json'),
   `${JSON.stringify(
     {
-      说明: '外部数据库里与本游戏物种对应的记录摘录，由 scripts/data/check-traits.mjs 生成，勿手改。',
+      说明: '外部数据库里与本游戏物种（及后续阶段物种）对应的记录摘录，由 scripts/data/check-traits.mjs 生成，勿手改。只是参考资料，游戏运行时不读它。',
       sources: manifest.sources.map(({ id, name, citation, license, url, sha256 }) => ({ id, name, citation, license, url, sha256 })),
       species: reference,
       extraTaxa: extra,
@@ -151,7 +164,7 @@ for (const sp of species) {
   const P = r.pantheria ?? {};
   const A = r.anage ?? {};
   const rep = sp.reproduction;
-  const homeDiamM = P.homeRangeKm2 ? 2 * Math.sqrt((P.homeRangeKm2 * 1e6) / Math.PI) : null;
+  const homeDiamM = P.homeRangeKm2 != null ? 2 * Math.sqrt((P.homeRangeKm2 * 1e6) / Math.PI) : null;
   out.push(`## ${sp.name}（*${sp.scientificName}*）`);
   out.push('');
   out.push(`PanTHERIA：${r.pantheria ? '有记录' : '**无记录**'}；AnAge：${r.anage ? `有记录（数据质量 ${A.dataQuality ?? '—'}，样本 ${A.sampleSize ?? '—'}）` : '**无记录**'}`);
@@ -167,9 +180,9 @@ for (const sp of species) {
   row('最长寿命（年）', sp.maxLifespanYears, P.maxLongevityMonths === null || P.maxLongevityMonths === undefined ? null : P.maxLongevityMonths / 12, A.maxLongevityYears, 1);
   row('开局密度（只/平方公里）', sp.initialDensityPerHa * 100, P.populationDensityPerKm2, null, 1);
   row('日活动范围直径（米；PanTHERIA 由家域面积折算）', sp.movement.dailyRangeM, homeDiamM, null);
-  out.push(`| 活动时段 | ${sp.activity} | ${P.activityCycle ? PAN_ACTIVITY[P.activityCycle] ?? P.activityCycle : '—'} | — | 人工比对 |`);
+  out.push(`| 活动时段 | ${sp.activity} | ${P.activityCycle != null ? PAN_ACTIVITY[P.activityCycle] ?? P.activityCycle : '—'} | — | 人工比对 |`);
   out.push('');
 }
 mkdirSync(join(root, 'docs'), { recursive: true });
 writeFileSync(join(root, 'docs', 'DATA_CHECK.md'), `${out.join('\n')}\n`);
-console.log('已写出 src/data/reference/traits-reference.json 和 docs/DATA_CHECK.md');
+console.log('已写出 docs/data/traits-reference.json 和 docs/DATA_CHECK.md');
