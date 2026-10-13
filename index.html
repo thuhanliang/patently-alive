@@ -8,12 +8,18 @@
     <style>
       html, body { margin: 0; height: 100%; background: #2b2b2b; color: #ddd; font: 13px/1.4 ui-monospace, monospace; }
       #app { position: fixed; inset: 0; }
-      #hud { position: fixed; left: 8px; top: 8px; padding: 4px 8px; background: rgba(0, 0, 0, 0.5); white-space: pre; pointer-events: none; }
+      #app canvas { display: block; touch-action: none; cursor: grab; }
+      #app canvas:active { cursor: grabbing; }
+      #hud { position: fixed; left: 8px; top: 8px; padding: 4px 8px; background: rgba(0, 0, 0, 0.6); white-space: pre; pointer-events: none; }
+      #toolbar { position: fixed; right: 8px; top: 8px; display: flex; gap: 4px; }
+      #toolbar button { font: inherit; color: #ddd; background: #444; border: 1px solid #666; padding: 4px 10px; cursor: pointer; }
+      #toolbar button.active { background: #777; color: #fff; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="hud"></div>
+    <div id="toolbar"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

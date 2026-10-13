@@ -10,7 +10,7 @@
 
 ```sh
 npm install
-npm run dev        # 本地试玩，地址栏加 ?seed=123 可以换种子
+npm run dev        # 本地试玩；地址栏加 ?seed=123 换种子，?speed=100 换倍速
 npm test           # 确定性、内核纯净性等测试
 npm run typecheck  # 两遍类型检查：整个项目一遍，模拟内核单独一遍（不带 DOM 类型）
 npm run build      # 类型检查 + 打包到 dist/
