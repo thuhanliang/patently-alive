@@ -5,7 +5,7 @@ import { BLUEPRINT } from './palette';
 import { CELL_PX } from './projection';
 
 /**
- * 玩家干预的批注（蓝图蓝，见 CLAUDE.md「美术」）：陷阱方形、搜捕范围圆圈、找尸体的小圆圈加十字、围栏线。
+ * 玩家干预的批注（蓝图蓝，见 CLAUDE.md「美术」）：陷阱方形、搜捕范围实线圈、采样虚线圈、找尸体的圆圈加十字、围栏线。
  * 进行中的工作旁边写剩几晚（几天）；完工的围栏画实线，在建的画淡线。
  * 只读推演状态（state.jobs、state.fences）。
  */
@@ -55,6 +55,17 @@ export class AnnotationLayer {
         this.marks.rect(cx - half / 3, cy - half / 3, (half * 2) / 3, (half * 2) / 3).fill({ color: BLUEPRINT, alpha: 0.6 });
       } else if (job.kind === 'cull') {
         this.marks.circle(cx, cy, (this.tools?.cull.radiusCells ?? 1) * CELL_PX).stroke({ width: 2, color: BLUEPRINT });
+      } else if (job.kind === 'sample') {
+        // 采样圆圈：虚线圈，和搜捕的实线圈区分开。
+        unit = '天';
+        const r = (this.tools?.sample.radiusCells ?? 1) * CELL_PX;
+        const dashes = 16;
+        for (let k = 0; k < dashes; k++) {
+          const a0 = (k / dashes) * Math.PI * 2;
+          const a1 = a0 + (Math.PI * 2) / dashes / 2;
+          this.marks.moveTo(cx + r * Math.cos(a0), cy + r * Math.sin(a0)).arc(cx, cy, r, a0, a1);
+        }
+        this.marks.stroke({ width: 2, color: BLUEPRINT });
       } else if (job.kind === 'necropsy') {
         unit = '天';
         this.marks.circle(cx, cy, (this.tools?.necropsy.radiusCells ?? 1) * CELL_PX).stroke({ width: 1.5, color: BLUEPRINT, alpha: 0.7 });

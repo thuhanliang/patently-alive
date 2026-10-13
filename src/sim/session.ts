@@ -110,7 +110,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: 'patently-alive/oplog',
-      version: 4,
+      version: 5,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
@@ -186,6 +186,11 @@ export class Session {
         if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
+      case 'sample': {
+        if (!this.config.tools) return '这片世界没有兽医工具';
+        if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        return this.landProblem(op.x, op.y);
+      }
       case 'necropsy': {
         if (!this.config.tools) return '这片世界没有兽医工具';
         if (op.species !== null && !this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
@@ -242,6 +247,9 @@ export class Session {
         return;
       case 'cull':
         this.simulation.cull(this.speciesIndex(op.species), op.x, op.y);
+        return;
+      case 'sample':
+        this.simulation.sample(this.speciesIndex(op.species), op.x, op.y);
         return;
       case 'necropsy':
         this.simulation.necropsy(op.species === null ? -1 : this.speciesIndex(op.species), op.x, op.y);

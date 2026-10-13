@@ -25,8 +25,18 @@
       .panel-title { font-weight: 600; color: var(--blueprint); align-self: flex-start; }
       .panel label { display: inline-flex; align-items: center; gap: 2px; }
       .note { color: var(--ink-soft); font-size: 12px; }
-      #captures { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; font-size: 12px; }
-      @media (max-width: 760px) { #captures { display: none !important; } }
+      #captures { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; font-size: 12px; pointer-events: auto; max-height: calc(100vh - 560px); min-height: 120px; overflow-y: auto; }
+      #captures .log-head { color: var(--blueprint); font-weight: 600; margin-top: 4px; }
+      #captures select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--ink-soft); border-radius: 3px; }
+      .log-row { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink); background: none; border: none; border-bottom: 1px dotted rgba(31, 29, 26, 0.25); padding: 1px 0; cursor: pointer; }
+      .log-row:hover { background: var(--paper-deep); }
+      .log-row.active { color: var(--blueprint); font-weight: 600; }
+      #exam-card { position: fixed; left: 384px; top: 8px; max-width: 360px; min-width: 260px; padding: 6px 10px; background: var(--paper); border: 1.5px solid var(--blueprint); font-size: 12px; pointer-events: auto; }
+      #exam-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 0; }
+      #exam-card dt { color: var(--ink-soft); }
+      #exam-card dd { margin: 0; }
+      .card-close { position: absolute; right: 4px; top: 2px; font: inherit; background: none; border: none; cursor: pointer; color: var(--ink); font-size: 16px; }
+      @media (max-width: 760px) { #captures, #exam-card { display: none !important; } }
       #deaths { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; pointer-events: none; font-size: 12px; }
       @media (max-width: 760px) { #deaths { display: none; } }
       #status { max-width: 420px; text-align: right; color: var(--vermilion); min-height: 1.4em; }
@@ -40,6 +50,7 @@
       <div id="deaths"></div>
       <div id="captures" style="display: none"></div>
     </div>
+    <div id="exam-card" style="display: none"></div>
     <div id="toolbar">
       <div class="bar" id="time-bar"></div>
       <div class="bar" id="camera-bar"></div>

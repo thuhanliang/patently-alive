@@ -11,5 +11,7 @@ export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type Foc
 export { isJuvenileAt, type Individuals } from './individuals';
 export { OpSchema, OpLogSchema, RulesSchema, SANDBOX_RULES, costOf, type Op, type OpLog, type LogEntry, type Cost, type Rules } from './ops';
 export { Session, type SubmitResult, type Resources } from './session';
-export { type Capture, type Job } from './jobs';
+export { type Capture, type Job, type Carcass, type NecropsySearch } from './jobs';
 export { CAUSE, causeName, recentByCause, type DeathLedger } from './ledger';
+export { ageClass, EMPTY_STOMACH, type AgeClass, type Exam, type Stomach } from './exam';
+export { summarize, wilson, meanCi, THIN_BCS, type SampleSummary, type Proportion, type MeanEstimate } from './inference';

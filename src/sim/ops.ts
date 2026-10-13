@@ -38,6 +38,8 @@ export const OpSchema = z.discriminatedUnion('type', [
   }),
   /** 夜间搜捕：在一处移除一种动物。占一支兽医队一天，扑杀本身降低满意度。 */
   z.object({ type: z.literal('cull'), species: z.string(), x: z.number().int(), y: z.number().int() }),
+  /** 体检采样：在一处抓一种动物，检查完放生。占一支兽医队一天。 */
+  z.object({ type: z.literal('sample'), species: z.string(), x: z.number().int(), y: z.number().int() }),
   /** 找尸体做尸检：在一处搜一天；species 为 null 时什么物种的都要。 */
   z.object({ type: z.literal('necropsy'), species: z.string().nullable(), x: z.number().int(), y: z.number().int() }),
   /** 架一段直围栏：端点在格子的角上。工期按长度算，完工后才挡得住动物。 */
@@ -97,7 +99,7 @@ export const OpLogSchema = z
   .object({
     format: z.literal('patently-alive/oplog'),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(4),
+    version: z.literal(5),
     config: SimConfigSchema,
     rules: RulesSchema,
     entries: z.array(LogEntrySchema),
@@ -138,6 +140,8 @@ export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number): Cos
     }
     case 'cull':
       return tools ? { budget: tools.cull.cost, staff: 1, days: 1, satisfaction: tools.cull.satisfaction } : FREE;
+    case 'sample':
+      return tools ? { budget: tools.sample.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
     case 'necropsy':
       return tools ? { budget: tools.necropsy.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
     case 'fence': {
