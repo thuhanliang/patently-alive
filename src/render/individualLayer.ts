@@ -26,7 +26,8 @@ export class IndividualLayer {
 
   constructor(
     private readonly species: readonly DerivedSpecies[],
-    private readonly texture: Texture,
+    /** 每个物种的形状（同一张底图上的不同区域，见 sprites.ts）。 */
+    private readonly textures: readonly Texture[],
     private readonly colors: readonly number[],
   ) {
     this.container.addChild(this.particles, this.outline);
@@ -37,7 +38,7 @@ export class IndividualLayer {
     const n = ind.count;
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     while (this.pool.length < n) {
-      const p = new Particle({ texture: this.texture, anchorX: 0.5, anchorY: 0.5 });
+      const p = new Particle({ texture: this.textures[0]!, anchorX: 0.5, anchorY: 0.5 });
       this.pool.push(p);
       this.particles.addParticle(p);
     }
@@ -51,12 +52,13 @@ export class IndividualLayer {
       const p = this.pool[i]!;
       const juvenile = isJuvenileAt(sp, ind.born[i]!, day);
       // 按贴图的实际宽度换算成世界坐标里的边长。
-      const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / this.texture.width;
+      const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / this.textures[s]!.width;
       p.x = ind.x[i]! * CELL_PX;
       p.y = ind.y[i]! * CELL_PX;
       p.scaleX = px;
       p.scaleY = px;
       p.tint = this.colors[s]!;
+      p.texture = this.textures[s]!;
     }
     this.particles.update();
 

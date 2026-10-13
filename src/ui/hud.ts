@@ -1,4 +1,4 @@
-import { SEASON_NAMES, TICKS_PER_DAY, calendar, checksum, type SimState } from '../sim';
+import { SEASON_NAMES, TICKS_PER_DAY, calendar, checksum, meanLandVegetation, type SimState } from '../sim';
 
 /** 左上角的状态读数：种子、日期、植被、倍速、状态校验和。 */
 export class Hud {
@@ -18,10 +18,7 @@ export class Hud {
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (day !== this.lastDay) {
       this.sum = checksum(state);
-      const veg = state.grid.vegetation;
-      let total = 0;
-      for (let i = 0; i < veg.length; i++) total += veg[i]!;
-      this.meanVeg = total / veg.length;
+      this.meanVeg = meanLandVegetation(state.grid);
       this.lastDay = day;
     }
     const d = calendar(state.tick);
@@ -29,7 +26,7 @@ export class Hud {
       `种子   ${state.config.seed}`,
       `日期   第 ${d.year + 1} 年 ${d.month + 1} 月 ${d.dayOfMonth + 1} 日 ${String(d.hour).padStart(2, '0')}:00（${SEASON_NAMES[d.season]}）`,
       `天气   ${state.weather.toFixed(2)}`,
-      `植被   平均 ${this.meanVeg.toFixed(0)} g/m²`,
+      `植被   陆地平均 ${this.meanVeg.toFixed(0)} g/m²`,
       `倍速   ${speed}x`,
       `个体   ${state.focus ? `展开 ${state.individuals.count} 只（${state.focus.x1 - state.focus.x0}×${state.focus.y1 - state.focus.y0} 格）` : '未展开（放大到地块档）'}`,
       `日志   ${logLength} 条操作`,

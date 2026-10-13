@@ -2,7 +2,7 @@
   "id": "weasel",
   "name": "伶鼬",
   "scientificName": "Mustela nivalis",
-  "diet": "carnivore",
+  "diet": { "plant": 0, "vertebrate": 1, "invertebrate": 0 },
   "bodyMassKg": 0.078,
   "activity": "cathemeral",
   "reproduction": {

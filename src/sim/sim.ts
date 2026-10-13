@@ -3,10 +3,11 @@ import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
 import { createGrid, growVegetation, type Grid } from './grid';
 import { isLand } from './terrain';
-import { deriveAll, type DerivedSpecies } from './physiology';
+import { deriveAll, type DerivedSpecies, type PreyWeights } from './physiology';
 import {
   createPopulation,
   crowdingBlocks,
+  landCells,
   crowdingByBlock,
   dailyPopulation,
   shiftStages,
@@ -67,7 +68,8 @@ export function createInitialState(config: SimConfig): SimState {
   const rng = Rng.fromSeed(parsed.seed);
   const grid = createGrid(parsed.world, rng);
   const { derived } = deriveAll(parsed.species, parsed.world.cellSizeM);
-  const populations = derived.map((d) => createPopulation(d, grid, cellArea(parsed), rng));
+  const mainOnly = new Set(parsed.world.mainIslandOnly ?? []);
+  const populations = derived.map((d) => createPopulation(d, grid, cellArea(parsed), rng, mainOnly.has(d.params.id)));
   return {
     config: parsed,
     tick: 0,
@@ -93,9 +95,10 @@ export class Sim {
   private rng: Rng;
   // 由配置推导、不随时间变化的量，不进状态。
   private readonly derived: DerivedSpecies[];
-  private readonly prey: number[][];
+  private readonly prey: PreyWeights;
   private readonly scratch: Int32Array;
-  private readonly blocks: { blockOf: Int32Array; cellsIn: Float64Array };
+  private readonly blocks: { blockOf: Int32Array; cellsIn: Float64Array; blocksWide: number };
+  private readonly land: Int32Array;
 
   constructor(state: SimState) {
     this.s = cloneData(state);
@@ -103,6 +106,13 @@ export class Sim {
     ({ derived: this.derived, prey: this.prey } = deriveAll(this.s.config.species, this.s.config.world.cellSizeM));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
     this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height, this.s.grid.terrain);
+    this.land = landCells(this.s.grid);
+  }
+
+  /** 灌丛啃不到的下限；世界里没有灌丛参数时为 undefined。 */
+  private get shrubFloor(): number | undefined {
+    const sh = this.s.config.world.shrub;
+    return sh ? sh.maxBiomass * sh.floorFraction : undefined;
   }
 
   static create(config: SimConfig): Sim {
@@ -228,6 +238,7 @@ export class Sim {
         day: hourDay,
         cellAreaM2: cellArea(this.s.config),
         floorBiomass: this.s.config.world.vegetation.floorBiomass,
+        shrubFloor: this.shrubFloor,
         rng: this.rng,
         stats: this.s.dayAccum,
       });
@@ -267,8 +278,8 @@ export class Sim {
 
     const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
     const crowding = crowdingByBlock(
-      { species: this.derived, populations: this.s.populations, prey: this.prey, ...this.blocks },
-      { individuals: { ...this.s.individuals, width: this.s.grid.width }, pending: this.s.emigrants },
+      { species: this.derived, populations: this.s.populations, prey: this.prey, cover: this.s.grid.cover, ...this.blocks },
+      { individuals: { ...this.s.individuals, width: this.s.grid.width, day }, pending: this.s.emigrants },
     );
 
     const cellStats = dailyPopulation({
@@ -278,11 +289,13 @@ export class Sim {
       populations: this.s.populations,
       cellAreaM2: cellArea(this.s.config),
       floorBiomass: world.vegetation.floorBiomass,
+      shrubFloor: this.shrubFloor,
       breeding,
       rng: this.rng,
       scratch: this.scratch,
       crowding,
       blockOf: this.blocks.blockOf,
+      land: this.land,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {

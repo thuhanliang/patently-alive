@@ -12,11 +12,11 @@
 
 ```sh
 npm install
-npm run dev        # 本地试玩；地址栏加 ?seed=123 换种子，?speed=100 换倍速
+npm run dev        # 本地试玩（默认鸟岛）；地址栏加 ?seed=123 换种子，?speed=100 换倍速，?world=grassland 打开阶段 0 的草原
 npm test           # 确定性、内核纯净性等测试
 npm run typecheck  # 两遍类型检查：整个项目一遍，模拟内核单独一遍（不带 DOM 类型）
 npm run build      # 类型检查 + 打包到 dist/
-npm run sweep      # 批量推演：多个种子跑 10 年，打印起伏和报警（SEEDS / YEARS / SIZE / SEED0 可调）
+npm run sweep      # 批量推演：多个种子跑 10 年，打印起伏和报警（WORLD / SEEDS / YEARS / SIZE / SEED0 可调）
 ```
 
 ## 操作
@@ -29,9 +29,18 @@ npm run sweep      # 批量推演：多个种子跑 10 年，打印起伏和报�
 - 所有会改变推演的操作都走统一操作接口（`src/sim/session.ts`）并写进操作日志；
   "导出日志"得到的 JSON 就是存档，"载入日志回放"可以原样重现。
 
-## 草原里有什么
+## 鸟岛里有什么（阶段 1，开发中）
 
-田鼠、穴兔两种食草动物，伶鼬、白鼬两种小型捕食者。参数来自 PanTHERIA、AnAge（见 `docs/DATA_CHECK.md`、`LICENSES-DATA.md`），
+一座主岛加三座离岸小岛。本地的双斑鸻（地面筑巢，白身黑帽的圆点），外来的船鼠、穴兔、野猫（猫和兔开局只在主岛）。
+参数来源和建模假设见 `docs/MODEL.md`。现在能看到的：
+
+- 不管不顾时鸟每年少一成左右：鼠和猫找到地上的窝，蛋和雏鸟被吃掉；成鸟会飞，不容易被抓。
+- 灌丛是窝的掩护：灌丛格的颜色随灌丛多少变化，兔子多的地方几年下来会褪色。
+- 兽医工具、尸检、评分还没做（阶段 1 后面几步）；投放可以先用来做实验，例如往小岛上放几只猫。
+
+## 草原里有什么（阶段 0）
+
+`?world=grassland` 打开。田鼠、穴兔两种食草动物，伶鼬、白鼬两种小型捕食者。参数来自 PanTHERIA、AnAge（见 `docs/DATA_CHECK.md`、`LICENSES-DATA.md`），
 建模假设和调参记录见 `docs/MODEL.md`。值得看的：
 
 - 季节：春夏繁殖、冬季减少，植被跟着季节涨落。

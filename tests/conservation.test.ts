@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Sim, TICKS_PER_DAY, checksum, countAt, deserialize, serialize, type FocusRect, type SimState } from '../src/sim';
 import { applyFocus } from '../src/sim/individuals';
-import { JUVENILE_STAGES, deriveAll, juvenileStageAt } from '../src/sim/physiology';
+import { deriveAll, juvenileStageAt } from '../src/sim/physiology';
 import { Rng } from '../src/sim/rng';
 import { makeConfig, makeSim } from './helpers';
+import { scenarioLibrary, speciesFor, worldFor } from '../src/data';
 
 const FOCUS: FocusRect = { x0: 8, y0: 8, x1: 24, y1: 24 };
 
@@ -145,10 +146,33 @@ describe('个体模型和格子模型的一致性', () => {
     const a = cells.totals();
     const b = expanded.totals();
     cells.species.forEach((sp, s) => {
-      if (!sp.herbivore) return;
+      if (sp.predator) return;
       expect(Math.abs(b[s]! - a[s]!) / a[s]!, sp.params.id).toBeLessThan(0.15);
     });
   });
+});
+
+describe('个体模型和格子模型的一致性（鸟岛）', () => {
+  it('同一座岛全部展开成个体，30 天后鼠、兔、鸟的总数与格子模型相差不到 15%', () => {
+    // 鼠吃蛋、兔子啃灌丛、鸟吃虫、窝的掩护：两边按同一套规则。猫太少，不比。
+    const island = worldFor(scenarioLibrary.get('bird-island')!);
+    const world = { ...island, width: 32, height: 32, terrain: { ...island.terrain!, islets: { ...island.terrain!.islets, count: 0 } } };
+    const results = [3, 4, 5].map((seed) => {
+      const config = { seed, world, species: speciesFor(world) };
+      const cells = Sim.create(config);
+      const expanded = Sim.create(config);
+      expanded.setFocus({ x0: 0, y0: 0, x1: 32, y1: 32 });
+      cells.stepN(TICKS_PER_DAY * 30);
+      expanded.stepN(TICKS_PER_DAY * 30);
+      return { ids: cells.species.map((s) => s.params.id), a: cells.totals(), b: expanded.totals() };
+    });
+    // 三个种子加起来比，减小偶然性。
+    const sum = (k: 'a' | 'b', s: number): number => results.reduce((t, r) => t + r[k][s]!, 0);
+    results[0]!.ids.forEach((id, s) => {
+      if (id === 'cat') return;
+      expect(Math.abs(sum('b', s) - sum('a', s)) / sum('a', s), id).toBeLessThan(0.15);
+    });
+  }, 120_000);
 });
 
 describe('关注区的校验和时机', () => {
@@ -191,11 +215,11 @@ describe('幼体传送带：个体和格子的年龄段始终对齐', () => {
     const st = sim.state;
     const day = sim.day;
     return sim.species.map((sp, s) => {
-      const out = new Array<number>(JUVENILE_STAGES + 1).fill(0);
+      const out = new Array<number>(sp.juvenileStages + 1).fill(0);
       for (const pops of [st.populations, st.emigrants]) {
         const p = pops[s]!;
         p.juveniles.forEach((stage, k) => (out[k]! += stage.reduce((a, b) => a + b, 0)));
-        out[JUVENILE_STAGES]! += p.adults.reduce((a, b) => a + b, 0);
+        out[sp.juvenileStages]! += p.adults.reduce((a, b) => a + b, 0);
       }
       const ind = st.individuals;
       for (let i = 0; i < ind.count; i++) if (ind.species[i] === s) out[juvenileStageAt(sp, ind.born[i]!, day)]! += 1;

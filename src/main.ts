@@ -29,13 +29,17 @@ document.addEventListener('click', (e) => {
   if (e.target instanceof HTMLButtonElement) e.target.blur();
 });
 
-/** 地址栏 ?scenario=bird-island 载入情景的世界；不写就是阶段 0 的草原。 */
+/** 默认情景：野猫与鸟岛。地址栏 ?scenario=… 换情景，?world=grassland 打开阶段 0 的草原。 */
+const DEFAULT_SCENARIO = 'bird-island';
+
 function chosenWorld(): { world: WorldParams; seed: number; problem: string } {
-  const id = new URLSearchParams(location.search).get('scenario');
-  const scenario = id ? scenarioLibrary.get(id) : undefined;
-  if (scenario) return { world: worldFor(scenario), seed: scenario.seed, problem: '' };
+  const params = new URLSearchParams(location.search);
+  if (params.get('world') === 'grassland') return { world: grassland, seed: 1, problem: '' };
+  const id = params.get('scenario') ?? DEFAULT_SCENARIO;
+  const scenario = scenarioLibrary.get(id) ?? scenarioLibrary.get(DEFAULT_SCENARIO)!;
   const known = [...scenarioLibrary.keys()].join('、');
-  return { world: grassland, seed: 1, problem: id ? `没有情景「${id}」，载入了草原（现有：${known}）` : '' };
+  const problem = scenario.id === id ? '' : `没有情景「${id}」，载入了「${scenario.name}」（现有：${known}）`;
+  return { world: worldFor(scenario), seed: scenario.seed, problem };
 }
 
 async function main(): Promise<void> {

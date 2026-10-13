@@ -2,7 +2,7 @@
   "id": "vole",
   "name": "田鼠",
   "scientificName": "Microtus agrestis",
-  "diet": "herbivore",
+  "diet": { "plant": 1, "vertebrate": 0, "invertebrate": 0 },
   "bodyMassKg": 0.03,
   "activity": "cathemeral",
   "reproduction": {

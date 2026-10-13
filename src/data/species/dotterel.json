@@ -1,0 +1,22 @@
+{
+  "id": "dotterel",
+  "name": "双斑鸻",
+  "scientificName": "Charadrius bicinctus",
+  "diet": { "plant": 0, "vertebrate": 0, "invertebrate": 1 },
+  "bodyMassKg": 0.059,
+  "activity": "cathemeral",
+  "reproduction": {
+    "litterSize": 3,
+    "gestationDays": 26,
+    "litterIntervalDays": 90,
+    "ageAtMaturityDays": 363,
+    "breedingByMonth": [1, 1, 1, 0.5, 0, 0, 0, 0, 0, 0, 0, 0.5],
+    "nestDays": 61,
+    "nest": "ground"
+  },
+  "survival": { "adultAnnual": 0.78 },
+  "maxLifespanYears": 18.3,
+  "movement": { "dailyRangeM": 400, "homeRangeKm2": 0.01, "territorial": true, "flies": true },
+  "initialDensityPerHa": 0.3,
+  "source": "本地地面筑巢鸟，参照新西兰的双斑鸻（banded dotterel）。体重（59.4 克）、性成熟（363 天）、最长寿命（18.3 年）取 AnAge Build 15（Tacutu et al. 2018）。以下为文献常见范围内的估计，未逐条核对：每窝 3 枚蛋，孵化约 26 天，出飞约 35 天（窝里天数 = 孵化 + 出飞前 = 61 天），一季多半只成功育一窝、失败后补产（模型不分'补产'，两窝间隔取 90 天，一季约 1.3 窝）；繁殖期在南半球的冬末到初夏（游戏日历的春季前后）；成体年存活率约 0.78；繁殖期守约 1 公顷的领地；吃水边和草地上的无脊椎动物，昼夜都觅食（见 docs/MODEL.md）。在 PanTHERIA 里没有记录（哺乳动物数据库）。"
+}

@@ -19,6 +19,47 @@
     }
   ],
   "species": {
+    "cat": {
+      "scientificName": "Felis catus",
+      "pantheria": {
+        "adultBodyMassG": 2884.8,
+        "litterSize": null,
+        "littersPerYear": null,
+        "gestationDays": 62.99,
+        "interbirthIntervalDays": null,
+        "sexualMaturityDays": 296.98,
+        "maxLongevityMonths": 408,
+        "homeRangeKm2": 1.41,
+        "populationDensityPerKm2": 3.47,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 3900,
+        "litterSize": 4,
+        "littersPerYear": null,
+        "gestationDays": 65,
+        "interLitterDays": null,
+        "femaleMaturityDays": 289,
+        "maxLongevityYears": 30,
+        "dataQuality": "questionable",
+        "sampleSize": "large"
+      }
+    },
+    "dotterel": {
+      "scientificName": "Charadrius bicinctus",
+      "pantheria": null,
+      "anage": {
+        "adultWeightG": 59.4,
+        "litterSize": null,
+        "littersPerYear": null,
+        "gestationDays": null,
+        "interLitterDays": null,
+        "femaleMaturityDays": 363,
+        "maxLongevityYears": 18.3,
+        "dataQuality": "acceptable",
+        "sampleSize": "large"
+      }
+    },
     "rabbit": {
       "scientificName": "Oryctolagus cuniculus",
       "pantheria": {
@@ -41,6 +82,32 @@
         "interLitterDays": 29,
         "femaleMaturityDays": 730,
         "maxLongevityYears": 13,
+        "dataQuality": "acceptable",
+        "sampleSize": "large"
+      }
+    },
+    "rat": {
+      "scientificName": "Rattus rattus",
+      "pantheria": {
+        "adultBodyMassG": 142.68,
+        "litterSize": 5.88,
+        "littersPerYear": 3.75,
+        "gestationDays": 23.45,
+        "interbirthIntervalDays": 31.25,
+        "sexualMaturityDays": 115.29,
+        "maxLongevityMonths": 50.4,
+        "homeRangeKm2": 0.00231795,
+        "populationDensityPerKm2": 2640.54,
+        "activityCycle": null
+      },
+      "anage": {
+        "adultWeightG": 200,
+        "litterSize": 7.3,
+        "littersPerYear": 4.3,
+        "gestationDays": 22,
+        "interLitterDays": 36,
+        "femaleMaturityDays": 90,
+        "maxLongevityYears": 4.2,
         "dataQuality": "acceptable",
         "sampleSize": "large"
       }
