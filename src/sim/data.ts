@@ -69,8 +69,39 @@ export function decodeData<T>(value: unknown): T {
     }
   }
   const out: Record<string, unknown> = {};
-  for (const k of keys) out[k] = decodeData((value as Record<string, unknown>)[k]);
+  for (const k of keys) {
+    // 赋值给 __proto__ 会改原型而不是加字段；状态里不会有这个键，有就是坏文件。
+    if (k === '__proto__') throw new Error('数据里有非法的键 __proto__');
+    out[k] = decodeData((value as Record<string, unknown>)[k]);
+  }
   return out as T;
+}
+
+/**
+ * 两份纯数据的"形状"是否一致：对象的键相同；类型化数组种类相同，参照方是按格子的数组（长度 = cells）时长度也要相同；
+ * 数组只比是不是数组（长度随局面变）；null 和任何值都算相容（例如没有关注区时 focus 为 null）。
+ * 用来拒绝旧版本或改坏了的存档快照：返回第一处不一致的路径，一致返回 null。
+ */
+export function shapeMismatch(value: unknown, reference: unknown, cells: number, path = 'state'): string | null {
+  if (value === null || reference === null) return null;
+  const vt = typedTag(value);
+  const rt = typedTag(reference);
+  if (vt || rt) {
+    if (vt !== rt) return path;
+    const rl = (reference as TypedArray).length;
+    return rl === cells && (value as TypedArray).length !== cells ? path : null;
+  }
+  if (Array.isArray(reference)) return Array.isArray(value) ? null : path;
+  if (typeof reference !== 'object') return typeof value === typeof reference ? null : path;
+  if (typeof value !== 'object' || Array.isArray(value)) return path;
+  const vk = Object.keys(value).sort();
+  const rk = Object.keys(reference).sort();
+  if (vk.join() !== rk.join()) return `${path}（键：${vk.filter((k) => !rk.includes(k)).concat(rk.filter((k) => !vk.includes(k))).join('、')}）`;
+  for (const k of rk) {
+    const m = shapeMismatch((value as Record<string, unknown>)[k], (reference as Record<string, unknown>)[k], cells, `${path}.${k}`);
+    if (m) return m;
+  }
+  return null;
 }
 
 export function serialize(value: unknown): string {

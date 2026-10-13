@@ -1,7 +1,8 @@
 import { SimConfigSchema, type SimConfig } from './config';
-import { cloneData } from './data';
-import { costOf, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
-import { Sim } from './sim';
+import { checksum, cloneData, shapeMismatch } from './data';
+import { costOf, LOG_FORMAT, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
+import { Sim, type SimState } from './sim';
+import { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
@@ -241,13 +242,65 @@ export class Session {
   /** 导出操作日志（存档）。 */
   exportLog(): OpLog {
     return {
-      format: 'patently-alive/oplog',
+      format: LOG_FORMAT,
       version: 6,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
       endTick: this.simulation.tick,
     };
+  }
+
+  /** 存档：日志 + 此刻的快照。返回的是纯数据（类型化数组照原样），写文件时用 serialize。 */
+  save(): SaveFile {
+    return {
+      format: SAVE_FORMAT,
+      version: SAVE_VERSION,
+      log: this.exportLog(),
+      session: {
+        speed: this.currentSpeed,
+        resources: cloneData(this.res),
+        spent: this.spent,
+        received: this.received,
+        quarters: cloneData(this.settled),
+        removed: [...this.removedBySpecies],
+      },
+      state: this.simulation.snapshot() as unknown as Record<string, unknown>,
+    };
+  }
+
+  /**
+   * 读档：按存档里的日志建局，再把快照装回去（不重跑）。
+   * 快照的配置、时刻、物种数要和日志对得上，否则拒绝。
+   */
+  static restore(input: unknown): Session {
+    return Session.restoreParsed(SaveSchema.parse(input));
+  }
+
+  /** 已经用 SaveSchema 校验过的存档（免得几 MB 的快照校验两遍）。 */
+  static restoreParsed(save: SaveFile): Session {
+    const { log } = save;
+    const state = save.state as unknown as SimState;
+    // 新建一局拿开局基准，也拿来当快照形状的参照。
+    const session = new Session(log.config, log.rules);
+    if (state.tick !== log.endTick) throw new Error(`存档的快照在第 ${state.tick} tick，日志停在第 ${log.endTick} tick，对不上`);
+    if (checksum(state.config) !== checksum(session.config)) throw new Error('存档的快照和日志不是同一个世界');
+    const fresh = session.simulation.state;
+    const bad = shapeMismatch(state, fresh, fresh.grid.width * fresh.grid.height);
+    if (bad) throw new Error(`存档的快照格式和这个版本不一样（${bad}），可能是旧版本的存档`);
+    const n = session.config.species.length;
+    const s = save.session;
+    if (s.removed.length !== n || s.resources.busyUntil.length !== session.rules.staff) throw new Error('存档里的资源和开局规则对不上');
+    // Sim 的构造函数自己会拷贝一份。
+    session.simulation = new Sim(state);
+    for (const e of cloneData(log.entries)) session.log.push(e);
+    session.currentSpeed = s.speed;
+    Object.assign(session.res, cloneData(s.resources));
+    session.spent = s.spent;
+    session.received = s.received;
+    for (const q of cloneData(s.quarters)) session.settled.push(q);
+    session.removedBySpecies.splice(0, n, ...s.removed);
+    return session;
   }
 
   /**
