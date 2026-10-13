@@ -2,7 +2,7 @@
 
 物种设计 + 生态推演 + 兽医干预的游戏。设计文档见 `docs/`，协作约定见 `CLAUDE.md`。
 
-当前阶段：**阶段 0 · 灰盒推演**（见 `docs/PHASE0.md`）。
+当前阶段：**阶段 1 · 野猫与鸟岛**（见 `docs/PHASE1.md`）。阶段 0（灰盒推演）已过关。
 
 在线试玩：<https://thuhanliang.github.io/patently-alive/>（`main` 每次更新后自动发布）。
 
