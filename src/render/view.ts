@@ -1,5 +1,6 @@
 import { Application, Container } from 'pixi.js';
 import { buildShapeTextures, shapeOf } from './sprites';
+import { AnnotationLayer } from './annotationLayer';
 import { TICKS_PER_DAY, type DerivedSpecies, type SimState } from '../sim';
 import { Camera } from './camera';
 import { GridLayer, type DataLayer } from './gridLayer';
@@ -19,6 +20,7 @@ export class MapView {
   private readonly world = new Container();
   private readonly grid: GridLayer;
   private readonly individuals: IndividualLayer;
+  private readonly annotations: AnnotationLayer;
   private lastTick = -1;
   private lastDay = -1;
   private layer: DataLayer = { kind: 'vegetation' };
@@ -37,7 +39,8 @@ export class MapView {
       species.map((sp) => shapes[shapeOf(sp.params.id)]),
       colors.map((c) => c.body),
     );
-    this.world.addChild(this.grid.container, this.individuals.container);
+    this.annotations = new AnnotationLayer(state.config.tools?.cull.radiusCells ?? 1);
+    this.world.addChild(this.grid.container, this.individuals.container, this.annotations.container);
     app.stage.addChild(this.world);
 
     this.camera.setWorld(mapWorldSize(width, height));
@@ -103,6 +106,7 @@ export class MapView {
       this.individuals.draw(state);
       this.lastTick = state.tick;
     }
+    this.annotations.draw(state);
     this.grid.setGridLinesVisible(this.camera.zoom * CELL_PX >= GRID_LINES_MIN_CELL_PX);
     this.camera.apply(this.world);
   }

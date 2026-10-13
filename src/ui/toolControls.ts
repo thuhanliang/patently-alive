@@ -15,7 +15,11 @@ export function bindToolControls(
   bar: HTMLElement,
   species: ReadonlyArray<{ id: string; name: string }>,
   cb: ToolCallbacks,
-): { isReleasing: () => boolean; releaseChoice: () => { id: string; count: number } } {
+  /** 能不能投放（情景里的管理员身份不能，见 Rules.allowRelease）；不能就不显示投放的控件。 */
+  allowRelease = true,
+  /** 打开投放模式时调用（关掉别的点击模式）。 */
+  onReleaseStart: () => void = () => {},
+): { isReleasing: () => boolean; stopReleasing: () => void; releaseChoice: () => { id: string; count: number } } {
   const select = document.createElement('select');
   for (const s of species) {
     const o = document.createElement('option');
@@ -33,6 +37,7 @@ export function bindToolControls(
   toggle.textContent = '投放模式';
   let releasing = false;
   toggle.addEventListener('click', () => {
+    if (!releasing) onReleaseStart();
     releasing = !releasing;
     toggle.classList.toggle('active', releasing);
   });
@@ -86,10 +91,14 @@ export function bindToolControls(
   const row2 = document.createElement('div');
   row2.className = 'bar';
   row2.append(seed, reseed, exportBtn, importBtn, file);
-  bar.append(row1, row2);
+  bar.append(...(allowRelease ? [row1] : []), row2);
 
   return {
     isReleasing: () => releasing,
+    stopReleasing: () => {
+      releasing = false;
+      toggle.classList.remove('active');
+    },
     releaseChoice: () => ({ id: select.value, count: Math.max(1, Math.min(10_000, Math.floor(Number(count.value) || 1))) }),
   };
 }

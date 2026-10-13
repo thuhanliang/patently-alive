@@ -58,6 +58,8 @@ describe('情景数据校验', () => {
       // 引用的世界存在，世界里的物种也都存在。
       const world = worldFor(r.data);
       for (const id of world.species) expect(speciesLibrary.has(id), id).toBe(true);
+      // 委托人在意的物种（sentiment）要是这片世界里的物种，写错了名字会悄悄不扣满意度。
+      for (const id of Object.keys(r.data.sentiment)) expect(world.species, `sentiment: ${id}`).toContain(id);
     });
   }
 });

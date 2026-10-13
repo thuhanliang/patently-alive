@@ -12,7 +12,8 @@
       #app { position: fixed; left: 0; right: 0; top: 0; bottom: 196px; }
       #app canvas { display: block; touch-action: none; cursor: grab; }
       #app canvas:active { cursor: grabbing; }
-      #hud { position: fixed; left: 8px; top: 8px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre; pointer-events: none; font: 12px/1.45 ui-monospace, monospace; }
+      #left { position: fixed; left: 8px; top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
+      #hud { padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre; pointer-events: none; font: 12px/1.45 ui-monospace, monospace; }
       #toolbar { position: fixed; right: 8px; top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
       .bar { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
       .bar button { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--ink); border-radius: 3px; padding: 3px 10px; cursor: pointer; }
@@ -20,7 +21,13 @@
       .bar button.active { background: var(--blueprint); border-color: var(--blueprint); color: var(--paper); }
       #tool-bar { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
       .bar select, .bar input { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--ink-soft); border-radius: 3px; padding: 2px 6px; }
-      #deaths { position: fixed; left: 8px; top: 176px; max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; pointer-events: none; font-size: 12px; }
+      .panel { padding: 6px 8px; background: rgba(243, 237, 224, 0.92); border: 1px solid rgba(31, 29, 26, 0.35); display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+      .panel-title { font-weight: 600; color: var(--blueprint); align-self: flex-start; }
+      .panel label { display: inline-flex; align-items: center; gap: 2px; }
+      .note { color: var(--ink-soft); font-size: 12px; }
+      #captures { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; font-size: 12px; }
+      @media (max-width: 760px) { #captures { display: none !important; } }
+      #deaths { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; pointer-events: none; font-size: 12px; }
       @media (max-width: 760px) { #deaths { display: none; } }
       #status { max-width: 420px; text-align: right; color: var(--vermilion); min-height: 1.4em; }
       #chart { cursor: pointer; position: fixed; left: 8px; right: 8px; bottom: 8px; height: 180px; width: calc(100% - 16px); }
@@ -28,12 +35,16 @@
   </head>
   <body>
     <div id="app"></div>
-    <div id="hud"></div>
-    <div id="deaths"></div>
+    <div id="left">
+      <div id="hud"></div>
+      <div id="deaths"></div>
+      <div id="captures" style="display: none"></div>
+    </div>
     <div id="toolbar">
       <div class="bar" id="time-bar"></div>
       <div class="bar" id="camera-bar"></div>
       <div class="bar" id="layer-bar"></div>
+      <div id="field-tools"></div>
       <div id="tool-bar"></div>
       <div id="status"></div>
     </div>

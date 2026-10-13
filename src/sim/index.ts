@@ -9,6 +9,7 @@ export { type DerivedSpecies } from './physiology';
 export * from './time';
 export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type FocusRect } from './focus';
 export { isJuvenileAt, type Individuals } from './individuals';
-export { OpSchema, OpLogSchema, costOf, type Op, type OpLog, type LogEntry, type Cost } from './ops';
+export { OpSchema, OpLogSchema, RulesSchema, SANDBOX_RULES, costOf, type Op, type OpLog, type LogEntry, type Cost, type Rules } from './ops';
 export { Session, type SubmitResult, type Resources } from './session';
+export { type Capture, type Job } from './jobs';
 export { CAUSE, causeName, recentByCause, type DeathLedger } from './ledger';

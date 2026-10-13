@@ -82,7 +82,7 @@ describe('展开与收拢守恒', () => {
       sim.step(); // 换天
       sim.state.lastDay.forEach((d, s) => {
         expect(d.total).toBe(sim.totals()[s]);
-        expect(d.total).toBe(dayStart[s]! + d.births + d.released - d.deathsPredation - d.deathsStarvation - d.deathsOther);
+        expect(d.total).toBe(dayStart[s]! + d.births + d.released - d.deathsPredation - d.deathsStarvation - d.deathsOther - d.removed);
       });
       // 中途换几次关注区，包括全部收拢。
       if (day === 20) sim.setFocus({ x0: 0, y0: 0, x1: 16, y1: 16 });

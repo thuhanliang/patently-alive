@@ -52,10 +52,12 @@ export interface DayStats {
   deathsOther: number;
   /** 玩家投放进来的数量。 */
   released: number;
+  /** 兽医工具移除的数量（陷阱、搜捕）。 */
+  removed: number;
 }
 
 export function emptyDayStats(total = 0): DayStats {
-  return { total, births: 0, deathsPredation: 0, deathsStarvation: 0, deathsOther: 0, released: 0 };
+  return { total, births: 0, deathsPredation: 0, deathsStarvation: 0, deathsOther: 0, released: 0, removed: 0 };
 }
 
 /** 按体型折算的数量：幼体算半只（食量、作为猎物的体重都按这个算）。 */

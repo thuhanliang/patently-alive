@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SimConfigSchema } from './config';
+import type { Tools } from '../data/schema/tools';
 
 /**
  * 玩家操作。所有会改变推演或时间流速的操作都写成这里的数据，
@@ -25,6 +26,17 @@ export const OpSchema = z.discriminatedUnion('type', [
   }),
   /** 设置关注区（展开成个体的区域）；null 表示全部收拢。 */
   z.object({ type: z.literal('setFocus'), focus: FocusRectSchema.nullable() }),
+  /** 布一组陷阱：放几晚，抓到名单上的物种就移除，其余放生。占一支兽医队若干天。 */
+  z.object({
+    type: z.literal('trap'),
+    trap: z.string(),
+    x: z.number().int(),
+    y: z.number().int(),
+    nights: z.number().int().min(1).max(30),
+    remove: z.array(z.string()),
+  }),
+  /** 夜间搜捕：在一处移除一种动物。占一支兽医队一天，扑杀本身降低满意度。 */
+  z.object({ type: z.literal('cull'), species: z.string(), x: z.number().int(), y: z.number().int() }),
 ]);
 
 export type Op = z.infer<typeof OpSchema>;
@@ -37,15 +49,45 @@ export const LogEntrySchema = z.object({
 export type LogEntry = z.infer<typeof LogEntrySchema>;
 
 /**
- * 操作日志文件 = 存档：完整的推演配置（含种子、世界、物种数据）+ 按时间排序的操作。
+ * 一局的规则：开局资源和身份能做什么。情景给定；沙盒（阶段 0 的草原、?sandbox=1）资源不限、可以投放。
+ * 资源会随操作变化，也写进日志，回放时从同样的开局资源出发。
+ */
+export const RulesSchema = z.object({
+  /** 情景 id；沙盒为 null。 */
+  scenario: z.string().nullable(),
+  /** 开局预算（元）。 */
+  budget: z.number().int().min(0),
+  /** 兽医队数量。 */
+  staff: z.number().int().min(0),
+  /** 开局的客户满意度（0–100）。 */
+  satisfaction: z.number().min(0).max(100),
+  /** 能不能投放物种：沙盒可以；情景里的管理员身份不行（引种在阶段 2 解锁）。 */
+  allowRelease: z.boolean(),
+  /** 每移除一只某物种，满意度降多少（情景的 sentiment）。没列出的不扣。 */
+  sentiment: z.record(z.string(), z.number().min(0)),
+});
+export type Rules = z.infer<typeof RulesSchema>;
+
+export const SANDBOX_RULES: Rules = {
+  scenario: null,
+  budget: 1_000_000_000,
+  staff: 99,
+  satisfaction: 100,
+  allowRelease: true,
+  sentiment: {},
+};
+
+/**
+ * 操作日志文件 = 存档：完整的推演配置（含种子、世界、物种数据）+ 开局规则 + 按时间排序的操作。
  * 同一份日志回放出同一个结果。
  */
 export const OpLogSchema = z
   .object({
     format: z.literal('patently-alive/oplog'),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(2),
+    version: z.literal(3),
     config: SimConfigSchema,
+    rules: RulesSchema,
     entries: z.array(LogEntrySchema),
     /** 导出时推演走到的 tick；回放默认推进到这里（最后一条操作之后的时间也不丢）。 */
     endTick: z.number().int().min(0),
@@ -58,12 +100,33 @@ export const OpLogSchema = z
   });
 export type OpLog = z.infer<typeof OpLogSchema>;
 
-/** 每种操作的花费。阶段 0 还没有预算和人手的玩法，全部为 0；以后兽医工具在这里定价。 */
+/**
+ * 一个操作的花费：预算（元）、几支兽医队、占用几天、满意度变化（负数是下降）。
+ * 时间也是资源：兽医队出工期间不能接别的活。
+ */
 export interface Cost {
   budget: number;
   staff: number;
+  days: number;
+  satisfaction: number;
 }
 
-export function costOf(_op: Op): Cost {
-  return { budget: 0, staff: 0 };
+export const FREE: Cost = { budget: 0, staff: 0, days: 0, satisfaction: 0 };
+
+/**
+ * 每种操作的花费。调速、关注区、沙盒里的投放不花钱；兽医工具按工具数据定价。
+ * 价格来自推演配置里的工具数据（config.tools），回放时和当时一样。
+ */
+export function costOf(op: Op, tools: Tools | undefined): Cost {
+  switch (op.type) {
+    case 'trap': {
+      const t = tools?.traps.find((x) => x.id === op.trap);
+      if (!t) return FREE;
+      return { budget: t.setupCost + t.nightlyCost * op.nights, staff: 1, days: op.nights, satisfaction: 0 };
+    }
+    case 'cull':
+      return tools ? { budget: tools.cull.cost, staff: 1, days: 1, satisfaction: tools.cull.satisfaction } : FREE;
+    default:
+      return FREE;
+  }
 }

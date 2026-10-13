@@ -1,0 +1,34 @@
+{
+  "traps": [
+    {
+      "id": "cat-cage",
+      "name": "猫笼（肉饵）",
+      "minMassKg": 0.5,
+      "maxMassKg": 8,
+      "bait": { "plant": 0.05, "vertebrate": 1, "invertebrate": 0.2 },
+      "cages": 10,
+      "setupCost": 2000,
+      "nightlyCost": 300,
+      "source": "活捕笼，踏板要一定体重才触发，鼠和小鸟踩不动；肉或鱼作饵，主要吸引食肉动物，兔子偶尔进笼。价格为假设值（见 docs/MODEL.md）。"
+    },
+    {
+      "id": "rat-cage",
+      "name": "鼠笼（花生酱饵）",
+      "minMassKg": 0.02,
+      "maxMassKg": 1,
+      "bait": { "plant": 1, "vertebrate": 0.1, "invertebrate": 0.3 },
+      "cages": 20,
+      "setupCost": 800,
+      "nightlyCost": 100,
+      "source": "小型活捕笼，花生酱、谷物作饵，吸引吃种子和植物的动物；地面活动的小鸟也会进笼，所以新西兰的灭鼠站多半套上隧道。价格为假设值（见 docs/MODEL.md）。"
+    }
+  ],
+  "cull": {
+    "name": "夜间搜捕",
+    "radiusCells": 6,
+    "success": 0.3,
+    "cost": 3000,
+    "satisfaction": -2,
+    "source": "一支队伍一晚在约 600 米范围内用灯光搜寻、移除指定物种，只针对认得出的目标。成功率、价格为假设值（见 docs/MODEL.md）。"
+  }
+}

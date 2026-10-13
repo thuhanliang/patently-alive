@@ -116,7 +116,7 @@ function push(
 /**
  * 删除被标记的个体，保持其余个体的先后顺序（顺序影响随机数的消耗，必须确定）。
  */
-function compact(ind: Individuals, removed: Uint8Array): void {
+export function compact(ind: Individuals, removed: Uint8Array): void {
   const n = ind.count;
   let kept = 0;
   for (let r = 0; r < n; r++) if (!removed[r]) kept += 1;
