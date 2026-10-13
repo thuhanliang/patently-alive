@@ -24,6 +24,14 @@ const DAMUTH_COEF = 16982;
 const CROWDING_FACTOR = 20;
 /** 拥挤程度按多大的区块统计（格）。动物会在几格之间走动，单格计数太跳。 */
 export const CROWDING_BLOCK_CELLS = 8;
+/**
+ * 幼体在格子里分成几个年龄段，每天按概率往下一段走，最后一段长成成体。
+ * 只有一段时成熟时间是指数分布，有一部分刚出生几天就成年、开始繁殖，种群长得偏快；
+ * 分成几段后成熟时间集中在性成熟年龄附近，和个体（按年龄成熟）对得上。
+ */
+export const JUVENILE_STAGES = 8;
+/** 前这么多个年龄段的幼体还在窝里、跟着母亲，不自己扩散（个体里对应年龄不到性成熟一半的幼崽不走动）。 */
+export const NEST_STAGES = JUVENILE_STAGES / 2;
 /** 幼体按成体的这个比例算食量和体重（从刚出生到长成的平均）。 */
 export const JUVENILE_SIZE_FACTOR = 0.5;
 /** 幼体的基础日死亡率是成体的几倍。 */
@@ -35,6 +43,15 @@ export const PREDATION_HALF_SATURATION_DAYS = 0.5;
 /** 扩散一跳的最大格数，限制计算量。 */
 const MAX_MOVE_RADIUS = 8;
 
+/** 个体的体内储备上限（够吃几天）≈ 2 · M^0.25：大动物撑得久。 */
+const RESERVE_COEF = 2;
+/** 捕食者在这个距离（格）内碰上活动中的猎物才有机会抓。 */
+export const CATCH_RADIUS_CELLS = 0.3;
+/** 碰上之后、体型完全合适时的捕获成功率。 */
+export const CATCH_SUCCESS = 0.3;
+/** 吃够当天需求的这么多倍就不再捕猎（和格子模型一致：吃饱为止）。 */
+export const SATIATION = 1;
+
 export interface DerivedSpecies {
   readonly params: SpeciesParams;
   readonly herbivore: boolean;
@@ -44,7 +61,7 @@ export interface DerivedSpecies {
   readonly adultDailyMortality: number;
   readonly juvenileDailyMortality: number;
   readonly starvationRate: number;
-  /** 幼体每天长成成体的概率。 */
+  /** 幼体每天进入下一个年龄段（最后一段则长成成体）的概率。 */
   readonly maturationRate: number;
   /** 繁殖期内每只雌性每天产一窝的概率。 */
   readonly litterRate: number;
@@ -53,6 +70,14 @@ export interface DerivedSpecies {
   /** 每天离开所在格子的概率，以及一跳的最大格数。 */
   readonly moveProb: number;
   readonly moveRadius: number;
+  /** 个体：活动时每小时走多远（格）。 */
+  readonly hourlyStepCells: number;
+  /** 个体：一天里活动的小时数。 */
+  readonly activeHours: number;
+  /** 个体：体内储备上限（天）。 */
+  readonly maxReserveDays: number;
+  readonly maturityDays: number;
+  readonly maxAgeDays: number;
 }
 
 export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
@@ -72,11 +97,16 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     adultDailyMortality,
     juvenileDailyMortality: Math.min(1, adultDailyMortality * JUVENILE_MORTALITY_FACTOR),
     starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
-    maturationRate: 1 / p.reproduction.ageAtMaturityDays,
+    maturationRate: Math.min(1, JUVENILE_STAGES / p.reproduction.ageAtMaturityDays),
     litterRate: breedingDays > 0 ? 1 / Math.min(p.reproduction.litterIntervalDays, breedingDays) : 0,
     crowdingCapacity: typicalPerKm2 * CROWDING_FACTOR * cellKm2,
     moveProb: Math.min(0.5, cellsPerDay / 2),
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
+    hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
+    activeHours: activeHoursPerDay(p.activity),
+    maxReserveDays: RESERVE_COEF * detPow(p.bodyMassKg, 0.25),
+    maturityDays: p.reproduction.ageAtMaturityDays,
+    maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
   };
 }
 
@@ -104,6 +134,30 @@ export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number):
 }
 
 type Activity = SpeciesParams['activity'];
+
+/**
+ * 各活动时段在一天 24 小时里哪些小时活动（个体用）。
+ * 昼行 6–17 时；夜行 18–5 时；晨昏 4–7 时和 17–20 时；全天型全天都可能活动。
+ */
+const ACTIVE_HOURS: Record<Activity, readonly boolean[]> = {
+  diurnal: hoursMask((h) => h >= 6 && h < 18),
+  nocturnal: hoursMask((h) => h >= 18 || h < 6),
+  crepuscular: hoursMask((h) => (h >= 4 && h < 8) || (h >= 17 && h < 21)),
+  cathemeral: hoursMask(() => true),
+};
+
+function hoursMask(f: (h: number) => boolean): boolean[] {
+  return Array.from({ length: 24 }, (_, h) => f(h));
+}
+
+export function isActive(activity: Activity, hour: number): boolean {
+  return ACTIVE_HOURS[activity][hour]!;
+}
+
+export function activeHoursPerDay(activity: Activity): number {
+  return ACTIVE_HOURS[activity].filter(Boolean).length;
+}
+
 const ACTIVITY_INDEX: Record<Activity, number> = { diurnal: 0, nocturnal: 1, crepuscular: 2, cathemeral: 3 };
 /** 两种活动时段碰上的程度（对称）。晨昏型和昼行、夜行都有一半重叠。 */
 const ACTIVITY_OVERLAP = [

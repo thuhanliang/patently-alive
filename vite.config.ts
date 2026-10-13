@@ -5,5 +5,7 @@ export default defineConfig({
   base: './',
   test: {
     include: ['tests/**/*.test.ts'],
+    // 有几个测试要跑两年推演，默认 5 秒不够。
+    testTimeout: 30_000,
   },
 });

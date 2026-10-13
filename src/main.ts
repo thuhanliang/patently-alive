@@ -1,5 +1,5 @@
 import { grassland, grasslandSpecies } from './data';
-import { FixedStepClock, Sim, TICKS_PER_DAY } from './sim';
+import { FixedStepClock, Sim, TICKS_PER_DAY, focusAround, type FocusRect } from './sim';
 import { GreyboxView } from './render/view';
 import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   const clock = new FixedStepClock({ stepMs: 50, maxStepsPerFrame: TICKS_PER_DAY * 2 });
   clock.speed = intParam('speed', 1, 1000);
 
-  const view = await GreyboxView.mount(el('app'), sim.state);
+  const view = await GreyboxView.mount(el('app'), sim.state, sim.species);
   const hud = new Hud(el('hud'));
   const names = sim.species.map((s) => s.params.name);
   const history = new PopulationHistory([...names, '平均植被']);
@@ -46,7 +46,21 @@ async function main(): Promise<void> {
   history.record(0, sim.state);
   const syncTime = bindTimeControls(el('time-bar'), clock, () => advance(TICKS_PER_DAY - (sim.tick % TICKS_PER_DAY)));
 
+  // 镜头放大到地块档时，以画面中心为准请求关注区；拉远时全部收拢。
+  // （关注区会影响推演结果，第 5 步改成走统一操作接口、写进操作日志。）
+  const syncFocus = (): void => {
+    let want: FocusRect | null = null;
+    if (view.closeUp) {
+      const v = view.visibleCells();
+      want = focusAround(v.cx, v.cy, v.w, v.h, sim.state.grid.width, sim.state.grid.height);
+    }
+    const cur = sim.state.requestedFocus;
+    const same = want === null || cur === null ? want === cur : want.x0 === cur.x0 && want.y0 === cur.y0 && want.x1 === cur.x1 && want.y1 === cur.y1;
+    if (!same) sim.setFocus(want);
+  };
+
   view.ticker.add((ticker) => {
+    syncFocus();
     advance(clock.advance(ticker.deltaMS));
     view.draw(sim.state);
     hud.update(sim.state, clock.speed);

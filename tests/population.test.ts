@@ -93,7 +93,7 @@ describe('按格子的种群推演', () => {
     sim.stepN(TICKS_PER_DAY * 200);
     for (const p of sim.state.populations) {
       expect(p.adults.every((n) => n >= 0)).toBe(true);
-      expect(p.juveniles.every((n) => n >= 0)).toBe(true);
+      for (const st of p.juveniles) expect(st.every((n) => n >= 0)).toBe(true);
     }
   });
 

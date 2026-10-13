@@ -26,6 +26,7 @@ export class Hud {
       `天气   ${state.weather.toFixed(2)}`,
       `植被   平均 ${this.meanVeg.toFixed(0)} g/m²`,
       `倍速   ${speed}x`,
+      `个体   ${state.focus ? `展开 ${state.individuals.count} 只（${state.focus.x1 - state.focus.x0}×${state.focus.y1 - state.focus.y0} 格）` : '未展开（放大到地块档）'}`,
       `校验和 ${this.sum.toString(16).padStart(8, '0')}（当天开始时）`,
     ].join('\n');
   }

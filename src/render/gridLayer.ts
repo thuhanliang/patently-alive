@@ -46,10 +46,16 @@ export class GridLayer {
       const pop = state.populations[layer.index]!;
       const counts = this.counts;
       max = 1;
-      for (let i = 0; i < counts.length; i++) {
-        counts[i] = pop.adults[i]! + pop.juveniles[i]!;
-        if (counts[i]! > max) max = counts[i]!;
+      counts.set(pop.adults);
+      for (const stage of pop.juveniles) for (let i = 0; i < counts.length; i++) counts[i] = counts[i]! + stage[i]!;
+      // 关注区里的动物已经展开成个体，也要算进密度。
+      const ind = state.individuals;
+      for (let k = 0; k < ind.count; k++) {
+        if (ind.species[k] !== layer.index) continue;
+        const c = Math.floor(ind.y[k]!) * state.grid.width + Math.floor(ind.x[k]!);
+        counts[c] = counts[c]! + 1;
       }
+      for (let i = 0; i < counts.length; i++) if (counts[i]! > max) max = counts[i]!;
       values = counts;
     }
     const px = this.image.data;

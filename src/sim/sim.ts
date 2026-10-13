@@ -5,12 +5,24 @@ import { createGrid, growVegetation, type Grid } from './grid';
 import { deriveAll, type DerivedSpecies } from './physiology';
 import {
   createPopulation,
+  crowdingByBlock,
   dailyPopulation,
   emptyDayStats,
   populationTotal,
   type DayStats,
   type Population,
 } from './population';
+import { sameFocus, type FocusRect } from './focus';
+import {
+  absorbImmigrants,
+  applyFocus,
+  countByCell,
+  countBySpecies,
+  createIndividuals,
+  individualsDaily,
+  individualsHourly,
+  type Individuals,
+} from './individuals';
 import { TICKS_PER_DAY, calendar, monthlyCurve } from './time';
 
 /** 推演的全部状态。必须是纯数据：可以序列化成快照、原样恢复。 */
@@ -26,6 +38,14 @@ export interface SimState {
   populations: Population[];
   /** 各物种最近一天的账目。 */
   lastDay: DayStats[];
+  /** 当前展开成个体的区域；null 表示全部按格子计数。 */
+  focus: FocusRect | null;
+  /** 请求的关注区，下一个 tick 开始时生效。 */
+  requestedFocus: FocusRect | null;
+  /** 关注区里的个体。 */
+  individuals: Individuals;
+  /** 当天到目前为止的账目（个体每小时被捕食的计入这里），换天时并入 lastDay。 */
+  dayAccum: DayStats[];
 }
 
 function cellArea(config: SimConfig): number {
@@ -46,6 +66,10 @@ export function createInitialState(config: SimConfig): SimState {
     grid,
     populations,
     lastDay: populations.map((p) => emptyDayStats(populationTotal(p))),
+    focus: null,
+    requestedFocus: null,
+    individuals: createIndividuals(),
+    dayAccum: populations.map(() => emptyDayStats()),
   };
 }
 
@@ -86,9 +110,41 @@ export class Sim {
     return this.derived;
   }
 
+  /**
+   * 请求换关注区（null = 全部收拢）。下一个 tick 开始时生效。
+   * 关注区会影响推演结果，第 5 步改成写进操作日志的操作。
+   */
+  setFocus(focus: FocusRect | null): void {
+    this.s.requestedFocus = focus ? { ...focus } : null;
+  }
+
+  /** 每个物种的总数：格子计数 + 展开的个体。 */
+  totals(): number[] {
+    const ind = countBySpecies(this.s.individuals, this.derived.length);
+    return this.s.populations.map((p, i) => populationTotal(p) + ind[i]!);
+  }
+
   step(): void {
+    if (!sameFocus(this.s.focus, this.s.requestedFocus)) {
+      applyFocus(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.s.requestedFocus, this.rng);
+      this.s.focus = this.s.requestedFocus ? { ...this.s.requestedFocus } : null;
+    }
     this.s.tick += 1;
+    if (this.s.focus) {
+      individualsHourly(this.s.individuals, {
+        species: this.derived,
+        populations: this.s.populations,
+        grid: this.s.grid,
+        focus: this.s.focus,
+        hour: calendar(this.s.tick).hour,
+        cellAreaM2: cellArea(this.s.config),
+        floorBiomass: this.s.config.world.vegetation.floorBiomass,
+        rng: this.rng,
+        stats: this.s.dayAccum,
+      });
+    }
     if (this.s.tick % TICKS_PER_DAY === 0) this.daily();
+    this.s.rng = this.rng.state();
   }
 
   stepN(count: number): void {
@@ -111,17 +167,47 @@ export class Sim {
     const decay = monthlyCurve(world.vegetation.decayByMonth, dayOfYear);
     growVegetation(this.s.grid, world, growth, decay);
 
-    this.s.lastDay = dailyPopulation({
+    const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
+    const cells = this.s.grid.width * this.s.grid.height;
+    const extra = this.s.individuals.count > 0
+      ? countByCell(this.s.individuals, this.derived.length, cells, this.s.grid.width)
+      : undefined;
+    const crowding = crowdingByBlock(
+      { grid: this.s.grid, species: this.derived, populations: this.s.populations },
+      extra,
+    );
+
+    const cellStats = dailyPopulation({
       species: this.derived,
       prey: this.prey,
       grid: this.s.grid,
       populations: this.s.populations,
       cellAreaM2: cellArea(this.s.config),
       floorBiomass: world.vegetation.floorBiomass,
-      breeding: this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!),
+      breeding,
       rng: this.rng,
       scratch: this.scratch,
+      crowding,
     });
-    this.s.rng = this.rng.state();
+    const acc = this.s.dayAccum;
+    individualsDaily(this.s.individuals, {
+      species: this.derived,
+      width: this.s.grid.width,
+      breeding,
+      crowding,
+      rng: this.rng,
+      stats: acc,
+    });
+    absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng);
+
+    const totals = this.totals();
+    this.s.lastDay = cellStats.map((c, s) => ({
+      total: totals[s]!,
+      births: c.births + acc[s]!.births,
+      deathsPredation: c.deathsPredation + acc[s]!.deathsPredation,
+      deathsStarvation: c.deathsStarvation + acc[s]!.deathsStarvation,
+      deathsOther: c.deathsOther + acc[s]!.deathsOther,
+    }));
+    this.s.dayAccum = this.derived.map(() => emptyDayStats());
   }
 }
