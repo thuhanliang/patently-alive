@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { grassland } from '../src/data';
+import { grassland, scenarioLibrary, speciesFor, worldFor } from '../src/data';
 import { makeConfig, makeSim } from './helpers';
 import { FixedStepClock, Sim, TICKS_PER_DAY, checksum, deserialize, serialize, type SimState } from '../src/sim';
 
@@ -63,6 +63,22 @@ describe('确定性', () => {
   it('长跑校验和固定（改了推演规则就要有意识地更新它）', () => {
     const sim = Sim.create(makeConfig(1, { ...grassland, width: 48, height: 48 }));
     sim.stepN(TICKS_PER_DAY * 360 * 2);
-    expect(checksum(sim.state)).toMatchInlineSnapshot(`609600433`);
+    expect(checksum(sim.state)).toMatchInlineSnapshot(`1166552777`);
   });
+
+  it('鸟岛：带个体的快照一天中途存档再恢复，和一口气跑完逐位相同（掩护、灌丛、窝都在状态里）', () => {
+    const island = worldFor(scenarioLibrary.get('bird-island')!);
+    const world = { ...island, width: 48, height: 48 };
+    const config = { seed: 9, world, species: speciesFor(world) };
+    const straight = Sim.create(config);
+    straight.setFocus({ x0: 8, y0: 8, x1: 32, y1: 32 });
+    straight.stepN(TICKS_PER_DAY * 100);
+    const first = Sim.create(config);
+    first.setFocus({ x0: 8, y0: 8, x1: 32, y1: 32 });
+    first.stepN(TICKS_PER_DAY * 61 + 7);
+    const resumed = new Sim(deserialize<SimState>(serialize(first.snapshot())));
+    resumed.stepN(TICKS_PER_DAY * 100 - (TICKS_PER_DAY * 61 + 7));
+    expect(serialize(resumed.snapshot())).toBe(serialize(straight.snapshot()));
+  }, 60_000);
 });
+

@@ -1,10 +1,11 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
+import { buildShapeTextures, shapeOf } from './sprites';
 import { TICKS_PER_DAY, type DerivedSpecies, type SimState } from '../sim';
 import { Camera } from './camera';
 import { GridLayer, type DataLayer } from './gridLayer';
 import { IndividualLayer } from './individualLayer';
 import { CELL_PX, mapWorldSize } from './projection';
-import { INK, PAPER, speciesColor } from './palette';
+import { PAPER, speciesColor } from './palette';
 
 /** 格线在一格放大到多少屏幕像素以上时出现。 */
 const GRID_LINES_MIN_CELL_PX = 14;
@@ -30,10 +31,12 @@ export class MapView {
     const { width, height } = state.grid;
     const colors = species.map((sp) => speciesColor(sp.params.id));
     this.grid = new GridLayer(width, height, state.grid.terrain, colors.map((c) => c.chart));
-    // 个体的占位形状：白底圆点 + 墨线轮廓，按物种主色着色（着色只乘在白底上，墨线还是墨色）。
-    const dot = new Graphics().circle(32, 32, 26).fill(0xffffff).stroke({ width: 7, color: INK });
-    const texture = app.renderer.generateTexture({ target: dot, resolution: 1, antialias: true });
-    this.individuals = new IndividualLayer(species, texture, colors.map((c) => c.body));
+    const shapes = buildShapeTextures(app.renderer);
+    this.individuals = new IndividualLayer(
+      species,
+      species.map((sp) => shapes[shapeOf(sp.params.id)]),
+      colors.map((c) => c.body),
+    );
     this.world.addChild(this.grid.container, this.individuals.container);
     app.stage.addChild(this.world);
 

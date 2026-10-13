@@ -17,12 +17,12 @@ describe('从性状推导的参数', () => {
 
   it('日食量符合代谢体重缩放的数量级', () => {
     // 兔每天约 100 克干物质，田鼠约 5 克，白鼬约 80 克猎物（约体重的三分之一）。
-    expect(deriveSpecies(byId('rabbit'), cell).dailyIntakeG).toBeGreaterThan(80);
-    expect(deriveSpecies(byId('rabbit'), cell).dailyIntakeG).toBeLessThan(130);
-    expect(deriveSpecies(byId('vole'), cell).dailyIntakeG).toBeLessThan(8);
+    expect(deriveSpecies(byId('rabbit'), cell).plantIntakeG).toBeGreaterThan(80);
+    expect(deriveSpecies(byId('rabbit'), cell).plantIntakeG).toBeLessThan(130);
+    expect(deriveSpecies(byId('vole'), cell).plantIntakeG).toBeLessThan(8);
     const stoat = deriveSpecies(byId('stoat'), cell);
-    expect(stoat.dailyIntakeG / stoat.bodyMassG).toBeGreaterThan(0.2);
-    expect(stoat.dailyIntakeG / stoat.bodyMassG).toBeLessThan(0.5);
+    expect(stoat.vertebrateIntakeG / stoat.bodyMassG).toBeGreaterThan(0.2);
+    expect(stoat.vertebrateIntakeG / stoat.bodyMassG).toBeLessThan(0.5);
   });
 
   it('日死亡率与年存活率一致', () => {
@@ -65,7 +65,7 @@ describe('从性状推导的参数', () => {
 
   it('谁吃谁由性状推出：白鼬主要吃田鼠，偶尔吃兔；食草动物不吃任何动物；不吃同类', () => {
     const derived = grasslandSpecies.map((s) => deriveSpecies(s, cell));
-    const m = preyMatrix(derived);
+    const m = preyMatrix(derived).mobile;
     const idx = (id: string) => grasslandSpecies.findIndex((s) => s.id === id);
     const [vole, rabbit, stoat] = [idx('vole'), idx('rabbit'), idx('stoat')];
     expect(m[stoat]![vole]!).toBeGreaterThan(0.5);
@@ -78,7 +78,7 @@ describe('从性状推导的参数', () => {
 
   it('食肉动物只抓比自己轻的食肉动物：白鼬会吃伶鼬，伶鼬不抓白鼬', () => {
     const derived = ['vole', 'weasel', 'stoat'].map((id) => deriveSpecies(byId(id), cell));
-    const m = preyMatrix(derived);
+    const m = preyMatrix(derived).mobile;
     expect(m[2]![1]!).toBeGreaterThan(0);
     expect(m[1]![2]!).toBe(0);
     expect(m[1]![0]!).toBeGreaterThan(0);
@@ -101,7 +101,7 @@ describe('从性状推导的参数', () => {
   it('伶鼬的拥挤程度随猎物多少伸缩：没有猎物就住不下，猎物越多越宽松', () => {
     const species = ['vole', 'weasel'].map((id) => deriveSpecies(byId(id), cell));
     const prey = preyMatrix(species);
-    const { blockOf, cellsIn } = crowdingBlocks(8, 8);
+    const { blockOf, cellsIn, blocksWide } = crowdingBlocks(8, 8);
     const crowding = (voles: number): number => {
       const empty = (): Population => ({
         juveniles: Array.from({ length: JUVENILE_STAGES }, () => new Int32Array(64)),
@@ -110,7 +110,7 @@ describe('从性状推导的参数', () => {
       const populations = [empty(), empty()];
       populations[0]!.adults[0] = voles;
       populations[1]!.adults[0] = 2;
-      return crowdingByBlock({ species, prey, populations, blockOf, cellsIn })[1]![0]!;
+      return crowdingByBlock({ species, prey, populations, blockOf, cellsIn, blocksWide })[1]![0]!;
     };
     expect(crowding(0)).toBeGreaterThan(1e6);
     expect(crowding(100)).toBeGreaterThan(crowding(1000));
@@ -119,7 +119,7 @@ describe('从性状推导的参数', () => {
 
   it('一次捕获能用上的肉量有上限：白鼬吃不完一只兔子，吃得完一只田鼠', () => {
     const stoat = deriveSpecies(byId('stoat'), cell);
-    const need = stoat.dailyIntakeG;
+    const need = stoat.vertebrateIntakeG;
     expect(usableMeal(stoat, need, 30)).toBe(30);
     expect(usableMeal(stoat, need, 1600)).toBeCloseTo(need * (1 + stoat.maxReserveDays));
     expect(usableMeal(stoat, need, 1600)).toBeLessThan(400);

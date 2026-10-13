@@ -85,12 +85,15 @@ export class GridLayer {
     if (layer.kind === 'vegetation') {
       const veg = state.grid.vegetation;
       const max = state.config.world.vegetation.maxBiomass;
+      const shrub = state.grid.shrub;
+      const shrubMax = state.config.world.shrub?.maxBiomass ?? 1;
       for (let i = 0; i < veg.length; i++) {
         const f = veg[i]! / max;
         switch (terrain[i]) {
           case TERRAIN.water: put(i, water(i)); break;
           case TERRAIN.coast: put(i, lerpColor(T.coast, T.grassDry, f * 1.5)); break;
-          case TERRAIN.shrub: put(i, lerpColor(T.shrubDry, T.shrubLush, f * 1.4)); break;
+          // 灌丛格按灌丛多少着色：被啃薄了就褪成枯黄。
+          case TERRAIN.shrub: put(i, lerpColor(T.shrubDry, T.shrubLush, shrub[i]! / shrubMax)); break;
           default: put(i, lerpColor(T.grassDry, T.grassLush, f * 1.4));
         }
       }

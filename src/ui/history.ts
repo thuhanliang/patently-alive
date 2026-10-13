@@ -1,4 +1,4 @@
-import type { SimState } from '../sim';
+import { meanLandVegetation, type SimState } from '../sim';
 
 /**
  * 种群曲线的数据：每天记一次各物种总数和平均植被，环形缓冲。
@@ -31,10 +31,7 @@ export class PopulationHistory {
     else this.start = (this.start + 1) % this.capacity;
     this.days[i] = day;
     state.lastDay.forEach((d, s) => (this.buf[s]![i] = d.total));
-    const veg = state.grid.vegetation;
-    let total = 0;
-    for (let k = 0; k < veg.length; k++) total += veg[k]!;
-    this.buf[this.buf.length - 1]![i] = total / veg.length;
+    this.buf[this.buf.length - 1]![i] = meanLandVegetation(state.grid);
   }
 
   get length(): number {

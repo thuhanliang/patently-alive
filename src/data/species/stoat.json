@@ -2,7 +2,7 @@
   "id": "stoat",
   "name": "白鼬",
   "scientificName": "Mustela erminea",
-  "diet": "carnivore",
+  "diet": { "plant": 0, "vertebrate": 1, "invertebrate": 0 },
   "bodyMassKg": 0.25,
   "activity": "cathemeral",
   "reproduction": {

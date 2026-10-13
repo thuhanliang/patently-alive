@@ -11,6 +11,40 @@ import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
 const HERBIVORE_INTAKE_COEF = 70;
 /** 食肉动物每天需要的猎物鲜重（克）≈ 230 · M^0.75。白鼬约 80 克，接近体重的三分之一。 */
 const CARNIVORE_INTAKE_COEF = 230;
+/**
+ * 吃无脊椎动物每天需要的鲜重（克）≈ 300 · M^0.75。60 克的鸻约 36 克，约为体重的六成
+ * （小型涉禽每天吃掉体重一半左右的无脊椎动物，鸟的代谢比同体重的哺乳动物高）。
+ */
+const INVERTEBRATE_INTAKE_COEF = 300;
+/**
+ * 一格每天能找到的无脊椎动物（克鲜重）≈ 系数 × 植被生物量（g/m²）× 面积（m²）。
+ * 昆虫等多少跟着植被走：植被被啃光，吃虫的也跟着挨饿。不单独模拟虫子的种群，当天吃不完的不留到明天。
+ */
+export const INVERTEBRATE_YIELD = 0.001;
+/** 脊椎动物在食谱里占到这个比例以上，才算会追捕会跑的猎物的"捕食者"；以下的（例如鼠）只吃跑不掉的：蛋、雏鸟、窝里的幼崽。 */
+export const PURSUIT_DIET_SHARE = 0.5;
+/** 会飞的猎物（成体、出了窝的幼体）被捕食者碰上时，只有这个比例来不及飞走。 */
+export const FLIGHT_ESCAPE = 0.3;
+/**
+ * 窝是藏起来的：捕食者再多、再饿，一天里也只能找到窝里幼体的这么一部分（乘在 nest 权重上）。
+ * 没有这一条，捕食者一多，每天就有一半以上的蛋被吃掉，掩护再好也没用。
+ * 取 0.05：捕食者充足时，没有掩护的地面浅窝熬过约 67 天巢期的只有约 3%，灌丛长满时约四分之一
+ * （地面筑巢鸟在有外来捕食者的地方，巢成功率常低到一两成）。
+ */
+export const NEST_DISCOVERY = 0.05;
+/** 洞穴、巢穴里的幼崽，比放在外面难找到这么多（乘在被抓的概率上）。 */
+export const BURROW_EXPOSURE = 0.3;
+/** 地面浅窝：掩护（0–1）最好时，被发现的概率降低这么多。 */
+export const COVER_PROTECTION = 0.6;
+/** 草地的掩护：草长到上限时算多少（灌丛长满算 1，海岸没有掩护）。 */
+export const GRASS_COVER = 0.5;
+/** 一天里一格灌丛最多被啃掉的比例。 */
+export const MAX_BROWSE_FRACTION = 0.01;
+/**
+ * 有灌丛的格子里，吃植物的动物有这么多的植物食量来自灌丛（嫩枝、幼苗、草丛底部），其余吃草；
+ * 草不够时也拿灌丛补。灌丛长得慢，兔子多了掩护就慢慢被啃薄（见 docs/MODEL.md）。
+ */
+export const BROWSE_SHARE = 0.25;
 /** 完全吃不到东西时每天的饿死概率 ≈ 0.12 · M^−0.25：越小的动物撑得越短。 */
 const STARVATION_COEF = 0.12;
 /** 吃到需求的这个比例就不会挨饿；低于它时饿死概率随缺口线性上升。 */
@@ -42,6 +76,14 @@ export const PREY_STOCK_DAYS = 15;
 export const JUVENILE_STAGES = 4;
 /** 前这么多个年龄段的幼体还在窝里、跟着母亲，不自己扩散（个体里对应年龄不到性成熟一半的幼崽不走动）。 */
 export const NEST_STAGES = JUVENILE_STAGES / 2;
+/**
+ * 写了窝里天数（nestDays）的物种：每段约 窝里天数 / 1.5 天（段数夹在 2–8 之间），前两段左右算在窝里。
+ * 传送带对所有个体同一天挪段，新生的在第一段里平均只待半段；所以窝里的段数取
+ * round(窝里天数 / 每段天数 + 0.5)，平均在窝里的时间 ≈ (窝里段数 − 0.5) × 每段天数 ≈ 窝里天数。
+ * 例如鸻：每段 45 天、8 段，前 2 段在窝里，平均 67 天（孵化 + 出飞约 61 天）。
+ */
+const MIN_STAGES = 2;
+const MAX_STAGES = 8;
 /** 幼体按成体的这个比例算食量和体重（从刚出生到长成的平均）。 */
 export const JUVENILE_SIZE_FACTOR = 0.5;
 /** 幼体的基础日死亡率是成体的几倍。 */
@@ -64,10 +106,28 @@ export const SATIATION = 1;
 
 export interface DerivedSpecies {
   readonly params: SpeciesParams;
-  readonly herbivore: boolean;
+  /** 吃植被（食谱里有植物）。 */
+  readonly grazer: boolean;
+  /** 吃脊椎动物（食谱里有脊椎动物）。 */
+  readonly predator: boolean;
+  /** 以脊椎动物为主（≥ PURSUIT_DIET_SHARE）：会追捕会跑的猎物；领地按猎物多少伸缩；被更大的捕食者盯上时会还手。 */
+  readonly carnivore: boolean;
+  /** 吃无脊椎动物。 */
+  readonly insectivore: boolean;
   readonly bodyMassG: number;
-  /** 每天的食物需求：食草为干物质克数，食肉为猎物鲜重克数。 */
-  readonly dailyIntakeG: number;
+  /**
+   * 每天对三类食物的需求，已乘上食谱比例：植物为干物质克数，脊椎动物、无脊椎动物为鲜重克数。
+   * 吃饱程度 = Σ 比例 × 这一类吃到的份额（见 population 的 combineFed）。
+   */
+  readonly plantIntakeG: number;
+  readonly vertebrateIntakeG: number;
+  readonly invertebrateIntakeG: number;
+  /** 幼体分几段、前几段在窝里。 */
+  readonly juvenileStages: number;
+  readonly nestStages: number;
+  /** 窝的类型；null 表示没写（阶段 0 的物种，窝里的幼体和别的幼体一样容易被抓）。 */
+  readonly nest: 'ground' | 'burrow' | null;
+  readonly flies: boolean;
   readonly adultDailyMortality: number;
   readonly juvenileDailyMortality: number;
   readonly starvationRate: number;
@@ -77,6 +137,11 @@ export interface DerivedSpecies {
   readonly litterRate: number;
   /** 平均每格住到这么多只就不再繁殖（按区块统计）。 */
   readonly crowdingCapacity: number;
+  /**
+   * 拥挤程度在周围几圈区块里一起算（0 = 只看自己的区块）。家域比一个区块大得多的物种（野猫约 1.4 平方公里，
+   * 一个区块 0.16 平方公里），一只就"占满"一个区块，得按家域那么大的范围统计。
+   */
+  readonly crowdingRadiusBlocks: number;
   /** 每天离开所在格子的概率，以及一跳的最大格数。 */
   readonly moveProb: number;
   readonly moveRadius: number;
@@ -103,8 +168,8 @@ function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
 }
 
 export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
-  const herbivore = p.diet === 'herbivore';
   const metabolicMass = detPow(p.bodyMassKg, 0.75);
+  const { juvenileStages, nestStages, stageDays } = conveyor(p);
   const adultDailyMortality = 1 - detPow(p.survival.adultAnnual, 1 / DAYS_PER_YEAR);
   const cellsPerDay = p.movement.dailyRangeM / cellSizeM;
   // 最长一段连续繁殖期的天数；它比两窝间隔还短时，每段繁殖期只够生一窝。
@@ -113,15 +178,25 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
   const cellKm2 = (cellSizeM * cellSizeM) / 1_000_000;
   return {
     params: p,
-    herbivore,
+    grazer: p.diet.plant > 0,
+    predator: p.diet.vertebrate > 0,
+    carnivore: p.diet.vertebrate >= PURSUIT_DIET_SHARE,
+    insectivore: p.diet.invertebrate > 0,
     bodyMassG: p.bodyMassKg * 1000,
-    dailyIntakeG: (herbivore ? HERBIVORE_INTAKE_COEF : CARNIVORE_INTAKE_COEF) * metabolicMass,
+    plantIntakeG: p.diet.plant * HERBIVORE_INTAKE_COEF * metabolicMass,
+    vertebrateIntakeG: p.diet.vertebrate * CARNIVORE_INTAKE_COEF * metabolicMass,
+    invertebrateIntakeG: p.diet.invertebrate * INVERTEBRATE_INTAKE_COEF * metabolicMass,
+    juvenileStages,
+    nestStages,
+    nest: p.reproduction.nest ?? null,
+    flies: p.movement.flies === true,
     adultDailyMortality,
     juvenileDailyMortality: Math.min(1, adultDailyMortality * JUVENILE_MORTALITY_FACTOR),
     starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
-    stageDays: Math.max(1, Math.floor(p.reproduction.ageAtMaturityDays / JUVENILE_STAGES)),
+    stageDays,
     litterRate: breedingDays > 0 ? 1 / Math.min(p.reproduction.litterIntervalDays, breedingDays) : 0,
     crowdingCapacity: crowdingPerKm2(p, typicalPerKm2) * cellKm2,
+    crowdingRadiusBlocks: crowdingRadius(p, cellSizeM),
     moveProb: Math.min(0.5, cellsPerDay / 2),
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
     hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
@@ -130,6 +205,27 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
     territorial: p.movement.territorial === true && p.movement.homeRangeKm2 !== undefined,
   };
+}
+
+/** 家域边长折合几个区块，取 (边长 / 区块边长 − 1) / 2 四舍五入：窗口 (2r+1)² 个区块和家域差不多大。 */
+function crowdingRadius(p: SpeciesParams, cellSizeM: number): number {
+  const home = p.movement.homeRangeKm2;
+  if (home === undefined) return 0;
+  const blockKm = (CROWDING_BLOCK_CELLS * cellSizeM) / 1000;
+  return Math.max(0, Math.round((Math.sqrt(home) / blockKm - 1) / 2));
+}
+
+/** 幼体传送带的段数、窝里的段数、每段天数（见 JUVENILE_STAGES、MIN_STAGES）。 */
+function conveyor(p: SpeciesParams): { juvenileStages: number; nestStages: number; stageDays: number } {
+  const maturity = p.reproduction.ageAtMaturityDays;
+  const nestDays = p.reproduction.nestDays;
+  if (nestDays === undefined) {
+    return { juvenileStages: JUVENILE_STAGES, nestStages: NEST_STAGES, stageDays: Math.max(1, Math.floor(maturity / JUVENILE_STAGES)) };
+  }
+  const juvenileStages = Math.min(MAX_STAGES, Math.max(MIN_STAGES, Math.round(maturity / (nestDays / 1.5))));
+  const stageDays = Math.max(1, Math.floor(maturity / juvenileStages));
+  const nestStages = Math.min(juvenileStages - 1, Math.max(1, Math.round(nestDays / stageDays + 0.5)));
+  return { juvenileStages, nestStages, stageDays };
 }
 
 /** 最长一段连续（跨年也算连续）繁殖期的天数，按各月比例累加。 */
@@ -149,7 +245,7 @@ function longestSeasonDays(byMonth: readonly number[]): number {
 /** 由配置推导全部物种参数和捕食矩阵；状态初始化和推演都用这一处，保证一致。 */
 export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number): {
   derived: DerivedSpecies[];
-  prey: number[][];
+  prey: PreyWeights;
 } {
   const derived = species.map((s) => deriveSpecies(s, cellSizeM));
   return { derived, prey: preyMatrix(derived) };
@@ -161,9 +257,9 @@ export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number):
  * （每个 day % stageDays === 0 的日子挪一次，在那天的出生之前挪）。
  * day 指"传送带最近一次可能挪段的那一天"，即最近一次每日结算所在的天（见 Sim.day）。
  */
-export function juvenileStageAt(sp: Pick<DerivedSpecies, 'stageDays'>, born: number, day: number): number {
+export function juvenileStageAt(sp: Pick<DerivedSpecies, 'stageDays' | 'juvenileStages'>, born: number, day: number): number {
   const shifts = Math.floor(day / sp.stageDays) - Math.floor(born / sp.stageDays);
-  return Math.min(JUVENILE_STAGES, shifts);
+  return Math.min(sp.juvenileStages, shifts);
 }
 
 type Activity = SpeciesParams['activity'];
@@ -234,25 +330,53 @@ export function sizeSuitability(preyToPredatorMass: number): number {
 }
 
 /**
- * 捕食矩阵：suitability[捕食者][猎物] ∈ [0, 1] = 体型适合度 × 活动时段重叠。
- * 只有食肉动物有非零行；不吃同种。
+ * 捕食权重（捕食者 × 猎物，[0, 1]），分两种：
+ * - mobile：会跑的猎物（成体、出了窝的幼体）= 体型适合度 × 活动时段重叠 × 会飞的话 FLIGHT_ESCAPE。
+ *   只有以脊椎动物为主的捕食者（carnivore）才追得上；鼠这样的杂食动物为 0。
+ * - nest：窝里的幼体（蛋、雏鸟、窝里的幼崽）= 体型适合度（按幼体体重）× NEST_DISCOVERY × 窝的暴露程度。
+ *   窝不会跑，也不分白天黑夜，不乘活动时段重叠；地面浅窝还要再乘各格的掩护（见 nestExposure）。
+ *   没写窝类型的物种（阶段 0）按旧规则：和 mobile 一样。
+ * 不吃同种。
  */
-export function preyMatrix(species: readonly DerivedSpecies[]): number[][] {
-  return species.map((pred, i) =>
+export interface PreyWeights {
+  mobile: number[][];
+  nest: number[][];
+}
+
+export function preyMatrix(species: readonly DerivedSpecies[]): PreyWeights {
+  const mobile = species.map((pred, i) =>
     species.map((prey, j) => {
-      if (pred.herbivore || i === j) return 0;
-      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity);
+      if (!pred.carnivore || i === j) return 0;
+      const fly = prey.flies ? FLIGHT_ESCAPE : 1;
+      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity) * fly;
     }),
   );
+  const nest = species.map((pred, i) =>
+    species.map((prey, j) => {
+      if (!pred.predator || i === j) return 0;
+      if (prey.nest === null) return mobile[i]![j]!;
+      const ratio = (prey.bodyMassG * JUVENILE_SIZE_FACTOR) / pred.bodyMassG;
+      return catchSuitability(pred, prey, ratio) * NEST_DISCOVERY * (prey.nest === 'burrow' ? BURROW_EXPOSURE : 1);
+    }),
+  );
+  return { mobile, nest };
+}
+
+/**
+ * 一格的掩护（0–1）：灌丛按灌丛生物量占上限的比例，草地按植被占上限的比例 × GRASS_COVER，海岸和水没有掩护。
+ * 每天植被更新后算一次，存在格子里（见 grid.cover）。
+ */
+export function nestExposure(cover: number): number {
+  return 1 - COVER_PROTECTION * cover;
 }
 
 /**
  * 捕食者能不能抓这种猎物（这一只和那一只的体重比 → [0, 1]）。
- * 食草动物按体型适合度；别的食肉动物会还手，只抓成体比自己物种轻的
+ * 一般按体型适合度；以脊椎动物为主的捕食者会还手，只抓成体比自己物种轻的
  * （白鼬会吃伶鼬，伶鼬不会去抓白鼬）。这条按物种的成体体重判断，格子模型和个体模型才一致。
  */
 export function catchSuitability(pred: DerivedSpecies, prey: DerivedSpecies, preyToPredatorMass: number): number {
-  if (!prey.herbivore && prey.bodyMassG >= pred.bodyMassG) return 0;
+  if (prey.carnivore && prey.bodyMassG >= pred.bodyMassG) return 0;
   return sizeSuitability(preyToPredatorMass);
 }
 

@@ -18,15 +18,57 @@ export function isLand(t: number): boolean {
  * 生成地形。没有 terrain 参数的世界整张都是草地，而且不抽随机数（阶段 0 的草原结果不变）。
  * 返回每格的地形和地形肥力系数（水为 0）。
  */
-export function generateTerrain(world: WorldParams, rng: Rng): { terrain: Uint8Array; fertilityBy: Float64Array } {
+export function generateTerrain(
+  world: WorldParams,
+  rng: Rng,
+): { terrain: Uint8Array; island: Uint8Array; fertilityBy: Float64Array } {
   const n = world.width * world.height;
   const t = world.terrain;
-  if (!t) return { terrain: new Uint8Array(n).fill(TERRAIN.grass), fertilityBy: new Float64Array(n).fill(1) };
+  if (!t) {
+    return { terrain: new Uint8Array(n).fill(TERRAIN.grass), island: new Uint8Array(n).fill(1), fertilityBy: new Float64Array(n).fill(1) };
+  }
   const terrain = islandTerrain(world.width, world.height, t, rng);
   const fertilityBy = new Float64Array(n);
   const factor = [0, t.fertilityBy.coast, t.fertilityBy.grass, t.fertilityBy.shrub];
   for (let i = 0; i < n; i++) fertilityBy[i] = factor[terrain[i]!]!;
-  return { terrain, fertilityBy };
+  return { terrain, island: labelIslands(terrain, world.width, world.height), fertilityBy };
+}
+
+/**
+ * 给每块陆地编号：0 是水，1 是最大的一块（主岛），2、3…… 是其余的岛，按面积从大到小、同样大按位置先后。
+ * 四连通，和生成时一致。
+ */
+export function labelIslands(terrain: Uint8Array, width: number, height: number): Uint8Array {
+  const comp = new Int32Array(terrain.length).fill(-1);
+  const sizes: number[] = [];
+  const stack: number[] = [];
+  for (let start = 0; start < terrain.length; start++) {
+    if (terrain[start] === TERRAIN.water || comp[start] !== -1) continue;
+    const id = sizes.length;
+    let size = 0;
+    comp[start] = id;
+    stack.push(start);
+    while (stack.length > 0) {
+      const i = stack.pop()!;
+      size += 1;
+      const x = i % width;
+      const y = (i - x) / width;
+      const around = [x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1, y > 0 ? i - width : -1, y < height - 1 ? i + width : -1];
+      for (const j of around) {
+        if (j >= 0 && terrain[j] !== TERRAIN.water && comp[j] === -1) {
+          comp[j] = id;
+          stack.push(j);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  const order = sizes.map((_, k) => k).sort((a, b) => sizes[b]! - sizes[a]! || a - b);
+  const rank = new Int32Array(sizes.length);
+  order.forEach((k, r) => (rank[k] = r + 1));
+  const out = new Uint8Array(terrain.length);
+  for (let i = 0; i < out.length; i++) if (comp[i]! >= 0) out[i] = Math.min(255, rank[comp[i]!]!);
+  return out;
 }
 
 function islandTerrain(width: number, height: number, t: IslandTerrain, rng: Rng): Uint8Array {

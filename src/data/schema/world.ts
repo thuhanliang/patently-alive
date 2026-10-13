@@ -67,6 +67,20 @@ export const WorldParamsSchema = z.object({
     /** 各月枯落比例（每天）。 */
     decayByMonth: monthly,
   }),
+  /**
+   * 灌丛（木本）的生物量：长得慢，是地面筑巢鸟的掩护；草不够吃时食草动物会啃它。只在灌丛格里有。
+   * 有灌丛地形的世界必须写。
+   */
+  shrub: z.object({
+    /** 灌丛长满时的生物量（g/m²），不乘肥力。 */
+    maxBiomass: z.number().positive(),
+    /** 开局占上限的比例。 */
+    initialFraction: z.number().min(0).max(1),
+    /** logistic 生长的内禀增长率（每天），乘植被的各月生长系数和天气。 */
+    growthRate: z.number().min(0),
+    /** 啃不到的部分（占上限的比例），保证能长回来。 */
+    floorFraction: z.number().min(0).max(1),
+  }).optional(),
   weather: z.object({
     /** 天气系数逐日变化的惯性（0–1），越大越"连阴天"。 */
     persistence: z.number().min(0).max(1),
@@ -78,8 +92,14 @@ export const WorldParamsSchema = z.object({
   terrain: IslandTerrainSchema.optional(),
   /** 这片世界里的预设物种（物种数据文件的 id）。 */
   species: z.array(z.string()).min(1),
+  /** 开局只在主岛上的物种（离岸小岛上没有）。没有海岛地形时不起作用。 */
+  mainIslandOnly: z.array(z.string()).optional(),
   /** 数值出处说明。 */
   source: z.string(),
+}).refine((w) => !w.terrain || w.terrain.shrubFraction === 0 || w.shrub !== undefined, {
+  message: '有灌丛地形的世界要写 shrub 参数',
+}).refine((w) => (w.mainIslandOnly ?? []).every((id) => w.species.includes(id)), {
+  message: 'mainIslandOnly 里的物种要在 species 里',
 });
 
 export type WorldParams = z.infer<typeof WorldParamsSchema>;

@@ -3,10 +3,11 @@
  *   npm run sweep                      # 默认 8 个种子、10 年、64×64
  *   SEEDS=20 YEARS=15 SIZE=96 npm run sweep
  *   SEED0=5 SEEDS=1 npm run sweep      # 只跑第 5 个种子（并行跑几份时用）
+ *   WORLD=island npm run sweep         # 换一个世界（src/data/world 下的文件名）；海岛默认用数据里的尺寸
  * 用来调参数：看起伏够不够、有没有哪个种子过早灭绝或爆炸。
  */
 import { it } from 'vitest';
-import { grassland, speciesFor } from '../src/data';
+import { speciesFor, worldLibrary } from '../src/data';
 import { DAYS_PER_YEAR } from '../src/sim';
 import { balanceCheck } from '../src/sim/balance';
 
@@ -20,11 +21,15 @@ function intEnv(name: string, fallback: number, min: number): number {
 }
 const SEEDS = intEnv('SEEDS', 8, 1);
 const YEARS = intEnv('YEARS', 10, 1);
-const SIZE = intEnv('SIZE', 64, 8);
+const WORLD = env.WORLD || 'grassland';
+const base = worldLibrary.get(WORLD);
+if (!base) throw new Error(`没有世界「${WORLD}」，现有：${[...worldLibrary.keys()].join('、')}`);
+// 草原默认缩到 64×64 跑得快；带地形的世界默认用数据里的尺寸（地形按尺寸缩放，太小岛就没了）。
+const SIZE = intEnv('SIZE', base.terrain ? base.width : 64, 8);
 const SEED0 = intEnv('SEED0', 1, 0);
 
-it(`sweep ${SEEDS} seeds × ${YEARS} years @ ${SIZE}²`, () => {
-  const world = { ...grassland, width: SIZE, height: SIZE };
+it(`sweep ${WORLD}: ${SEEDS} seeds × ${YEARS} years @ ${SIZE}²`, () => {
+  const world = { ...base, width: SIZE, height: SIZE };
   const lines: string[] = [];
   let alarms = 0;
   for (let seed = SEED0; seed < SEED0 + SEEDS; seed++) {

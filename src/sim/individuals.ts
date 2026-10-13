@@ -2,13 +2,16 @@ import type { Grid } from './grid';
 import { crossesWater } from './terrain';
 import { inFocus, type FocusRect } from './focus';
 import {
+  BURROW_EXPOSURE,
   CATCH_RADIUS_CELLS,
   CATCH_SUCCESS,
+  FED_SUFFICIENT,
+  FLIGHT_ESCAPE,
+  INVERTEBRATE_YIELD,
   JUVENILE_SIZE_FACTOR,
-  JUVENILE_STAGES,
-  MAX_GRAZE_FRACTION,
-  NEST_STAGES,
+  NEST_DISCOVERY,
   SATIATION,
+  nestExposure,
   catchSuitability,
   isActive,
   juvenileStageAt,
@@ -16,7 +19,7 @@ import {
   usableMeal,
   breedingRoom,
 } from './physiology';
-import { countAt, type DayStats, type Population } from './population';
+import { countAt, eatPlants, type DayStats, type Population } from './population';
 import type { Rng } from './rng';
 
 /**
@@ -39,6 +42,8 @@ export interface Individuals {
   reserve: Float64Array;
   /** 今天已经吃到的量，占自己日需求的比例。 */
   fed: Float64Array;
+  /** 今天吃到的肉（脊椎动物），同样按占自己日需求的比例计；吃够食谱里肉的份额就不再捕猎。 */
+  meat: Float64Array;
 }
 
 export function createIndividuals(capacity = 256): Individuals {
@@ -53,10 +58,11 @@ export function createIndividuals(capacity = 256): Individuals {
     female: new Uint8Array(capacity),
     reserve: new Float64Array(capacity),
     fed: new Float64Array(capacity),
+    meat: new Float64Array(capacity),
   };
 }
 
-const FIELDS = ['species', 'x', 'y', 'vx', 'vy', 'born', 'female', 'reserve', 'fed'] as const;
+const FIELDS = ['species', 'x', 'y', 'vx', 'vy', 'born', 'female', 'reserve', 'fed', 'meat'] as const;
 
 function ensureCapacity(ind: Individuals, n: number): void {
   if (n <= ind.x.length) return;
@@ -72,7 +78,7 @@ function ensureCapacity(ind: Individuals, n: number): void {
 
 /** 第 born 天出生的个体到第 day 天是否还是幼体（和格子里的传送带同一条规则）。 */
 export function isJuvenileAt(sp: DerivedSpecies, born: number, day: number): boolean {
-  return juvenileStageAt(sp, born, day) < JUVENILE_STAGES;
+  return juvenileStageAt(sp, born, day) < sp.juvenileStages;
 }
 
 /** 个体按体型折算：幼体算半只（食量、作为猎物的体重）。 */
@@ -89,6 +95,7 @@ function push(
   born: number,
   reserve: number,
   fed = 0,
+  meatShare = 0,
 ): void {
   ensureCapacity(ind, ind.count + 1);
   const i = ind.count++;
@@ -101,6 +108,8 @@ function push(
   ind.female[i] = rng.nextInt(2);
   ind.reserve[i] = reserve;
   ind.fed[i] = fed;
+  // 一天中途展开的当作已经按时吃过（见 expandCell），肉也按食谱比例算吃过。
+  ind.meat[i] = fed * meatShare;
 }
 
 /**
@@ -154,24 +163,24 @@ export function expandCell(
     if (countAt(pop, c) === 0) continue;
     const sd = sp.stageDays;
     const fd = Math.floor(day / sd);
-    for (let k = 0; k < JUVENILE_STAGES; k++) {
+    for (let k = 0; k < sp.juvenileStages; k++) {
       const n = pop.juveniles[k]![c]!;
       // 第 k 段：出生日在 [(fd−k)·sd, (fd−k+1)·sd) 内，且不晚于今天。
       const bLo = (fd - k) * sd;
       const bHi = Math.min(day, (fd - k + 1) * sd - 1);
       for (let j = 0; j < n; j++) {
         const born = bLo + rng.nextInt(bHi - bLo + 1);
-        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed);
+        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed, sp.params.diet.vertebrate);
       }
       pop.juveniles[k]![c] = 0;
     }
     // 成体：出生日不晚于 (fd − 段数 + 1)·sd − 1，往前抽，年龄不超过最长寿命。
-    const latestAdultBirth = (fd - JUVENILE_STAGES + 1) * sd - 1;
+    const latestAdultBirth = (fd - sp.juvenileStages + 1) * sd - 1;
     const minAdultAge = day - latestAdultBirth;
     const adultSpan = Math.max(1, Math.min(Math.round(2 / sp.adultDailyMortality), sp.maxAgeDays - minAdultAge));
     for (let k = 0; k < na; k++) {
       const born = latestAdultBirth - rng.nextInt(adultSpan);
-      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed);
+      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed, sp.params.diet.vertebrate);
     }
     pop.adults[c] = 0;
   }
@@ -195,7 +204,7 @@ function collapseOne(
   const pop = populations[s]!;
   const sp = species[s]!;
   const k = juvenileStageAt(sp, ind.born[i]!, day);
-  if (k < JUVENILE_STAGES) {
+  if (k < sp.juvenileStages) {
     const stage = pop.juveniles[k]!;
     stage[c] = stage[c]! + 1;
   } else {
@@ -276,6 +285,8 @@ export interface HourlyContext {
   day: number;
   cellAreaM2: number;
   floorBiomass: number;
+  /** 灌丛啃不到的下限（g/m²）；没有灌丛的世界为 undefined。 */
+  shrubFloor?: number | undefined;
   rng: Rng;
   /** 当天累计的账目（被捕食的计入这里）。 */
   stats: DayStats[];
@@ -301,9 +312,9 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     const sp = species[s]!;
 
     // 窝里的幼崽不走动（和格子模型里前几个年龄段不扩散一致），但照样吃东西。
-    const nested = juvenileStageAt(sp, ind.born[i]!, ctx.day) < NEST_STAGES;
+    const nested = juvenileStageAt(sp, ind.born[i]!, ctx.day) < sp.nestStages;
     if (nested) {
-      if (sp.herbivore) graze(ind, i, sp, grid, ctx);
+      feed(ind, i, sp, grid, ctx);
       continue;
     }
 
@@ -344,43 +355,68 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
       continue;
     }
 
-    if (sp.herbivore) graze(ind, i, sp, grid, ctx);
+    feed(ind, i, sp, grid, ctx);
   }
 
   hunt(ind, ctx, removed, active);
   compact(ind, removed);
 }
 
-/** 食草个体吃这一小时的份额（不超过所在格能啃的量）。 */
-function graze(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: HourlyContext): void {
+/**
+ * 吃这一小时的植物和无脊椎动物份额。吃饱程度按食谱比例累加（和格子模型的 combineFed 一致）。
+ * 植物：先吃草，不够再啃灌丛。无脊椎动物：这一格当天能找到的量按活动小时平分，不和别的个体分摊
+ * （虫子多半吃不完；格子模型里是同一格的动物一起分，是已知的小差别）。
+ */
+function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: HourlyContext): void {
+  if (!sp.grazer && !sp.insectivore) return;
   const c = Math.floor(ind.y[i]!) * grid.width + Math.floor(ind.x[i]!);
-  const need = sp.dailyIntakeG * sizeOf(sp, ind.born[i]!, ctx.day);
-  const available = Math.max(0, grid.vegetation[c]! - ctx.floorBiomass) * ctx.cellAreaM2 * MAX_GRAZE_FRACTION;
-  const eaten = Math.min(need / sp.activeHours, available);
-  grid.vegetation[c] = grid.vegetation[c]! - eaten / ctx.cellAreaM2;
-  ind.fed[i] = ind.fed[i]! + eaten / need;
+  const size = sizeOf(sp, ind.born[i]!, ctx.day);
+  const diet = sp.params.diet;
+  if (sp.grazer) {
+    const need = sp.plantIntakeG * size;
+    const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.floorBiomass, ctx.shrubFloor);
+    ind.fed[i] = ind.fed[i]! + (diet.plant * eaten) / need;
+  }
+  if (sp.insectivore) {
+    const need = sp.invertebrateIntakeG * size;
+    const found = (INVERTEBRATE_YIELD * grid.vegetation[c]! * ctx.cellAreaM2) / sp.activeHours;
+    const eaten = Math.min(need / sp.activeHours, found);
+    ind.fed[i] = ind.fed[i]! + (diet.invertebrate * eaten) / need;
+  }
 }
 
 /**
- * 捕食：活动中的捕食者在 CATCH_RADIUS 内碰上活动中的猎物，按体型适合度 × 成功率抓。
- * 活动时段的重叠在这里自然体现（不活动的猎物碰不上），不再乘重叠系数。
+ * 捕食：活动中的捕食者在 CATCH_RADIUS 内碰上猎物，按 体型适合度 × 成功率 抓。规则和格子模型的 preyMatrix 一致：
+ * - 会跑的猎物（成体、出了窝的幼体）要在活动中才碰得上（活动时段的重叠在这里自然体现），
+ *   只有以脊椎动物为主的捕食者追得上；会飞的再乘 FLIGHT_ESCAPE。
+ * - 窝里的幼体不分白天黑夜都在窝里，谁都可能碰上，但窝是藏起来的：乘 NEST_DISCOVERY，
+ *   洞穴再乘 BURROW_EXPOSURE，地面浅窝按所在格的掩护打折。
+ *   没写窝类型的物种（阶段 0）按会跑的猎物算。
  * 用按格的链表找附近的猎物。
  */
 function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active: Uint8Array): void {
-  const { species, focus, rng } = ctx;
-  const hunting = Uint8Array.from(species, (sp, s) => (!sp.herbivore && active[s] ? 1 : 0));
+  const { species, focus, rng, grid } = ctx;
+  const hunting = Uint8Array.from(species, (sp, s) => (sp.predator && active[s] ? 1 : 0));
+  // 吃够食谱里肉的份额就不再捕猎（杂食的鼠吃一两个蛋就够了，不会因为草少就去多找蛋）。
+  const hungry = (i: number): boolean => ind.meat[i]! < species[ind.species[i]!]!.params.diet.vertebrate * SATIATION;
   const predators: number[] = [];
   for (let i = 0; i < ind.count; i++) {
-    if (!removed[i] && hunting[ind.species[i]!] && ind.fed[i]! < SATIATION) predators.push(i);
+    if (!removed[i] && hunting[ind.species[i]!] && hungry(i)) predators.push(i);
   }
   if (predators.length === 0) return;
 
+  // 窝里的幼体（写了窝类型的物种）不活动也找得到。这一小时里不会变，先算好。
+  const nested = new Uint8Array(ind.count);
+  for (let q = 0; q < ind.count; q++) {
+    const sp = species[ind.species[q]!]!;
+    if (sp.nest !== null && juvenileStageAt(sp, ind.born[q]!, ctx.day) < sp.nestStages) nested[q] = 1;
+  }
   const fw = focus.x1 - focus.x0;
   const fh = focus.y1 - focus.y0;
   const head = new Int32Array(fw * fh).fill(-1);
   const next = new Int32Array(ind.count).fill(-1);
   for (let i = ind.count - 1; i >= 0; i--) {
-    if (removed[i] || !active[ind.species[i]!]) continue;
+    if (removed[i] || (!active[ind.species[i]!] && !nested[i])) continue;
     const lc = (Math.floor(ind.y[i]!) - focus.y0) * fw + (Math.floor(ind.x[i]!) - focus.x0);
     next[i] = head[lc]!;
     head[lc] = i;
@@ -392,17 +428,18 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
     const ps = ind.species[p]!;
     const pred = species[ps]!;
     const predMass = pred.bodyMassG * sizeOf(pred, ind.born[p]!, ctx.day);
-    const need = pred.dailyIntakeG * sizeOf(pred, ind.born[p]!, ctx.day);
+    const need = pred.vertebrateIntakeG * sizeOf(pred, ind.born[p]!, ctx.day);
+    const share = pred.params.diet.vertebrate;
     const px = ind.x[p]!;
     const py = ind.y[p]!;
     const lx = Math.floor(px) - focus.x0;
     const ly = Math.floor(py) - focus.y0;
-    for (let dy = -1; dy <= 1 && ind.fed[p]! < SATIATION; dy++) {
-      for (let dx = -1; dx <= 1 && ind.fed[p]! < SATIATION; dx++) {
+    for (let dy = -1; dy <= 1 && hungry(p); dy++) {
+      for (let dx = -1; dx <= 1 && hungry(p); dx++) {
         const gx = lx + dx;
         const gy = ly + dy;
         if (gx < 0 || gy < 0 || gx >= fw || gy >= fh) continue;
-        for (let q = head[gy * fw + gx]!; q !== -1 && ind.fed[p]! < SATIATION; q = next[q]!) {
+        for (let q = head[gy * fw + gx]!; q !== -1 && hungry(p); q = next[q]!) {
           if (q === p || removed[q]) continue;
           const qs = ind.species[q]!;
           if (qs === ps) continue;
@@ -411,12 +448,21 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (ddx * ddx + ddy * ddy > r2) continue;
           const prey = species[qs]!;
           const preyMass = prey.bodyMassG * sizeOf(prey, ind.born[q]!, ctx.day);
-          const chance = catchSuitability(pred, prey, preyMass / predMass) * CATCH_SUCCESS;
+          let chance = catchSuitability(pred, prey, preyMass / predMass) * CATCH_SUCCESS;
+          if (nested[q]) {
+            const c = Math.floor(ind.y[q]!) * grid.width + Math.floor(ind.x[q]!);
+            chance *= NEST_DISCOVERY * (prey.nest === 'burrow' ? BURROW_EXPOSURE : nestExposure(grid.cover[c]!));
+          } else {
+            if (!pred.carnivore) continue;
+            if (prey.flies) chance *= FLIGHT_ESCAPE;
+          }
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
           ctx.stats[qs]!.deathsPredation += 1;
-          // 吃不完的浪费掉，按个体自己的需求折算。
-          ind.fed[p] = ind.fed[p]! + usableMeal(pred, need, preyMass) / need;
+          // 吃不完的浪费掉，按个体自己的需求折算；只吃肉的比例为 1，和阶段 0 一样。
+          const meal = usableMeal(pred, need, preyMass) / need;
+          ind.fed[p] = ind.fed[p]! + share * meal;
+          ind.meat[p] = ind.meat[p]! + share * meal;
         }
       }
     }
@@ -443,7 +489,7 @@ export interface IndividualDailyContext {
 /**
  * 一天：结算储备、死亡（基础、饥饿）、出生。年龄由出生日和当天推出，不用逐日加一。
  * 和格子模型一样没有"到最长寿命必死"：死亡率不随年龄变化，最长寿命只用来限制展开时分配的年龄。
- * 储备 = 上限内的（昨天储备 + 今天吃到的 − 1 天的需求）；低于 0 时按缺口挨饿。
+ * 储备 = 上限内的（昨天储备 + min(1, 今天吃到的 / FED_SUFFICIENT) − 1）；低于 0 时按缺口挨饿。
  */
 export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext): void {
   const { species, rng, stats } = ctx;
@@ -455,9 +501,12 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     const sp = species[s]!;
     const juvenile = isJuvenileAt(sp, ind.born[i]!, ctx.day);
 
-    const reserve = Math.max(-1, Math.min(sp.maxReserveDays, ind.reserve[i]! + ind.fed[i]! - 1));
+    // 和格子模型一样，吃到需求的 FED_SUFFICIENT 就算吃够（杂食的少了一类食物不至于挨饿）。
+    const enough = Math.min(1, ind.fed[i]! / FED_SUFFICIENT);
+    const reserve = Math.max(-1, Math.min(sp.maxReserveDays, ind.reserve[i]! + enough - 1));
     ind.reserve[i] = reserve;
     ind.fed[i] = 0;
+    ind.meat[i] = 0;
 
     const base = juvenile ? sp.juvenileDailyMortality : sp.adultDailyMortality;
     const starve = reserve < 0 ? sp.starvationRate * Math.min(1, -reserve) : 0;
