@@ -1,0 +1,37 @@
+{
+  "id": "weasel",
+  "name": "伶鼬",
+  "scientificName": "Mustela nivalis",
+  "diet": "carnivore",
+  "bodyMassKg": 0.1,
+  "activity": "cathemeral",
+  "reproduction": {
+    "litterSize": 6,
+    "gestationDays": 35,
+    "litterIntervalDays": 60,
+    "ageAtMaturityDays": 100,
+    "breedingByMonth": [
+      0.5,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0.5,
+      0,
+      0,
+      0,
+      0,
+      0.2
+    ]
+  },
+  "survival": {
+    "adultAnnual": 0.25
+  },
+  "maxLifespanYears": 3,
+  "movement": {
+    "dailyRangeM": 800
+  },
+  "initialDensityPerHa": 0.03,
+  "source": "【未核对】体重、窝仔、妊娠期、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。繁殖参数取田鼠多的年份那一侧（一年可两到三窝）；野外成体年存活率、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。阶段 0 第 6 步调参时加入草原。"
+}
