@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SpeciesSchema, WorldParamsSchema, speciesLibrary } from '../src/data';
+import { ScenarioSchema, SpeciesSchema, WorldParamsSchema, speciesLibrary, worldFor } from '../src/data';
 
 /** 内容即数据：src/data 下所有世界数据文件都必须通过 schema 校验。 */
 const worlds = import.meta.glob('../src/data/world/*.json', { eager: true, import: 'default' });
@@ -42,4 +42,22 @@ describe('物种数据校验', () => {
       for (const id of w.species) expect(speciesLibrary.has(id), id).toBe(true);
     }
   });
+});
+
+describe('情景数据校验', () => {
+  const scenarios = import.meta.glob('../src/data/scenarios/*.json', { eager: true, import: 'default' });
+  it('找到了情景数据', () => {
+    expect(Object.keys(scenarios).length).toBeGreaterThan(0);
+  });
+  for (const [file, json] of Object.entries(scenarios)) {
+    it(file, () => {
+      const r = ScenarioSchema.safeParse(json);
+      expect(r.success, r.success ? '' : JSON.stringify(r.error.issues, null, 2)).toBe(true);
+      if (!r.success) return;
+      expect(file.endsWith(`/${r.data.id}.json`)).toBe(true);
+      // 引用的世界存在，世界里的物种也都存在。
+      const world = worldFor(r.data);
+      for (const id of world.species) expect(speciesLibrary.has(id), id).toBe(true);
+    });
+  }
 });

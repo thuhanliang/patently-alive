@@ -2,6 +2,7 @@ import { SimConfigSchema, type SimConfig } from './config';
 import { cloneData } from './data';
 import { costOf, OpLogSchema, OpSchema, type LogEntry, type Op, type OpLog } from './ops';
 import { Sim } from './sim';
+import { isLand } from './terrain';
 
 export type SubmitResult = { ok: true } | { ok: false; reason: string };
 
@@ -106,6 +107,7 @@ export class Session {
       case 'release': {
         if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
         if (op.x < 0 || op.y < 0 || op.x >= width || op.y >= height) return `位置 (${op.x}, ${op.y}) 不在地图内`;
+        if (!isLand(this.simulation.state.grid.terrain[op.y * width + op.x]!)) return `位置 (${op.x}, ${op.y}) 是水，动物住不了`;
         return null;
       }
       case 'setFocus': {

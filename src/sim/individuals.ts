@@ -1,4 +1,5 @@
 import type { Grid } from './grid';
+import { crossesWater } from './terrain';
 import { inFocus, type FocusRect } from './focus';
 import {
   CATCH_RADIUS_CELLS,
@@ -324,6 +325,13 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
     if (ny < 0 || ny >= grid.height) {
       vy = -vy;
       ny = Math.min(grid.height - 1e-9, Math.max(0, ind.y[i]! + vy * sp.hourlyStepCells));
+    }
+    // 走到水边就掉头，这一小时留在原地（不会游泳；一步走一格以上时，中途也不能过水）。
+    if (crossesWater(grid.terrain, grid.width, xs[i]!, ys[i]!, nx, ny)) {
+      vx = -vx;
+      vy = -vy;
+      nx = xs[i]!;
+      ny = ys[i]!;
     }
     ind.x[i] = nx;
     ind.y[i] = ny;

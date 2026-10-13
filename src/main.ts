@@ -1,7 +1,8 @@
-import { grassland, grasslandSpecies } from './data';
+import { grassland, scenarioLibrary, speciesFor, worldFor, type WorldParams } from './data';
 import { FixedStepClock, OpLogSchema, Session, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { worldToCell } from './render/projection';
-import { GreyboxView } from './render/view';
+import { MapView } from './render/view';
+import { speciesColor } from './render/palette';
 import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
@@ -28,18 +29,35 @@ document.addEventListener('click', (e) => {
   if (e.target instanceof HTMLButtonElement) e.target.blur();
 });
 
+/** 地址栏 ?scenario=bird-island 载入情景的世界；不写就是阶段 0 的草原。 */
+function chosenWorld(): { world: WorldParams; seed: number; problem: string } {
+  const id = new URLSearchParams(location.search).get('scenario');
+  const scenario = id ? scenarioLibrary.get(id) : undefined;
+  if (scenario) return { world: worldFor(scenario), seed: scenario.seed, problem: '' };
+  const known = [...scenarioLibrary.keys()].join('、');
+  return { world: grassland, seed: 1, problem: id ? `没有情景「${id}」，载入了草原（现有：${known}）` : '' };
+}
+
 async function main(): Promise<void> {
-  const newSession = (seed: number): Session => new Session({ seed, world: grassland, species: grasslandSpecies });
-  let session = newSession(intParam('seed', 1, 0xffff_ffff));
+  const { world, seed: defaultSeed, problem } = chosenWorld();
+  const species = speciesFor(world);
+  const newSession = (seed: number): Session => new Session({ seed, world, species });
+  let session = newSession(intParam('seed', defaultSeed, 0xffff_ffff));
 
   // 一帧最多推进两天：推演每天要算整张地图，再多画面就卡了。倍速太高时实际速度会低于设定。
   const clock = new FixedStepClock({ stepMs: 50, maxStepsPerFrame: TICKS_PER_DAY * 2 });
-  const view = await GreyboxView.mount(el('app'), session.sim.state, session.sim.species);
+  const view = await MapView.mount(el('app'), session.sim.state, session.sim.species);
   const hud = new Hud(el('hud'));
   const status = el('status');
+  status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
   const history = new PopulationHistory([...names, '平均植被']);
-  const chart = new PopulationChart(el<HTMLCanvasElement>('chart'), history, grassland.vegetation.maxBiomass);
+  const chart = new PopulationChart(
+    el<HTMLCanvasElement>('chart'),
+    history,
+    world.vegetation.maxBiomass,
+    session.sim.species.map((s) => speciesColor(s.params.id).chart),
+  );
   // 点图切换纵轴：各自比例 ↔ 对数（只是看法，不进操作日志）。
   el<HTMLCanvasElement>('chart').addEventListener('click', () => {
     chart.scale = chart.scale === 'relative' ? 'log' : 'relative';

@@ -1,9 +1,9 @@
 import { Container, Graphics, Particle, ParticleContainer, Texture } from 'pixi.js';
 import { TICKS_PER_DAY, isJuvenileAt, type DerivedSpecies, type SimState } from '../sim';
 import { CELL_PX } from './projection';
+import { BLUEPRINT } from './palette';
 
-/** 灰盒：每个物种一个灰度，按体重给大小（格的比例）。幼体小一圈。 */
-const SPECIES_GRAYS = [0xf0f0f0, 0xb0b0b0, 0x202020, 0x707070];
+/** 占位画法：每个物种一个主色的圆点，按体重给大小（格的比例）。幼体小一圈。 */
 const JUVENILE_SCALE = 0.65;
 
 function sizeInCells(massKg: number): number {
@@ -24,7 +24,11 @@ export class IndividualLayer {
   private readonly outline = new Graphics();
   private outlineKey = '';
 
-  constructor(private readonly species: readonly DerivedSpecies[]) {
+  constructor(
+    private readonly species: readonly DerivedSpecies[],
+    private readonly texture: Texture,
+    private readonly colors: readonly number[],
+  ) {
     this.container.addChild(this.particles, this.outline);
   }
 
@@ -33,7 +37,7 @@ export class IndividualLayer {
     const n = ind.count;
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     while (this.pool.length < n) {
-      const p = new Particle({ texture: Texture.WHITE, anchorX: 0.5, anchorY: 0.5 });
+      const p = new Particle({ texture: this.texture, anchorX: 0.5, anchorY: 0.5 });
       this.pool.push(p);
       this.particles.addParticle(p);
     }
@@ -47,12 +51,12 @@ export class IndividualLayer {
       const p = this.pool[i]!;
       const juvenile = isJuvenileAt(sp, ind.born[i]!, day);
       // 按贴图的实际宽度换算成世界坐标里的边长。
-      const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / Texture.WHITE.width;
+      const px = (sizeInCells(sp.params.bodyMassKg) * (juvenile ? JUVENILE_SCALE : 1) * CELL_PX) / this.texture.width;
       p.x = ind.x[i]! * CELL_PX;
       p.y = ind.y[i]! * CELL_PX;
       p.scaleX = px;
       p.scaleY = px;
-      p.tint = SPECIES_GRAYS[s % SPECIES_GRAYS.length]!;
+      p.tint = this.colors[s]!;
     }
     this.particles.update();
 
@@ -65,7 +69,7 @@ export class IndividualLayer {
       if (f) {
         this.outline
           .rect(f.x0 * CELL_PX, f.y0 * CELL_PX, (f.x1 - f.x0) * CELL_PX, (f.y1 - f.y0) * CELL_PX)
-          .stroke({ width: 2, pixelLine: false, color: 0xffffff, alpha: 0.5 });
+          .stroke({ width: 2, pixelLine: false, color: BLUEPRINT, alpha: 0.7 });
       }
     }
   }
