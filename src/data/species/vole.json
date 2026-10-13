@@ -1,0 +1,20 @@
+{
+  "id": "vole",
+  "name": "田鼠",
+  "scientificName": "Microtus agrestis",
+  "diet": "herbivore",
+  "bodyMassKg": 0.03,
+  "activity": "cathemeral",
+  "reproduction": {
+    "litterSize": 4.5,
+    "gestationDays": 21,
+    "litterIntervalDays": 25,
+    "ageAtMaturityDays": 40,
+    "breedingByMonth": [1, 1, 1, 1, 1, 1, 1, 0.8, 0.3, 0, 0, 0.2]
+  },
+  "survival": { "adultAnnual": 0.1 },
+  "maxLifespanYears": 2,
+  "movement": { "dailyRangeM": 30 },
+  "initialDensityPerHa": 60,
+  "source": "体重、窝仔数、妊娠期：PanTHERIA / AnAge 的数量级；野外寿命多不足一年、密度约每公顷几十到几百只：Wikipedia「Field vole」及其引用。"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "stoat",
+  "name": "白鼬",
+  "scientificName": "Mustela erminea",
+  "diet": "carnivore",
+  "bodyMassKg": 0.25,
+  "activity": "cathemeral",
+  "reproduction": {
+    "litterSize": 7,
+    "gestationDays": 28,
+    "litterIntervalDays": 360,
+    "ageAtMaturityDays": 80,
+    "breedingByMonth": [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  },
+  "survival": { "adultAnnual": 0.35 },
+  "maxLifespanYears": 6,
+  "movement": { "dailyRangeM": 1500 },
+  "initialDensityPerHa": 0.06,
+  "source": "体重、窝仔数：PanTHERIA / AnAge 的数量级；一年一窝（延迟着床，妊娠期按着床后计）、雌性几周大即在巢中交配（性成熟按雌性取约 80 天）、每晚可走 1–3 公里、密度约每平方公里几只：Wikipedia「Stoat」及其引用。"
+}

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { grassland } from '../src/data';
+import { makeConfig, makeSim } from './helpers';
 import { FixedStepClock, Sim, TICKS_PER_DAY, checksum, deserialize, serialize, type SimState } from '../src/sim';
-import { makeSim } from './helpers';
+
 
 /** 把一串帧间隔喂给时钟，按时钟给出的步数推进，返回最终状态。 */
 function runWithFrames(seed: number, frames: number[]): Sim {
@@ -60,8 +61,8 @@ describe('确定性', () => {
   });
 
   it('长跑校验和固定（改了推演规则就要有意识地更新它）', () => {
-    const sim = Sim.create({ seed: 1, world: grassland });
+    const sim = Sim.create(makeConfig(1, { ...grassland, width: 48, height: 48 }));
     sim.stepN(TICKS_PER_DAY * 360 * 2);
-    expect(checksum(sim.state)).toMatchInlineSnapshot(`3849501674`);
+    expect(checksum(sim.state)).toMatchInlineSnapshot(`1054946985`);
   });
 });

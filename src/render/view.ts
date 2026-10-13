@@ -1,7 +1,7 @@
 import { Application, Container } from 'pixi.js';
 import { TICKS_PER_DAY, type SimState } from '../sim';
 import { Camera } from './camera';
-import { GridLayer } from './gridLayer';
+import { GridLayer, type DataLayer } from './gridLayer';
 import { CELL_PX, mapWorldSize } from './projection';
 
 /** 格线在一格放大到多少屏幕像素以上时出现。 */
@@ -16,6 +16,7 @@ export class GreyboxView {
   private readonly world = new Container();
   private readonly grid: GridLayer;
   private lastDay = -1;
+  private layer: DataLayer = { kind: 'vegetation' };
 
   private constructor(
     readonly app: Application,
@@ -47,11 +48,16 @@ export class GreyboxView {
     return this.app.ticker;
   }
 
+  setLayer(layer: DataLayer): void {
+    this.layer = layer;
+    this.lastDay = -1; // 下一帧重画
+  }
+
   draw(state: Readonly<SimState>): void {
     // 植被每天才变一次，只在换天时重画贴图。
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (day !== this.lastDay) {
-      this.grid.update(state);
+      this.grid.update(state, this.layer);
       this.lastDay = day;
     }
     this.grid.setGridLinesVisible(this.camera.zoom * CELL_PX >= GRID_LINES_MIN_CELL_PX);

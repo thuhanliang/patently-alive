@@ -2,9 +2,12 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { SimState } from '../sim';
 import { CELL_PX, mapWorldSize } from './projection';
 
+/** 数据图层：植被，或某个物种的密度。一次只开一层。 */
+export type DataLayer = { kind: 'vegetation' } | { kind: 'species'; index: number };
+
 /**
- * 植被图层：一格一个像素画进离屏画布，再整体放大成一张贴图（最近邻采样，格子边界清楚）。
- * 灰盒配色：植被越多越深。
+ * 格子图层：一格一个像素画进离屏画布，再整体放大成一张贴图（最近邻采样，格子边界清楚）。
+ * 灰盒配色：数值越高越深。物种密度按当前地图上的最高值归一化。
  */
 export class GridLayer {
   readonly container = new Container();
@@ -13,6 +16,7 @@ export class GridLayer {
   private readonly image: ImageData;
   private readonly texture: Texture;
   private readonly lines = new Graphics();
+  private readonly counts: Int32Array;
 
   constructor(width: number, height: number) {
     this.canvas = document.createElement('canvas');
@@ -22,6 +26,7 @@ export class GridLayer {
     if (!ctx) throw new Error('无法创建 2D 画布');
     this.ctx = ctx;
     this.image = ctx.createImageData(width, height);
+    this.counts = new Int32Array(width * height);
 
     this.texture = Texture.from(this.canvas);
     this.texture.source.scaleMode = 'nearest';
@@ -31,12 +36,25 @@ export class GridLayer {
     this.drawGridLines(width, height);
   }
 
-  update(state: Readonly<SimState>): void {
-    const { vegetation } = state.grid;
-    const max = state.config.world.vegetation.maxBiomass;
+  update(state: Readonly<SimState>, layer: DataLayer): void {
+    let values: ArrayLike<number>;
+    let max: number;
+    if (layer.kind === 'vegetation') {
+      values = state.grid.vegetation;
+      max = state.config.world.vegetation.maxBiomass;
+    } else {
+      const pop = state.populations[layer.index]!;
+      const counts = this.counts;
+      max = 1;
+      for (let i = 0; i < counts.length; i++) {
+        counts[i] = pop.adults[i]! + pop.juveniles[i]!;
+        if (counts[i]! > max) max = counts[i]!;
+      }
+      values = counts;
+    }
     const px = this.image.data;
-    for (let i = 0; i < vegetation.length; i++) {
-      const f = Math.min(1, vegetation[i]! / max);
+    for (let i = 0; i < values.length; i++) {
+      const f = Math.min(1, values[i]! / max);
       const g = Math.round(222 - 172 * f);
       const o = i * 4;
       px[o] = g;
