@@ -1,35 +1,25 @@
 import { SimConfigSchema, type SimConfig } from './config';
 import { Rng, type RngState } from './rng';
-import { cloneData } from './checksum';
-
-/**
- * 占位用的随机游走点，只为了让阶段 0 第 1 步有东西可推、可看、可测。
- * 第 2、3 步换成格子地图和按格子的种群推演后删掉。
- */
-export interface Walker {
-  x: number;
-  y: number;
-}
+import { cloneData } from './data';
+import { createGrid, growVegetation, type Grid } from './grid';
+import { TICKS_PER_DAY, calendar, monthlyCurve } from './time';
 
 /** 推演的全部状态。必须是纯数据：可以序列化成快照、原样恢复。 */
 export interface SimState {
   readonly config: SimConfig;
+  /** 已经走过的 tick 数（1 tick = 游戏内 1 小时）。 */
   tick: number;
   rng: RngState;
-  walkers: Walker[];
+  /** 当天的天气系数，乘在植被生长上；逐日带惯性变化。 */
+  weather: number;
+  grid: Grid;
 }
-
-export const PLACEHOLDER_GRID = 64;
-const PLACEHOLDER_WALKERS = 32;
 
 export function createInitialState(config: SimConfig): SimState {
   const parsed = SimConfigSchema.parse(config);
   const rng = Rng.fromSeed(parsed.seed);
-  const walkers: Walker[] = [];
-  for (let i = 0; i < PLACEHOLDER_WALKERS; i++) {
-    walkers.push({ x: rng.nextInt(PLACEHOLDER_GRID), y: rng.nextInt(PLACEHOLDER_GRID) });
-  }
-  return { config: parsed, tick: 0, rng: rng.state(), walkers };
+  const grid = createGrid(parsed.world, rng);
+  return { config: parsed, tick: 0, rng: rng.state(), weather: 1, grid };
 }
 
 /**
@@ -59,18 +49,8 @@ export class Sim {
   }
 
   step(): void {
-    const n = PLACEHOLDER_GRID;
-    for (const w of this.s.walkers) {
-      // 四个方向或原地，环形边界。
-      switch (this.rng.nextInt(5)) {
-        case 0: w.x = (w.x + 1) % n; break;
-        case 1: w.x = (w.x + n - 1) % n; break;
-        case 2: w.y = (w.y + 1) % n; break;
-        case 3: w.y = (w.y + n - 1) % n; break;
-        default: break;
-      }
-    }
     this.s.tick += 1;
+    if (this.s.tick % TICKS_PER_DAY === 0) this.daily();
     this.s.rng = this.rng.state();
   }
 
@@ -81,5 +61,17 @@ export class Sim {
   /** 深拷贝的快照，可以存档、也可以用 new Sim(snapshot) 恢复。 */
   snapshot(): SimState {
     return cloneData(this.s);
+  }
+
+  private daily(): void {
+    const world = this.s.config.world;
+    const w = world.weather;
+    const fresh = w.min + (w.max - w.min) * this.rng.nextFloat();
+    this.s.weather = w.persistence * this.s.weather + (1 - w.persistence) * fresh;
+
+    const { dayOfYear } = calendar(this.s.tick);
+    const growth = monthlyCurve(world.vegetation.growthByMonth, dayOfYear) * this.s.weather;
+    const decay = monthlyCurve(world.vegetation.decayByMonth, dayOfYear);
+    growVegetation(this.s.grid, world, growth, decay);
   }
 }
