@@ -1,0 +1,10 @@
+{
+  // 模拟内核单独做一次类型检查：不带 DOM 类型、不带任何宿主环境类型。
+  // 一旦 src/sim 里用到 window、document、requestAnimationFrame 等，这里会直接报错。
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/sim"]
+}
