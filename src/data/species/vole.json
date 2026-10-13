@@ -13,8 +13,8 @@
     "breedingByMonth": [1, 1, 1, 1, 1, 1, 1, 0.8, 0.3, 0, 0, 0.2]
   },
   "survival": { "adultAnnual": 0.1 },
-  "maxLifespanYears": 2,
+  "maxLifespanYears": 3.3,
   "movement": { "dailyRangeM": 30 },
-  "initialDensityPerHa": 60,
-  "source": "【未核对】体重、窝仔、妊娠期、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。野外成体年存活率、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。"
+  "initialDensityPerHa": 19.5,
+  "source": "已核对（docs/DATA_CHECK.md）。体重、窝仔数、妊娠期、性成熟与 PanTHERIA 1.0（Jones et al. 2009）、AnAge Build 15（Tacutu et al. 2018）一致；最长寿命取 PanTHERIA 的 MaxLongevity（39.6 个月）；开局密度取 PanTHERIA 的 PopulationDensity（1949 只/平方公里，田鼠密度年际变化很大，这是平均口径）；日活动范围与 PanTHERIA 家域折算一致。两窝间隔取 25 天，比两库的 20 天略长：繁殖季内的平均值。野外成体年存活率、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。"
 }

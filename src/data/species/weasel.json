@@ -3,35 +3,18 @@
   "name": "伶鼬",
   "scientificName": "Mustela nivalis",
   "diet": "carnivore",
-  "bodyMassKg": 0.1,
+  "bodyMassKg": 0.078,
   "activity": "cathemeral",
   "reproduction": {
     "litterSize": 6,
     "gestationDays": 35,
     "litterIntervalDays": 60,
     "ageAtMaturityDays": 100,
-    "breedingByMonth": [
-      0.5,
-      1,
-      1,
-      1,
-      1,
-      1,
-      0.5,
-      0,
-      0,
-      0,
-      0,
-      0.2
-    ]
+    "breedingByMonth": [0.5, 1, 1, 1, 1, 1, 0.5, 0, 0, 0, 0, 0.2]
   },
-  "survival": {
-    "adultAnnual": 0.25
-  },
-  "maxLifespanYears": 3,
-  "movement": {
-    "dailyRangeM": 800
-  },
-  "initialDensityPerHa": 0.03,
-  "source": "【未核对】体重、窝仔、妊娠期、两窝间隔、性成熟、最长寿命为凭已有知识填写的估计，尚未对照 PanTHERIA / AnAge 核对（见 docs/DATA_CHECK.md）。繁殖参数取田鼠多的年份那一侧（一年可两到三窝）；野外成体年存活率、繁殖月份、日活动范围为文献常见范围内的估计（见 docs/MODEL.md）。阶段 0 第 6 步调参时加入草原。"
+  "survival": { "adultAnnual": 0.25 },
+  "maxLifespanYears": 10,
+  "movement": { "dailyRangeM": 800 },
+  "initialDensityPerHa": 0.13,
+  "source": "已核对（docs/DATA_CHECK.md）。体重取 PanTHERIA 1.0（Jones et al. 2009）的 AdultBodyMass（78 克）；妊娠期、性成熟在 PanTHERIA 与 AnAge Build 15（Tacutu et al. 2018）的范围内；最长寿命取 PanTHERIA 的 MaxLongevity（120 个月，圈养记录）；开局密度取 PanTHERIA 的 PopulationDensity（12.9 只/平方公里）。与两库不同的：两窝间隔两库是全年平均（一年约一窝），伶鼬在田鼠多的年份一季可两窝，模型按田鼠多的那一侧取 60 天；窝仔数取 6，在文献 4–8 的范围内，略高于两库的平均 5。日活动范围是'每天走多远'，比家域折算的直径大。野外成体年存活率、繁殖月份为文献常见范围内的估计（见 docs/MODEL.md）。"
 }

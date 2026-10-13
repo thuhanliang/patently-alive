@@ -8,6 +8,7 @@ import {
   NEST_STAGES,
   PREDATION_HALF_SATURATION_DAYS,
   type DerivedSpecies,
+  usableMeal,
 } from './physiology';
 import type { Rng } from './rng';
 import { binomial, stochasticRound } from './sample';
@@ -116,7 +117,7 @@ export interface DailyContext {
 }
 
 /**
- * 一天的种群推演，逐格进行：捕食 → 进食 → 出生 → 死亡，最后整张图一起扩散。
+ * 一天的种群推演：捕食先按区块算好（捕食者跑遍家域），再逐格进行：捕食 → 进食 → 出生 → 死亡，最后整张图一起扩散。
  * （长大由传送带在这之前统一挪段，见 shiftStages。）
  * 先捕食：今天被吃掉的动物不再分走植被。
  * 返回各物种当天的账目。
@@ -127,9 +128,10 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
   const cells = grid.width * grid.height;
   const fed = new Float64Array(species.length);
   const { crowding, blockOf } = ctx;
+  const hunting = huntingByBlock(ctx, crowding[0]!.length);
 
   for (let c = 0; c < cells; c++) {
-    hunt(ctx, c, fed, stats);
+    hunt(ctx, c, hunting, fed, stats);
     graze(ctx, c, fed);
     const block = blockOf[c]!;
     for (let s = 0; s < species.length; s++) {
@@ -249,43 +251,81 @@ function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
   for (let s = 0; s < species.length; s++) if (species[s]!.herbivore) fed[s] = ratio;
 }
 
+/** 一个捕食者物种在各区块的捕猎结果。 */
+interface BlockHunting {
+  /** 每只可捕猎物（适合度为 1 时）今天被抓的概率。 */
+  kill: Float64Array;
+  /** 捕食者吃饱的比例。 */
+  fed: Float64Array;
+}
+
 /**
- * 捕食（II 型功能反应，带捕食者之间的分摊）：
- *   可捕生物量 B = Σ 适合度 × 数量 × 体重；需求 D = 捕食者数 × 日需求
+ * 捕食（II 型功能反应，带捕食者之间的分摊），按拥挤区块统计：
+ *   可捕生物量 B = Σ 适合度 × 数量 × 一只能用上的肉量；需求 D = 捕食者数 × 日需求
  *   捕获量 = D · B / (B + 半饱和天数 · D)
- * 再按各猎物在 B 里的份额分摊成每种猎物的死亡概率。
+ * 一个区块 8×8 格（50 米一格时 0.16 平方公里），和鼬类的家域相当（PanTHERIA：白鼬约 0.11、伶鼬约 0.07 平方公里）。
+ * 捕食者一天要跑遍家域，只看自己那一格会让它在猎物稀疏时饿死，和展开后的个体对不上。
  * 捕食者吃饱的程度按期望捕获量算：一天抓到几只是随机的，但动物有体内储备，
  * 饿不饿取决于平均捕获率，不取决于某一天的运气。
+ * 返回值按物种下标排列，食草动物是 null。
  */
-function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]): void {
-  const { species, populations, prey, rng } = ctx;
-  for (let s = 0; s < species.length; s++) {
-    const pred = species[s]!;
-    if (pred.herbivore) continue;
-    const hunters = sizeWeighted(populations[s]!, c);
-    if (hunters === 0) {
-      fed[s] = 1;
-      continue;
-    }
+function huntingByBlock(ctx: DailyContext, blocks: number): (BlockHunting | null)[] {
+  const { species, populations, prey, blockOf } = ctx;
+  const cells = blockOf.length;
+  return species.map((pred, s) => {
+    if (pred.herbivore) return null;
+    const hunters = new Float64Array(blocks);
+    const available = new Float64Array(blocks);
     const row = prey[s]!;
-    let available = 0;
-    for (let j = 0; j < species.length; j++) {
-      const w = row[j]!;
-      if (w === 0) continue;
-      available += w * sizeWeighted(populations[j]!, c) * species[j]!.bodyMassG;
+    // 每种猎物（成体 / 幼体）抓到一只能派上用场的肉量，见 usableMeal。
+    // 格子里的捕食者不分个体，按成体的需求算上限（幼体捕食者在个体模型里上限减半，是已知的小差别）。
+    const adultMeal = species.map((sp) => usableMeal(pred, pred.dailyIntakeG, sp.bodyMassG));
+    const juvenileMeal = species.map((sp) => usableMeal(pred, pred.dailyIntakeG, sp.bodyMassG * JUVENILE_SIZE_FACTOR));
+    for (let c = 0; c < cells; c++) {
+      const b = blockOf[c]!;
+      hunters[b] = hunters[b]! + sizeWeighted(populations[s]!, c);
+      for (let j = 0; j < species.length; j++) {
+        const w = row[j]!;
+        if (w === 0) continue;
+        const pop = populations[j]!;
+        available[b] = available[b]! + w * (pop.adults[c]! * adultMeal[j]! + juvenilesAt(pop, c) * juvenileMeal[j]!);
+      }
     }
-    const demand = hunters * pred.dailyIntakeG;
-    if (available <= 0) {
-      fed[s] = 0;
-      continue;
+    const kill = new Float64Array(blocks);
+    const fed = new Float64Array(blocks);
+    for (let b = 0; b < blocks; b++) {
+      const demand = hunters[b]! * pred.dailyIntakeG;
+      const avail = available[b]!;
+      if (demand === 0) {
+        fed[b] = 1;
+        continue;
+      }
+      if (avail <= 0) continue;
+      // 捕获量不会超过区块里实际可捕的猎物。
+      const captured = Math.min(avail, (demand * avail) / (avail + PREDATION_HALF_SATURATION_DAYS * demand));
+      kill[b] = captured / avail;
+      fed[b] = captured / demand;
     }
-    // 捕获量不会超过格子里实际可捕的猎物。
-    const captured = Math.min(available, (demand * available) / (available + PREDATION_HALF_SATURATION_DAYS * demand));
+    return { kill, fed };
+  });
+}
+
+/** 按区块的捕猎结果，在这一格里抽出被抓的猎物；fed[s] 记下捕食者吃饱的比例。 */
+function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | null)[], fed: Float64Array, stats: DayStats[]): void {
+  const { species, populations, prey, rng } = ctx;
+  const b = ctx.blockOf[c]!;
+  for (let s = 0; s < species.length; s++) {
+    const h = hunting[s];
+    if (!h) continue;
+    fed[s] = h.fed[b]!;
+    const kill = h.kill[b]!;
+    if (kill === 0) continue;
+    const row = prey[s]!;
     for (let j = 0; j < species.length; j++) {
       const w = row[j]!;
       if (w === 0) continue;
       // 每只该种猎物今天被抓的概率。
-      const p = Math.min(1, (captured * w) / available);
+      const p = Math.min(1, kill * w);
       const pop = populations[j]!;
       const ka = binomial(rng, pop.adults[c]!, p);
       pop.adults[c] = pop.adults[c]! - ka;
@@ -296,7 +336,6 @@ function hunt(ctx: DailyContext, c: number, fed: Float64Array, stats: DayStats[]
         stats[j]!.deathsPredation += kj;
       }
     }
-    fed[s] = captured / demand;
   }
 }
 
