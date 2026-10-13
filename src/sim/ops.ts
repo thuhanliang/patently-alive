@@ -110,9 +110,11 @@ export const SANDBOX_RULES: Rules = {
  * 操作日志文件 = 存档：完整的推演配置（含种子、世界、物种数据）+ 开局规则 + 按时间排序的操作。
  * 同一份日志回放出同一个结果。
  */
+export const LOG_FORMAT = 'patently-alive/oplog';
+
 export const OpLogSchema = z
   .object({
-    format: z.literal('patently-alive/oplog'),
+    format: z.literal(LOG_FORMAT),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
     version: z.literal(6),
     config: SimConfigSchema,

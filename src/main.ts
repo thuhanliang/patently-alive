@@ -1,5 +1,5 @@
 import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, scenarioRules, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { checksum, decodeData, FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, LOG_FORMAT, SAVE_FORMAT, SAVE_VERSION, SaveSchema, scenarioRules, serialize, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
@@ -13,6 +13,7 @@ import { DeathPanel } from './ui/deathPanel';
 import { FieldLog } from './ui/fieldLog';
 import { bindFieldTools } from './ui/fieldTools';
 import { bindLayerControls } from './ui/layerControls';
+import { readSlot, writeSlot } from './ui/saveSlot';
 import { bindTimeControls } from './ui/timeControls';
 import { bindToolControls } from './ui/toolControls';
 
@@ -118,6 +119,48 @@ async function main(): Promise<void> {
   };
   submit({ type: 'setSpeed', speed: intParam('speed', 1, 1000) });
 
+  // 这一局的标签：存档文件名和浏览器存档位都用它（情景、情景当沙盒、草原各不相同）。
+  const label = `${rules.scenario ?? 'grassland'}${rules.goal ? '' : '-sandbox'}`;
+
+  /** 载入存档文件或操作日志：存档直接装回快照，日志从头回放。 */
+  const loadText = (text: string): void => {
+    try {
+      const json = JSON.parse(text) as { format?: unknown; version?: unknown };
+      const isSave = json.format === SAVE_FORMAT;
+      if (isSave && json.version !== SAVE_VERSION) {
+        status.textContent = `存档版本是 ${String(json.version)}，这个版本的游戏只认 ${SAVE_VERSION}`;
+        return;
+      }
+      if (!isSave && json.format !== LOG_FORMAT) {
+        status.textContent = `不认识的文件格式：${String(json.format)}`;
+        return;
+      }
+      const parsed = isSave ? SaveSchema.safeParse(decodeData(json)) : OpLogSchema.safeParse(json);
+      if (!parsed.success) {
+        status.textContent = `${isSave ? '存档' : '操作日志'}内容不对：${parsed.error.issues[0]?.message ?? ''}`;
+        return;
+      }
+      const log = 'log' in parsed.data ? parsed.data.log : parsed.data;
+      // 画面、曲线都是按当前世界和物种建的；世界或物种不同的存档暂不支持载入。
+      // 按内容比（校验和和键的顺序无关；存档文件里的键是排过序的）。
+      const cur = session.exportLog().config;
+      const same =
+        checksum(log.config.world) === checksum(cur.world) &&
+        checksum(log.config.species) === checksum(cur.species) &&
+        checksum(log.rules) === checksum(session.rules) &&
+        checksum(log.config.tools ?? null) === checksum(cur.tools ?? null);
+      if (!same) {
+        status.textContent = '这份存档的世界、物种、工具数据或开局规则和当前不同，暂不支持载入';
+        return;
+      }
+      const next = 'log' in parsed.data ? Session.restoreParsed(parsed.data) : Session.replay(log);
+      restart(next);
+      status.textContent = `已${isSave ? '读档' : '回放'}到第 ${next.sim.day} 天`;
+    } catch (e) {
+      status.textContent = `无法载入：${(e as Error).message}`;
+    }
+  };
+
   const tools = bindToolControls(
     el('tool-bar'),
     session.sim.species.map((s) => ({ id: s.params.id, name: s.params.name })),
@@ -127,32 +170,30 @@ async function main(): Promise<void> {
         restart(newSession(seed));
         submit({ type: 'setSpeed', speed });
       },
-      exportLog: () => session.exportLog(),
-      importLog: (text) => {
-        try {
-          const json: unknown = JSON.parse(text);
-          const parsed = OpLogSchema.safeParse(json);
-          if (!parsed.success) {
-            status.textContent = `不是有效的操作日志：${parsed.error.issues[0]?.message ?? ''}`;
-            return;
-          }
-          // 画面、曲线都是按当前世界和物种建的；世界或物种不同的日志暂不支持载入。
-          const cur = session.exportLog().config;
-          const same =
-            JSON.stringify(parsed.data.config.world) === JSON.stringify(cur.world) &&
-            JSON.stringify(parsed.data.config.species) === JSON.stringify(cur.species) &&
-            JSON.stringify(parsed.data.rules) === JSON.stringify(session.rules) &&
-            JSON.stringify(parsed.data.config.tools) === JSON.stringify(cur.tools);
-          if (!same) {
-            status.textContent = '这份日志的世界、物种、工具数据或开局规则和当前不同，暂不支持载入';
-            return;
-          }
-          const next = Session.replay(parsed.data);
-          restart(next);
-          status.textContent = `已回放到第 ${next.sim.tick} tick`;
-        } catch (e) {
-          status.textContent = `日志无法回放：${(e as Error).message}`;
-        }
+      exportFile: () => ({
+        name: `patently-alive-${label}-seed${session.sim.state.config.seed}-day${session.sim.day}.json`,
+        text: serialize(session.save()),
+      }),
+      exportLog: () => ({
+        name: `patently-alive-${label}-seed${session.sim.state.config.seed}-day${session.sim.day}-log.json`,
+        text: JSON.stringify(session.exportLog()),
+      }),
+      importFile: (text) => loadText(text),
+      quickSave: () => {
+        const day = session.sim.day;
+        writeSlot(label, serialize(session.save())).then(
+          () => (status.textContent = `已存档（第 ${day} 天）`),
+          (e: Error) => (status.textContent = `存档失败：${e.message}`),
+        );
+      },
+      quickLoad: () => {
+        readSlot(label).then(
+          (v) => {
+            if (!v) status.textContent = '这个情景还没有存档';
+            else loadText(v.text);
+          },
+          (e: Error) => (status.textContent = `读档失败：${e.message}`),
+        );
       },
     },
     rules.allowRelease,

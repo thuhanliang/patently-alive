@@ -1,14 +1,18 @@
-import type { OpLog } from '../sim';
-
 export interface ToolCallbacks {
   reseed(seed: number): void;
-  exportLog(): OpLog;
-  /** 载入的文件原文；解析和校验由回调负责，出错时在状态栏说明。 */
-  importLog(text: string): void;
+  /** 导出存档文件：文件名和内容。 */
+  exportFile(): { name: string; text: string };
+  /** 只导出操作日志（小，可以从头回放；交流、报 bug 用）。 */
+  exportLog(): { name: string; text: string };
+  /** 载入的文件原文（存档或操作日志）；解析和校验由回调负责，出错时在状态栏说明。 */
+  importFile(text: string): void;
+  /** 快速存档 / 读档（浏览器里的一个存档位）。 */
+  quickSave(): void;
+  quickLoad(): void;
 }
 
 /**
- * 工具栏：投放（选物种和数量，打开投放模式后点地图）、改种子、导出 / 载入操作日志。
+ * 工具栏：投放（选物种和数量，打开投放模式后点地图）、改种子、存档 / 读档、导出 / 载入存档文件。
  * 返回的 isReleasing() 告诉地图点击该不该当成投放。
  */
 export function bindToolControls(
@@ -55,17 +59,20 @@ export function bindToolControls(
   });
 
   const exportBtn = document.createElement('button');
-  exportBtn.textContent = '导出日志';
-  exportBtn.addEventListener('click', () => {
-    const log = cb.exportLog();
-    const blob = new Blob([JSON.stringify(log)], { type: 'application/json' });
+  const download = ({ name, text }: { name: string; text: string }): void => {
+    const blob = new Blob([text], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `patently-alive-seed${log.config.seed}.json`;
+    a.download = name;
     a.click();
     // 有的浏览器异步开始下载，立刻释放链接会让下载失败。
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-  });
+  };
+  exportBtn.textContent = '导出存档';
+  exportBtn.addEventListener('click', () => download(cb.exportFile()));
+  const exportLogBtn = document.createElement('button');
+  exportLogBtn.textContent = '导出日志';
+  exportLogBtn.addEventListener('click', () => download(cb.exportLog()));
 
   const file = document.createElement('input');
   file.type = 'file';
@@ -75,23 +82,33 @@ export function bindToolControls(
     const f = file.files?.[0];
     if (!f) return;
     try {
-      cb.importLog(await f.text());
+      cb.importFile(await f.text());
     } finally {
       // 清空，下次选同一个文件也能触发。
       file.value = '';
     }
   });
   const importBtn = document.createElement('button');
-  importBtn.textContent = '载入日志回放';
+  importBtn.textContent = '载入存档或日志';
   importBtn.addEventListener('click', () => file.click());
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '存档';
+  saveBtn.addEventListener('click', () => cb.quickSave());
+  const loadBtn = document.createElement('button');
+  loadBtn.textContent = '读档';
+  loadBtn.addEventListener('click', () => cb.quickLoad());
 
   const row1 = document.createElement('div');
   row1.className = 'bar';
   row1.append(select, count, toggle);
   const row2 = document.createElement('div');
   row2.className = 'bar';
-  row2.append(seed, reseed, exportBtn, importBtn, file);
-  bar.append(...(allowRelease ? [row1] : []), row2);
+  row2.append(seed, reseed);
+  const row3 = document.createElement('div');
+  row3.className = 'bar';
+  row3.append(saveBtn, loadBtn, exportBtn, exportLogBtn, importBtn, file);
+  bar.append(...(allowRelease ? [row1] : []), row2, row3);
 
   return {
     isReleasing: () => releasing,
