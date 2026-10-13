@@ -182,6 +182,7 @@ for (const sp of species) {
   row('最长寿命（年）', sp.maxLifespanYears, P.maxLongevityMonths === null || P.maxLongevityMonths === undefined ? null : P.maxLongevityMonths / 12, A.maxLongevityYears, 1);
   row('开局密度（只/平方公里）', sp.initialDensityPerHa * 100, P.populationDensityPerKm2, null, 1);
   row('日活动范围直径（米；PanTHERIA 由家域面积折算）', sp.movement.dailyRangeM, homeDiamM, null);
+  if (sp.movement.homeRangeKm2 !== undefined) row('家域面积（平方公里）', sp.movement.homeRangeKm2, P.homeRangeKm2, null, 3);
   out.push(`| 活动时段 | ${sp.activity} | ${P.activityCycle != null ? PAN_ACTIVITY[P.activityCycle] ?? P.activityCycle : '—'} | — | 人工比对 |`);
   out.push('');
 }

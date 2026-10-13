@@ -265,7 +265,7 @@ export class Sim {
 
     const breeding = this.derived.map((d) => d.params.reproduction.breedingByMonth[month]!);
     const crowding = crowdingByBlock(
-      { species: this.derived, populations: this.s.populations, ...this.blocks },
+      { species: this.derived, populations: this.s.populations, prey: this.prey, ...this.blocks },
       { individuals: { ...this.s.individuals, width: this.s.grid.width }, pending: this.s.emigrants },
     );
 

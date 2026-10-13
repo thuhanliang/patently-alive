@@ -63,6 +63,6 @@ describe('确定性', () => {
   it('长跑校验和固定（改了推演规则就要有意识地更新它）', () => {
     const sim = Sim.create(makeConfig(1, { ...grassland, width: 48, height: 48 }));
     sim.stepN(TICKS_PER_DAY * 360 * 2);
-    expect(checksum(sim.state)).toMatchInlineSnapshot(`1419134994`);
+    expect(checksum(sim.state)).toMatchInlineSnapshot(`65457233`);
   });
 });

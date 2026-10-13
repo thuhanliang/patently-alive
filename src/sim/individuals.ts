@@ -8,11 +8,12 @@ import {
   MAX_GRAZE_FRACTION,
   NEST_STAGES,
   SATIATION,
+  catchSuitability,
   isActive,
   juvenileStageAt,
-  sizeSuitability,
   type DerivedSpecies,
   usableMeal,
+  breedingRoom,
 } from './physiology';
 import { countAt, type DayStats, type Population } from './population';
 import type { Rng } from './rng';
@@ -402,7 +403,7 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (ddx * ddx + ddy * ddy > r2) continue;
           const prey = species[qs]!;
           const preyMass = prey.bodyMassG * sizeOf(prey, ind.born[q]!, ctx.day);
-          const chance = sizeSuitability(preyMass / predMass) * CATCH_SUCCESS;
+          const chance = catchSuitability(pred, prey, preyMass / predMass) * CATCH_SUCCESS;
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
           ctx.stats[qs]!.deathsPredation += 1;
@@ -464,7 +465,7 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     const breeding = ctx.breeding[s]!;
     if (!juvenile && ind.female[i] && breeding > 0) {
       const block = ctx.blockOf[Math.floor(ind.y[i]!) * ctx.width + Math.floor(ind.x[i]!)]!;
-      const room = 1 - ctx.crowding[s]![block]!;
+      const room = breedingRoom(sp, ctx.crowding[s]![block]!);
       const condition = reserve >= 0 ? 1 : 0.5;
       if (room > 0 && rng.nextFloat() < breeding * sp.litterRate * room * condition) {
         const size = sp.params.reproduction.litterSize;

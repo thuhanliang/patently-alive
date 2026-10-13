@@ -40,6 +40,13 @@ export const SpeciesSchema = z
     movement: z.object({
       /** 每天活动范围的典型直径（米），决定扩散快慢。 */
       dailyRangeM: z.number().positive(),
+      /** 家域面积（平方公里），参考数据。 */
+      homeRangeKm2: z.number().positive().optional(),
+      /**
+       * 是否守固定领地（不随食物多少伸缩）。守领地的物种按家域面积限定能挤多密：领地占满了就不再繁殖。
+       * 否则按体重的典型密度算（Damuth 定律）。需要 homeRangeKm2。
+       */
+      territorial: z.boolean().optional(),
     }),
     /** 开局密度（只 / 公顷）。 */
     initialDensityPerHa: z.number().min(0),
@@ -47,6 +54,9 @@ export const SpeciesSchema = z
   })
   .refine((s) => s.reproduction.litterIntervalDays >= s.reproduction.gestationDays, {
     message: 'litterIntervalDays 不能短于 gestationDays',
+  })
+  .refine((s) => !s.movement.territorial || s.movement.homeRangeKm2 !== undefined, {
+    message: 'territorial 需要 homeRangeKm2',
   });
 
 export type SpeciesParams = z.infer<typeof SpeciesSchema>;

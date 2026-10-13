@@ -24,6 +24,14 @@ const DAMUTH_COEF = 16982;
 const CROWDING_FACTOR = 20;
 /** 拥挤程度按多大的区块统计（格）。动物会在几格之间走动，单格计数太跳。 */
 export const CROWDING_BLOCK_CELLS = 8;
+/** 有领地的物种，同一块地上能重叠几个家域（见 crowdingPerKm2）。 */
+export const TERRITORY_OVERLAP = 2;
+/**
+ * 不守固定领地的食肉动物，领地里要有几天食量的猎物才算"有地方住"（见 crowdingByBlock）。
+ * 量级按 PanTHERIA 推算：田鼠平均密度 19.5 只/公顷时，伶鼬家域（0.07 平方公里）里约有 120 天的食量，两只共享约 60 天。
+ * 取 60 时伶鼬被压得太稳、田鼠没有多年周期；调到 15，出现约 6 年的田鼠–伶鼬周期且不灭绝（见 docs/MODEL.md）。
+ */
+export const PREY_STOCK_DAYS = 15;
 /**
  * 幼体的"传送带"：格子里的幼体分成几个年龄段，每个物种每隔 stageDays 天（性成熟天数 ÷ 段数）
  * 整体往前挪一段，最后一段并入成体。挪段只是交换数组，不用抽随机数。
@@ -79,6 +87,19 @@ export interface DerivedSpecies {
   /** 个体：体内储备上限（天）。 */
   readonly maxReserveDays: number;
   readonly maxAgeDays: number;
+  /** 守固定领地：拥挤上限按领地算，见 breedingRoom。 */
+  readonly territorial: boolean;
+}
+
+/**
+ * 每平方公里最多挤多少只（超过就不再繁殖）。
+ * 守固定领地的：领地占满为止，同一块地上允许 TERRITORY_OVERLAP 只（雌雄领地重叠）；
+ * 其余按 Damuth 定律的典型密度 × CROWDING_FACTOR。取两者中小的。
+ */
+function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
+  const byMass = typicalPerKm2 * CROWDING_FACTOR;
+  const home = p.movement.homeRangeKm2;
+  return p.movement.territorial && home !== undefined ? Math.min(byMass, TERRITORY_OVERLAP / home) : byMass;
 }
 
 export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
@@ -100,13 +121,14 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
     stageDays: Math.max(1, Math.floor(p.reproduction.ageAtMaturityDays / JUVENILE_STAGES)),
     litterRate: breedingDays > 0 ? 1 / Math.min(p.reproduction.litterIntervalDays, breedingDays) : 0,
-    crowdingCapacity: typicalPerKm2 * CROWDING_FACTOR * cellKm2,
+    crowdingCapacity: crowdingPerKm2(p, typicalPerKm2) * cellKm2,
     moveProb: Math.min(0.5, cellsPerDay / 2),
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
     hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
     activeHours: activeHoursPerDay(p.activity),
     maxReserveDays: RESERVE_COEF * detPow(p.bodyMassKg, 0.25),
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
+    territorial: p.movement.territorial === true && p.movement.homeRangeKm2 !== undefined,
   };
 }
 
@@ -184,16 +206,18 @@ export function activityOverlap(a: Activity, b: Activity): number {
 
 /**
  * 体型适合度：猎物体重 / 捕食者体重之比 → [0, 1]。
- * 太小不值得抓，和自己差不多大或更大就越来越难抓。分段线性。
+ * 太小不值得抓；比自己大得越多越难抓，到 12 倍就抓不动了。分段线性。
  */
 const SIZE_RATIO_POINTS: Array<[number, number]> = [
   [0.005, 0],
   [0.02, 0.5],
   [0.05, 1],
   [0.5, 1],
-  [1, 0.6],
-  [3, 0.3],
-  [8, 0],
+  [1, 0.7],
+  // 鼬科能放倒比自己重好几倍的猎物：兔子（约为白鼬体重的 6 倍）是英国、新西兰白鼬的主要猎物。
+  [3, 0.5],
+  [8, 0.15],
+  [12, 0],
 ];
 
 export function sizeSuitability(preyToPredatorMass: number): number {
@@ -217,9 +241,19 @@ export function preyMatrix(species: readonly DerivedSpecies[]): number[][] {
   return species.map((pred, i) =>
     species.map((prey, j) => {
       if (pred.herbivore || i === j) return 0;
-      return sizeSuitability(prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity);
+      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity);
     }),
   );
+}
+
+/**
+ * 捕食者能不能抓这种猎物（这一只和那一只的体重比 → [0, 1]）。
+ * 食草动物按体型适合度；别的食肉动物会还手，只抓成体比自己物种轻的
+ * （白鼬会吃伶鼬，伶鼬不会去抓白鼬）。这条按物种的成体体重判断，格子模型和个体模型才一致。
+ */
+export function catchSuitability(pred: DerivedSpecies, prey: DerivedSpecies, preyToPredatorMass: number): number {
+  if (!prey.herbivore && prey.bodyMassG >= pred.bodyMassG) return 0;
+  return sizeSuitability(preyToPredatorMass);
 }
 
 /**
@@ -229,4 +263,13 @@ export function preyMatrix(species: readonly DerivedSpecies[]): number[][] {
  */
 export function usableMeal(pred: DerivedSpecies, needG: number, preyMassG: number): number {
   return Math.min(preyMassG, needG * (1 + pred.maxReserveDays));
+}
+
+/**
+ * 拥挤对繁殖的折扣（crowding：所在区块的拥挤程度，1 = 住满）。
+ * 一般物种越挤生得越少（线性）；有领地的物种只要还有空领地就照常繁殖，占满了才停。
+ */
+export function breedingRoom(sp: DerivedSpecies, crowding: number): number {
+  if (sp.territorial) return crowding < 1 ? 1 : 0;
+  return Math.max(0, 1 - crowding);
 }

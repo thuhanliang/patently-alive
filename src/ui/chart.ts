@@ -11,12 +11,19 @@ const STYLES: Array<{ color: string; dash: number[] }> = [
 const VEG_STYLE = { color: '#666666', dash: [] as number[] };
 
 /**
- * 种群曲线：对数纵轴（田鼠几十万、白鼬几百只，要放在同一张图上），
- * 横轴是最近几年。植被单独用右侧线性刻度。
+ * 纵轴的两种看法：
+ * - relative：每个物种按自己在图里的最高值缩放（0–100%），起伏一眼就能看出来；
+ * - log：对数纵轴，田鼠几十万、白鼬几百只放在同一把尺子上比。
+ */
+export type ChartScale = 'relative' | 'log';
+
+/**
+ * 种群曲线：横轴是最近几年，纵轴见 ChartScale。植被单独用右侧线性刻度。
  */
 export class PopulationChart {
   private readonly ctx: CanvasRenderingContext2D;
   private drawnKey = '';
+  scale: ChartScale = 'relative';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -35,7 +42,7 @@ export class PopulationChart {
     const h = canvas.clientHeight;
     // 只有记录或尺寸变了才重画（暂停时不白画）。
     const n0 = history.length;
-    const key = `${n0}:${n0 > 0 ? history.day(n0 - 1) : -1}:${w}x${h}:${dpr}`;
+    const key = `${n0}:${n0 > 0 ? history.day(n0 - 1) : -1}:${w}x${h}:${dpr}:${this.scale}`;
     if (key === this.drawnKey) return;
     this.drawnKey = key;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
@@ -53,17 +60,25 @@ export class PopulationChart {
     const n = history.length;
     const species = history.labels.length - 1;
 
-    // 纵轴：10^0 到覆盖所有数据的 10 的整数次幂。
-    let maxVal = 10;
-    for (let s = 0; s < species; s++) for (let i = 0; i < n; i++) maxVal = Math.max(maxVal, history.value(s, i));
+    // 纵轴。相对模式下每个物种各有一把尺子（自己在图里的最高值 = 100%）。
+    const maxOf = Array.from({ length: species }, (_, s) => {
+      let m = 0;
+      for (let i = 0; i < n; i++) m = Math.max(m, history.value(s, i));
+      return m;
+    });
+    const maxVal = Math.max(10, ...maxOf);
     const decades = Math.ceil(Math.log10(maxVal));
-    const yOf = (v: number): number => pad.t + ph - (Math.log10(Math.max(1, v)) / decades) * ph;
+    const yLog = (v: number): number => pad.t + ph - (Math.log10(Math.max(1, v)) / decades) * ph;
+    const yRel = (s: number) => (v: number): number => pad.t + ph - (maxOf[s]! > 0 ? v / maxOf[s]! : 0) * ph;
 
     ctx.font = '10px ui-monospace, monospace';
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
-    for (let d = 0; d <= decades; d++) {
-      const y = yOf(10 ** d);
+    const ticks: Array<[number, string]> =
+      this.scale === 'log'
+        ? Array.from({ length: decades + 1 }, (_, d) => [yLog(10 ** d), d === 0 ? '1' : `1e${d}`])
+        : [0, 0.25, 0.5, 0.75, 1].map((f) => [pad.t + ph - f * ph, `${f * 100}%`]);
+    for (const [y, label] of ticks) {
       ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.beginPath();
       ctx.moveTo(pad.l, y);
@@ -71,7 +86,7 @@ export class PopulationChart {
       ctx.stroke();
       ctx.fillStyle = '#888';
       ctx.textAlign = 'right';
-      ctx.fillText(d === 0 ? '1' : `1e${d}`, pad.l - 4, y + 3);
+      ctx.fillText(label, pad.l - 4, y + 3);
     }
 
     // 横轴：最近 window 天，按年画刻度。
@@ -117,7 +132,7 @@ export class PopulationChart {
     ctx.fillText('g/m²', pad.l + pw + 4, pad.t + 14);
     ctx.fillText('0', pad.l + pw + 4, pad.t + ph + 3);
 
-    for (let s = 0; s < species; s++) line(s, STYLES[s % STYLES.length]!, yOf);
+    for (let s = 0; s < species; s++) line(s, STYLES[s % STYLES.length]!, this.scale === 'log' ? yLog : yRel(s));
 
     // 图例：名字 + 当前数量。
     ctx.setLineDash([]);
@@ -141,5 +156,11 @@ export class PopulationChart {
       legend(`${history.labels[s]} ${now}`, STYLES[s % STYLES.length]!);
     }
     legend(history.labels[species]!, VEG_STYLE);
+    // 纵轴说明放在图例右边；放不下（窄屏）就放到右下角。
+    const hint = this.scale === 'log' ? '对数纵轴（点图切换）' : '各自最高值 = 100%（点图切换）';
+    ctx.fillStyle = '#777';
+    ctx.textAlign = 'right';
+    const fits = lx + ctx.measureText(hint).width < pad.l + pw;
+    ctx.fillText(hint, pad.l + pw, fits ? 13 : pad.t + ph - 4);
   }
 }

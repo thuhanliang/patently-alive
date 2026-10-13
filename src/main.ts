@@ -40,6 +40,10 @@ async function main(): Promise<void> {
   const names = session.sim.species.map((s) => s.params.name);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(el<HTMLCanvasElement>('chart'), history, grassland.vegetation.maxBiomass);
+  // 点图切换纵轴：各自比例 ↔ 对数（只是看法，不进操作日志）。
+  el<HTMLCanvasElement>('chart').addEventListener('click', () => {
+    chart.scale = chart.scale === 'relative' ? 'log' : 'relative';
+  });
 
   /** 所有玩家操作都从这里进统一操作接口；被拒绝时在状态栏说明原因。 */
   const submit = (op: Op): boolean => {
