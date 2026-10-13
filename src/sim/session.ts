@@ -2,6 +2,7 @@ import { SimConfigSchema, type SimConfig } from './config';
 import { cloneData } from './data';
 import { costOf, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
 import { Sim } from './sim';
+import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
 import { TICKS_PER_DAY } from './time';
@@ -59,6 +60,26 @@ export class Session {
   /** 资源的只读视图。 */
   get resources(): Readonly<Resources> {
     return this.res;
+  }
+
+  /** 当前的警报，最响的在前（含资源类：满意度低、预算不够布最便宜的工具）。 */
+  alerts(): Alert[] {
+    const tools = this.config.tools;
+    const resources = tools
+      ? {
+          budget: this.res.budget,
+          satisfaction: this.res.satisfaction,
+          cheapestTool: Math.min(
+            tools.cull.cost,
+            tools.sample.cost,
+            tools.necropsy.cost,
+            ...tools.traps.map((t) => t.setupCost + t.nightlyCost),
+            // 最短的围栏是一格长。
+            ...tools.fences.map((f) => (f.costPerKm * this.config.world.cellSizeM) / 1000),
+          ),
+        }
+      : undefined;
+    return this.simulation.alerts(resources);
   }
 
   /** 现在空闲的兽医队数量。 */

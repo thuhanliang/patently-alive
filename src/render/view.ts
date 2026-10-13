@@ -5,11 +5,12 @@ import { TICKS_PER_DAY, type DerivedSpecies, type SimState } from '../sim';
 import { Camera } from './camera';
 import { GridLayer, type DataLayer } from './gridLayer';
 import { IndividualLayer } from './individualLayer';
+import { RegionLayer } from './regionLayer';
+import { CLOSE_UP_CELL_PX } from './camera';
 import { CELL_PX, mapWorldSize } from './projection';
 import { PAPER, speciesColor } from './palette';
 
 /** 格线在一格放大到多少屏幕像素以上时出现。 */
-const GRID_LINES_MIN_CELL_PX = 14;
 
 /**
  * 地图画面（田野笔记的占位画法，见 palette.ts）：只读推演状态，不改任何状态。
@@ -20,6 +21,7 @@ export class MapView {
   private readonly world = new Container();
   private readonly grid: GridLayer;
   private readonly individuals: IndividualLayer;
+  private readonly region: RegionLayer;
   private readonly annotations: AnnotationLayer;
   private lastTick = -1;
   private lastDay = -1;
@@ -39,8 +41,12 @@ export class MapView {
       species.map((sp) => shapes[shapeOf(sp.params.id)]),
       colors.map((c) => c.body),
     );
+    this.region = new RegionLayer(
+      species.map((sp) => shapes[shapeOf(sp.params.id)]),
+      colors.map((c) => c.body),
+    );
     this.annotations = new AnnotationLayer(state.config.tools);
-    this.world.addChild(this.grid.container, this.individuals.container, this.annotations.container);
+    this.world.addChild(this.grid.container, this.region.container, this.individuals.container, this.annotations.container);
     app.stage.addChild(this.world);
 
     this.camera.setWorld(mapWorldSize(width, height));
@@ -73,7 +79,7 @@ export class MapView {
 
   /** 镜头是否放大到了能看清个体的程度（和出现格线是同一个门槛）。 */
   get closeUp(): boolean {
-    return this.camera.zoom * CELL_PX >= GRID_LINES_MIN_CELL_PX;
+    return this.camera.zoom * CELL_PX >= CLOSE_UP_CELL_PX;
   }
 
   get canvas(): HTMLCanvasElement {
@@ -82,6 +88,16 @@ export class MapView {
 
   get ticker(): Application['ticker'] {
     return this.app.ticker;
+  }
+
+  /** 死亡热力图上最深那一片的数值（图例用）。 */
+  get deathLegendMax(): number {
+    return this.grid.lastMax;
+  }
+
+  /** 最响的警报在地图上的位置（朱红圈）；null 表示没有。 */
+  setAlertAt(at: { x: number; y: number } | null): void {
+    this.annotations.alertAt = at;
   }
 
   setLayer(layer: DataLayer): void {
@@ -105,14 +121,19 @@ export class MapView {
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (day !== this.lastDay) {
       this.grid.update(state, this.layer);
+      this.region.draw(state);
       this.lastDay = day;
     }
+    // 群落图标只在区域档显示：全图太挤（也不和数据图层抢），地块档已经看得见个体。
+    const cellPx = this.camera.zoom * CELL_PX;
+    this.region.container.visible = this.camera.nearestPreset === 'region' && cellPx < CLOSE_UP_CELL_PX;
+    this.annotations.alertRing.visible = cellPx < CLOSE_UP_CELL_PX;
     if (state.tick !== this.lastTick) {
       this.individuals.draw(state);
       this.lastTick = state.tick;
     }
     this.annotations.draw(state);
-    this.grid.setGridLinesVisible(this.camera.zoom * CELL_PX >= GRID_LINES_MIN_CELL_PX);
+    this.grid.setGridLinesVisible(this.camera.zoom * CELL_PX >= CLOSE_UP_CELL_PX);
     this.camera.apply(this.world);
   }
 }
