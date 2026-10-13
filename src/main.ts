@@ -1,8 +1,9 @@
 import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type WorldParams } from './data';
-import { FixedStepClock, OpLogSchema, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
-import { worldToCell, worldToCorner } from './render/projection';
+import { FixedStepClock, OpLogSchema, RECENT_HALF_LIFE_DAYS, SANDBOX_RULES, Session, type Rules, TICKS_PER_DAY, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
+import { AlertBanner } from './ui/alertBanner';
 import { bindCameraControls } from './ui/cameraControls';
 import { PopulationChart } from './ui/chart';
 import { PopulationHistory } from './ui/history';
@@ -64,6 +65,9 @@ async function main(): Promise<void> {
   const hud = new Hud(el('hud'));
   const deaths = new DeathPanel(el('deaths'), session.sim.species.map((s) => s.params.name));
   const captures = new FieldLog(el('captures'), el('exam-card'), session.sim.species, toolData, necropsyTemplates);
+  const alertBanner = new AlertBanner(el('alert'), session.sim.species.map((s) => s.params.name), (at) =>
+    view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
+  );
   const status = el('status');
   status.textContent = problem;
   const names = session.sim.species.map((s) => s.params.name);
@@ -79,10 +83,15 @@ async function main(): Promise<void> {
     chart.scale = chart.scale === 'relative' ? 'log' : 'relative';
   });
 
+  /** 上次算警报是哪一天；−1 表示下一帧重算。 */
+  let alertDay = -1;
+
   /** 所有玩家操作都从这里进统一操作接口；被拒绝时在状态栏说明原因。 */
   const submit = (op: Op): boolean => {
     const r = session.submit(op);
     status.textContent = r.ok ? '' : `操作被拒绝：${r.reason}`;
+    // 花了预算、扑杀降了满意度，资源类警报要马上更新，不等到第二天。
+    if (r.ok) alertDay = -1;
     return r.ok;
   };
 
@@ -92,6 +101,8 @@ async function main(): Promise<void> {
     hud.reset();
     deaths.reset();
     captures.reset();
+    alertBanner.reset();
+    alertDay = -1;
     history.clear();
     history.record(Math.floor(session.sim.tick / TICKS_PER_DAY), session.sim.state);
     view.redraw();
@@ -168,7 +179,17 @@ async function main(): Promise<void> {
       view.redraw();
     }
   });
-  bindLayerControls(el('layer-bar'), names, (layer) => view.setLayer(layer));
+  const layers = bindLayerControls(el('layer-bar'), names, (layer) => view.setLayer(layer));
+
+  // 警报每天由引擎算一次（操作成功后也重算）；地图上只圈最响的那一处。
+  const syncAlerts = (): void => {
+    const day = Math.floor(session.sim.tick / TICKS_PER_DAY);
+    if (day === alertDay) return;
+    alertDay = day;
+    const all = session.alerts();
+    alertBanner.update(day, all);
+    view.setAlertAt(all[0]?.at ?? null);
+  };
 
   const advance = (ticks: number): void => {
     for (let i = 0; i < ticks; i++) {
@@ -204,7 +225,9 @@ async function main(): Promise<void> {
     }
     advance(clock.advance(ticker.deltaMS));
     view.setFenceStart(field.fenceStart());
+    syncAlerts();
     view.draw(session.sim.state);
+    layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
     deaths.update(session.sim.state);
     captures.update(session.sim.state);

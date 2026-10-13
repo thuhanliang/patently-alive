@@ -1,7 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { Tools } from '../data';
 import type { SimState } from '../sim';
-import { BLUEPRINT } from './palette';
+import { BLUEPRINT, VERMILION } from './palette';
 import { CELL_PX } from './projection';
 
 /**
@@ -12,15 +12,19 @@ import { CELL_PX } from './projection';
 export class AnnotationLayer {
   readonly container = new Container();
   private readonly marks = new Graphics();
+  /** 警报圈单独一层：放大到地块档时它比屏幕还大，由 MapView 藏起来。 */
+  readonly alertRing = new Graphics();
   private readonly labels = new Container();
   private key = '';
 
   constructor(private readonly tools: Tools | undefined) {
-    this.container.addChild(this.marks, this.labels);
+    this.container.addChild(this.alertRing, this.marks, this.labels);
   }
 
   /** 正在画的围栏的起点（格角坐标），没在画时为 null。 */
   fenceStart: { x: number; y: number } | null = null;
+  /** 最响的警报的位置（格子坐标）；朱红圈，同一时间只有一处。 */
+  alertAt: { x: number; y: number } | null = null;
 
   draw(state: Readonly<SimState>): void {
     const start = this.fenceStart;
@@ -29,12 +33,22 @@ export class AnnotationLayer {
       '|' +
       state.fences.map((f) => f.id).join(',') +
       '|' +
-      (start ? `${start.x},${start.y}` : '');
+      (start ? `${start.x},${start.y}` : '') +
+      '|' +
+      (this.alertAt ? `${this.alertAt.x},${this.alertAt.y}` : '');
     if (key === this.key) return;
     this.key = key;
     this.marks.clear();
     for (const l of this.labels.removeChildren()) l.destroy();
 
+    this.alertRing.clear();
+    if (this.alertAt) {
+      // 警报：朱红的双圈，圈住这一片（区块约 8 格）。
+      const ax = (this.alertAt.x + 0.5) * CELL_PX;
+      const ay = (this.alertAt.y + 0.5) * CELL_PX;
+      this.alertRing.circle(ax, ay, CELL_PX * 6).stroke({ width: 3, color: VERMILION });
+      this.alertRing.circle(ax, ay, CELL_PX * 7.2).stroke({ width: 1.5, color: VERMILION, alpha: 0.6 });
+    }
     if (start) {
       // 围栏起点：蓝图蓝的小圆点加圈。
       const sx = start.x * CELL_PX;

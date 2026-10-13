@@ -1,10 +1,13 @@
 import type { Container } from 'pixi.js';
 import { CELL_PX, type Point } from './projection';
 
-/** 镜头的两档预设：全图看整片地图，地块看清一格一格。 */
-export type ZoomPreset = 'map' | 'plot';
+/** 镜头的三档预设：全图看整片地图和数据图层，区域看各片的群落图标，地块看清一只一只。 */
+export type ZoomPreset = 'map' | 'region' | 'plot';
 
-/** 地块档下一格在屏幕上的像素数。 */
+/** 区域档、地块档下一格在屏幕上的像素数。 */
+export const REGION_CELL_SCREEN_PX = 10;
+/** 一格放大到这么多像素起算"近处"：画格线、展开个体（地块档）。 */
+export const CLOSE_UP_CELL_PX = 14;
 const PLOT_CELL_SCREEN_PX = 28;
 const MAX_CELL_SCREEN_PX = 64;
 
@@ -45,16 +48,32 @@ export class Camera {
       this.zoom = this.fitZoom;
       this.center = { x: this.world.x / 2, y: this.world.y / 2 };
     } else {
-      this.zoom = PLOT_CELL_SCREEN_PX / CELL_PX;
+      this.zoom = this.presetZoom(p);
       if (focus) this.center = { ...focus };
     }
     this.clamp();
   }
 
-  /** 当前更接近哪一档，用于界面高亮。 */
+  private presetZoom(p: ZoomPreset): number {
+    if (p === 'map') return this.fitZoom;
+    // 区域档至少比全图放大一点，屏幕很大时也分得开；但不能放大到"近处"，否则会展开个体、改变推演。
+    if (p === 'region') return Math.min(Math.max(REGION_CELL_SCREEN_PX, this.fitZoom * CELL_PX * 1.6), CLOSE_UP_CELL_PX * 0.85) / CELL_PX;
+    return PLOT_CELL_SCREEN_PX / CELL_PX;
+  }
+
+  /** 当前更接近哪一档（按缩放倍数的对数距离），用于界面高亮。 */
   get nearestPreset(): ZoomPreset {
-    const plot = PLOT_CELL_SCREEN_PX / CELL_PX;
-    return Math.abs(Math.log(this.zoom / this.fitZoom)) <= Math.abs(Math.log(this.zoom / plot)) ? 'map' : 'plot';
+    const presets: ZoomPreset[] = ['map', 'region', 'plot'];
+    let best: ZoomPreset = 'map';
+    let bestD = Infinity;
+    for (const p of presets) {
+      const d = Math.abs(Math.log(this.zoom / this.presetZoom(p)));
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best;
   }
 
   screenToWorld(p: Point): Point {

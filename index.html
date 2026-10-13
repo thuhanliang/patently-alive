@@ -40,6 +40,11 @@
       #deaths { max-width: 360px; padding: 6px 10px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.35); white-space: pre-wrap; pointer-events: none; font-size: 12px; }
       @media (max-width: 760px) { #deaths { display: none; } }
       #status { max-width: 420px; text-align: right; color: var(--vermilion); min-height: 1.4em; }
+      #layer-bar { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+      #alert { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 420px; pointer-events: none; }
+      .alert-banner { pointer-events: auto; font: inherit; font-weight: 600; color: var(--paper); background: var(--vermilion); border: none; border-radius: 3px; padding: 4px 12px; box-shadow: 0 1px 0 rgba(31, 29, 26, 0.35); }
+      .alert-log { padding: 2px 8px; background: rgba(243, 237, 224, 0.88); border: 1px solid rgba(31, 29, 26, 0.25); white-space: pre; font-size: 11px; color: var(--ink-soft); }
+      @media (max-width: 760px) { .alert-log { display: none !important; } }
       #chart { cursor: pointer; position: fixed; left: 8px; right: 8px; bottom: 8px; height: 180px; width: calc(100% - 16px); }
     </style>
   </head>
@@ -51,10 +56,11 @@
       <div id="captures" style="display: none"></div>
     </div>
     <div id="exam-card" style="display: none"></div>
+    <div id="alert"></div>
     <div id="toolbar">
       <div class="bar" id="time-bar"></div>
       <div class="bar" id="camera-bar"></div>
-      <div class="bar" id="layer-bar"></div>
+      <div id="layer-bar"></div>
       <div id="field-tools"></div>
       <div id="tool-bar"></div>
       <div id="status"></div>

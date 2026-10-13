@@ -153,3 +153,19 @@ export function causeName(cause: number, names: readonly string[]): string {
       return `巢失败（被${names[d.predator]}吃掉）`;
   }
 }
+
+/** 死亡热力图和警报地点按什么死因筛选（人为移除一律不算）。 */
+export type DeathFilter = 'all' | 'predation' | 'nest' | 'starvation' | 'other';
+
+/** 物种 s 每个区块近期死了多少（按死因筛选；人为移除不算）。热力图和警报地点共用这一个定义（铁律 4）。 */
+export function deathsByBlock(l: DeathLedger, s: number, filter: DeathFilter): Float64Array {
+  const out = new Float64Array(l.blocks);
+  for (let cause = 0; cause < l.causes; cause++) {
+    if (cause === CAUSE.removed) continue;
+    const kind = decodeCause(cause, l.species).kind;
+    if (filter !== 'all' && filter !== kind) continue;
+    const base = (s * l.causes + cause) * l.blocks;
+    for (let b = 0; b < l.blocks; b++) out[b] = out[b]! + l.recent[base + b]!;
+  }
+  return out;
+}

@@ -1,14 +1,19 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import { countAt, type SimState } from '../sim';
+import { countAt, deathsByBlock, type DeathFilter, type SimState } from '../sim';
 import { TERRAIN } from '../sim/terrain';
+import { crowdingBlocks } from '../sim/population';
 import { INK, PAPER, TERRAIN_COLORS as T, lerpColor } from './palette';
 import { CELL_PX, mapWorldSize } from './projection';
 
 /** 离岸多少格以外算深水。 */
 const DEEP_WATER_CELLS = 10;
 
-/** 数据图层：植被，或某个物种的密度。一次只开一层。 */
-export type DataLayer = { kind: 'vegetation' } | { kind: 'species'; index: number };
+/** 死亡热力图按哪类死因：全部（人为移除除外）、被捕食、巢失败、饿死、其他。 */
+/** 数据图层：植被、某个物种的密度，或某个物种近期死亡的热力图。一次只开一层。 */
+export type DataLayer =
+  | { kind: 'vegetation' }
+  | { kind: 'species'; index: number }
+  | { kind: 'deaths'; index: number; filter: DeathFilter };
 
 /**
  * 格子图层：一格一个像素画进离屏画布，再整体放大成一张贴图（最近邻采样，格子边界清楚）。
@@ -97,6 +102,18 @@ export class GridLayer {
           default: put(i, lerpColor(T.grassDry, T.grassLush, f * 1.4));
         }
       }
+    } else if (layer.kind === 'deaths') {
+      // 死亡热力：按区块（死因账本的分辨率）着墨色，越深死得越多（近期，30 天半衰期）。
+      const perBlock = deathsByBlock(state.deaths, layer.index, layer.filter);
+      let max = 0;
+      for (const v of perBlock) if (v > max) max = v;
+      this.lastMax = max;
+      const base = lerpColor(PAPER, T.grassDry, 0.2);
+      const blockOf = this.blockOf(state);
+      for (let i = 0; i < terrain.length; i++) {
+        if (terrain[i] === TERRAIN.water) put(i, water(i));
+        else put(i, lerpColor(base, INK, max > 0 ? 0.85 * Math.sqrt(perBlock[blockOf[i]!]! / max) : 0));
+      }
     } else {
       const counts = this.countSpecies(state, layer.index);
       let max = 1;
@@ -112,23 +129,21 @@ export class GridLayer {
     this.texture.source.update();
   }
 
-  /** 某物种每格的只数：格子计数 + 待合并计数 + 展开的个体。 */
+  /** 最近一次画死亡热力图时最深那一片的数值（图例用）。 */
+  lastMax = 0;
+  private blockCache: { width: number; blockOf: Int32Array } | null = null;
+
+  /** 每格属于哪个区块（和死因账本同一套，见 crowdingBlocks）。 */
+  private blockOf(state: Readonly<SimState>): Int32Array {
+    const { width, height, terrain } = state.grid;
+    if (this.blockCache?.width === width && this.blockCache.blockOf.length === width * height) return this.blockCache.blockOf;
+    const blockOf = crowdingBlocks(width, height, terrain).blockOf;
+    this.blockCache = { width, blockOf };
+    return blockOf;
+  }
+
   private countSpecies(state: Readonly<SimState>, s: number): Int32Array {
-    const pop = state.populations[s]!;
-    const counts = this.counts;
-    counts.set(pop.adults);
-    for (const stage of pop.juveniles) for (let i = 0; i < counts.length; i++) counts[i] = counts[i]! + stage[i]!;
-    // 当天从个体收拢回来、还没并进计数的也要算。
-    const pending = state.emigrants[s]!;
-    for (let i = 0; i < counts.length; i++) counts[i] = counts[i]! + countAt(pending, i);
-    // 关注区里的动物已经展开成个体，也要算进密度。
-    const ind = state.individuals;
-    for (let k = 0; k < ind.count; k++) {
-      if (ind.species[k] !== s) continue;
-      const c = Math.floor(ind.y[k]!) * state.grid.width + Math.floor(ind.x[k]!);
-      counts[c] = counts[c]! + 1;
-    }
-    return counts;
+    return speciesCellCounts(state, s, this.counts);
   }
 
   /** 放大到地块档时才看得见的格线。 */
@@ -175,5 +190,23 @@ function waterDepth(terrain: Uint8Array, width: number, height: number): Float64
   }
   const out = new Float64Array(terrain.length);
   for (let i = 0; i < out.length; i++) out[i] = dist[i] === -1 ? 1 : dist[i]! / DEEP_WATER_CELLS;
+  return out;
+}
+
+/** 某物种每格的只数：格子计数 + 待合并计数 + 展开的个体（写进 out 并返回它）。密度图层和区域图标共用。 */
+export function speciesCellCounts(state: Readonly<SimState>, s: number, out: Int32Array): Int32Array {
+  const pop = state.populations[s]!;
+  out.set(pop.adults);
+  for (const stage of pop.juveniles) for (let i = 0; i < out.length; i++) out[i] = out[i]! + stage[i]!;
+  // 当天从个体收拢回来、还没并进计数的也要算。
+  const pending = state.emigrants[s]!;
+  for (let i = 0; i < out.length; i++) out[i] = out[i]! + countAt(pending, i);
+  // 关注区里的动物已经展开成个体，也要算进密度。
+  const ind = state.individuals;
+  for (let k = 0; k < ind.count; k++) {
+    if (ind.species[k] !== s) continue;
+    const c = Math.floor(ind.y[k]!) * state.grid.width + Math.floor(ind.x[k]!);
+    out[c] = out[c]! + 1;
+  }
   return out;
 }

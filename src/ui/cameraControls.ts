@@ -1,7 +1,7 @@
 import type { Camera, ZoomPreset } from '../render/camera';
 
 /**
- * 镜头操作：拖拽平移、滚轮缩放、按键或按钮切换"全图 / 地块"两档。
+ * 镜头操作：拖拽平移、滚轮缩放、按键或按钮切换"全图 / 区域 / 地块"三档。
  * 镜头只影响画面，不进操作日志。
  */
 export function bindCameraControls(
@@ -57,7 +57,8 @@ export function bindCameraControls(
   const buttons = new Map<ZoomPreset, HTMLButtonElement>();
   for (const [preset, label] of [
     ['map', '全图 [1]'],
-    ['plot', '地块 [2]'],
+    ['region', '区域 [2]'],
+    ['plot', '地块 [3]'],
   ] as const) {
     const b = document.createElement('button');
     b.textContent = label;
@@ -69,7 +70,8 @@ export function bindCameraControls(
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (e.key === '1') goTo('map');
-    if (e.key === '2') goTo('plot');
+    if (e.key === '2') goTo('region');
+    if (e.key === '3') goTo('plot');
   });
 
   /** 每帧调用，高亮当前更接近的那一档。 */

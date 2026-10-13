@@ -21,6 +21,7 @@ import {
   type Population,
 } from './population';
 import { FOCUS_BLOCK, FOCUS_MAX_CELLS, inFocus, sameFocus, type FocusRect } from './focus';
+import { alerts, type Alert, type AlertInputs } from './alerts';
 import { runJobs, type Capture, type Job, type NecropsySearch } from './jobs';
 import { buildBarriers, fenceLengthCells, type Barrier, type Fence } from './fence';
 import {
@@ -76,7 +77,13 @@ export interface SimState {
   fences: Fence[];
   /** 各物种各格最近一次每日结算吃饱的程度（占日需求的比例）；体检看体况用。开局当作吃饱。 */
   fedLast: Float64Array[];
+  /** 每 CENSUS_DAYS 天记一次各物种总数（第 0 天开局时记第一次），留开局那次和最近几次，一共 CENSUS_KEEP 次；警报看趋势用。 */
+  census: { day: number; totals: number[] }[];
 }
+
+/** 普查间隔（天）和保留次数。 */
+export const CENSUS_DAYS = 30;
+export const CENSUS_KEEP = 25;
 
 function cellArea(config: SimConfig): number {
   return config.world.cellSizeM * config.world.cellSizeM;
@@ -109,6 +116,7 @@ export function createInitialState(config: SimConfig): SimState {
     necropsies: [],
     fences: [],
     fedLast: populations.map(() => new Float64Array(grid.width * grid.height).fill(1)),
+    census: [{ day: 0, totals: populations.map(populationTotal) }],
   };
 }
 
@@ -300,6 +308,11 @@ export class Sim {
     }
   }
 
+  /** 当前的警报（最响的在前），见 alerts.ts。资源由统一操作接口那边传入。 */
+  alerts(resources?: AlertInputs['resources']): Alert[] {
+    return alerts(this.s, { blockOf: this.blocks.blockOf, resources });
+  }
+
   /** 每个物种的总数：格子计数 + 待合并计数 + 展开的个体。 */
   totals(): number[] {
     const ind = countBySpecies(this.s.individuals, this.derived.length);
@@ -469,6 +482,12 @@ export class Sim {
       removed: acc[s]!.removed,
     }));
     this.s.dayAccum = this.derived.map(() => emptyDayStats());
+    // 普查：day 是刚开始的这一天（tick 已经到了它的 0 点）。
+    if (day % CENSUS_DAYS === 0) {
+      this.s.census.push({ day, totals: [...totals] });
+      // 开局那次（第 0 个）一直留着：濒临消失按开局的数量算。
+      if (this.s.census.length > CENSUS_KEEP) this.s.census.splice(1, this.s.census.length - CENSUS_KEEP);
+    }
     // 死因账本：今天的合计存进 lastDay，旧账（含今天的）衰减一天。
     closeLedgerDay(this.s.deaths);
     decayLedger(this.s.deaths);
