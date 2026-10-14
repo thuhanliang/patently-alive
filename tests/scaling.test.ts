@@ -89,13 +89,13 @@ describe('体重缩放公式', () => {
     expect(() => applyLaw(law, { log10MassG: 3 })).toThrow(/renamed/);
   });
 
-  it('飞行：超过最重飞鸟的体重就飞不起来；会飞的能量需求更高', () => {
+  it('飞行：超过最重飞鸟的体重就飞不起来；鸟的野外代谢比同体重的兽高', () => {
     const c = { litterSize: 2, diet: { plant: 0, vertebrate: 0, invertebrate: 1 }, bird: true, flies: true };
     expect(scaleTraits(scalingLaws, { ...c, bodyMassKg: 1 }).tooHeavyToFly).toBe(false);
     expect(scaleTraits(scalingLaws, { ...c, bodyMassKg: scalingLaws.flight.maxMassKg * 1.5 }).tooHeavyToFly).toBe(true);
-    expect(scaleTraits(scalingLaws, { ...c, bodyMassKg: 1 }).energyFactor).toBeGreaterThan(1);
-    // 系数是全体鸟类的平均：不会飞的鸟也比同体重的兽耗能；不会飞的兽是 1。
-    expect(scaleTraits(scalingLaws, { ...c, bodyMassKg: 1, flies: false }).energyFactor).toBeGreaterThan(1);
-    expect(scaleTraits(scalingLaws, { ...c, bodyMassKg: 1, flies: false, bird: false }).energyFactor).toBe(1);
+    const bird = scaleTraits(scalingLaws, { ...c, bodyMassKg: 1 }).fieldMetabolismKjPerDay;
+    const mammal = scaleTraits(scalingLaws, { ...c, bodyMassKg: 1, bird: false, flies: false }).fieldMetabolismKjPerDay;
+    expect(bird / mammal).toBeGreaterThan(1.3);
+    expect(bird / mammal).toBeLessThan(1.7);
   });
 });

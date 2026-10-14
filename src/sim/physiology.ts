@@ -171,7 +171,8 @@ function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
 }
 
 export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
-  const metabolicMass = detPow(p.bodyMassKg, 0.75);
+  // 胃口（设计物种的能量收支）乘在代谢体重上：三类食物的需求一起放大或缩小。
+  const metabolicMass = detPow(p.bodyMassKg, 0.75) * (p.energyFactor ?? 1);
   const { juvenileStages, nestStages, stageDays } = conveyor(p);
   const adultDailyMortality = 1 - detPow(p.survival.adultAnnual, 1 / DAYS_PER_YEAR);
   const cellsPerDay = p.movement.dailyRangeM / cellSizeM;
