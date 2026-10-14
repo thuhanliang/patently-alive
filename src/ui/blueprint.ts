@@ -10,8 +10,10 @@ export function drawBlueprint(canvas: HTMLCanvasElement, design: Design, bird: b
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth || canvas.width;
-  const h = canvas.clientHeight || canvas.height;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  // 还没进文档或被藏起来：没有尺寸，不画（canvas.width 是设备像素，不能拿来当 CSS 尺寸）。
+  if (w === 0 || h === 0) return;
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
@@ -33,12 +35,17 @@ export function drawBlueprint(canvas: HTMLCanvasElement, design: Design, bird: b
 
   // 体型：按体重的对数在 5 克 – 100 千克之间缩放。
   const t = Math.min(1, Math.max(0, (Math.log10(design.bodyMassKg) + 2.3) / 4.3));
-  const scale = Math.min(w, h * 1.6) / 400;
-  const rx = (40 + 55 * t) * scale;
-  const ry = rx * (bird ? 0.72 : 0.5);
+  const aspect = bird ? 0.72 : 0.5;
+  // 身体上方要留出头和翅膀，下方留出腿和尺寸标注；放不下就整体缩小。
+  const above = design.parts.limbs === 'wings' ? 1.9 : 1.25;
+  const below = 0.8 + legLength(design.parts.limbs);
+  let rx = (40 + 55 * t) * (Math.min(w, h * 1.6) / 400);
+  const fit = (h - 24 - 34) / (rx * aspect * (above + below));
+  if (fit < 1) rx *= fit;
+  const ry = rx * aspect;
   const legLen = legLength(design.parts.limbs) * ry;
   const cx = w * 0.47;
-  const cy = Math.min(h * 0.5, h - 34 - legLen - ry);
+  const cy = 24 + ry * above;
   const ground = cy + ry * 0.8 + legLen;
 
   // 地面线。
@@ -266,6 +273,7 @@ function drawMouth(ctx: CanvasRenderingContext2D, mouth: string, x: number, y: n
   ctx.stroke();
 }
 
-function massText(kg: number): string {
+/** 体重的写法（设计台的滑杆标签也用它）。 */
+export function massText(kg: number): string {
   return kg < 1 ? `${Math.round(kg * 1000)} 克` : `${Number.isInteger(kg) ? kg : kg.toFixed(1)} 千克`;
 }

@@ -45,6 +45,10 @@ export interface CompiledDesign {
   hints: { id: HintId; text: string }[];
   /** 会飞但太重：翅膀照长（照样付能量），就是飞不起来。 */
   tooHeavyToFly: boolean;
+  /** 长羽毛的：按鸟的公式推导。 */
+  bird: boolean;
+  /** 一年几窝（和引擎的 litterRate 一致）。 */
+  littersPerYear: number;
 }
 
 /** 生产 1 克断奶（出飞）的后代要多少千焦：组织本身约 7 千焦/克，加上怀孕、泌乳（喂雏）的损耗。建模假设，见 MODEL.md。 */
@@ -189,7 +193,7 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
   if (diet.vertebrate >= 0.5 && scaled.homeRangeKm2 > 1) hint('carnivoreHomeRange', { area: round1(scaled.homeRangeKm2) });
   if (bird) hint('borrowedLaw');
 
-  return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly };
+  return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear };
 }
 
 /**

@@ -1,7 +1,7 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
-import { DAYS_PER_MONTH, checksum, compileDesign, nearest, traitsOf, type CompiledDesign, type DesignKit } from '../sim';
+import { checksum, compileDesign, partsOf, nearest, traitsOf, type CompiledDesign, type DesignKit } from '../sim';
 import { BLUEPRINT, cssAlpha } from '../render/palette';
-import { drawBlueprint } from './blueprint';
+import { drawBlueprint, massText } from './blueprint';
 
 const ACTIVITY: Array<[Design['activity'], string]> = [
   ['diurnal', '昼行'],
@@ -28,6 +28,8 @@ export class DesignDesk {
   private readonly energyBox = div('desk-energy');
   private readonly derivedBox = div('desk-derived');
   private readonly hintBox = div('desk-hints');
+  /** 拖滑杆时一帧里会来好几次输入：线稿每帧只画一次。 */
+  private drawPending = false;
 
   constructor(
     private readonly el: HTMLElement,
@@ -37,7 +39,10 @@ export class DesignDesk {
     /** 比对"最像的现有技术"用。 */
     private readonly priorArt: ReadonlyMap<string, SpeciesParams>,
   ) {
-    this.design = loadDraft() ?? { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计' };
+    // 草稿里的部件可能已经改名或删掉了：编译不了就不用它。
+    const draft = loadDraft();
+    const usable = draft !== null && canCompile(draft, kit);
+    this.design = usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计' };
     el.addEventListener('click', (e) => {
       if (e.target === el) this.close();
     });
@@ -107,7 +112,8 @@ export class DesignDesk {
     from.addEventListener('change', () => {
       const t = this.templates.find((x) => x.species === from.value);
       if (!t) return;
-      this.design = { ...t.design, name: `仿${t.design.name}` };
+      this.design = { ...t.design, name: `仿${t.design.name}`.slice(0, 20) };
+      saveDraft(this.design);
       this.render();
     });
     box.append(row('起点', from));
@@ -185,9 +191,14 @@ export class DesignDesk {
     const design = this.withId();
     const c = compileDesign(design, this.kit);
     this.compiled = c;
-    const bird = this.kit.parts.get(design.parts.coat)?.bodyPlan === 'bird';
-    // 画布要先进了文档才有尺寸。
-    requestAnimationFrame(() => drawBlueprint(this.canvas, design, bird));
+    // 画布要先进了文档才有尺寸；一帧只画一次（画最新的设计）。
+    if (!this.drawPending) {
+      this.drawPending = true;
+      requestAnimationFrame(() => {
+        this.drawPending = false;
+        if (this.open && this.compiled) drawBlueprint(this.canvas, this.withId(), this.compiled.bird);
+      });
+    }
     this.renderEnergy(c);
     this.renderDerived(c);
     this.renderHints(c);
@@ -214,7 +225,9 @@ export class DesignDesk {
     const marker = div('desk-appetite-marker');
     const pos = Math.min(1, Math.max(0, (Math.log2(appetite) + 1) / 2));
     marker.style.left = `${pos * 100}%`;
-    marker.classList.toggle('warn', appetite > 1.35);
+    // 胃口偏大的门槛由引擎定（提醒 energyHigh），界面不另写一个数。
+    const high = c.hints.some((h) => h.id === 'energyHigh');
+    marker.classList.toggle('warn', high);
     scale.append(div('desk-appetite-mid'), marker);
     const labels = div('note desk-appetite-labels');
     labels.append(textEl('span', '0.5×'), textEl('span', '1×'), textEl('span', '2×'));
@@ -222,7 +235,7 @@ export class DesignDesk {
       textEl('div', '能量收支', 'log-head'),
       bar,
       list,
-      textEl('div', `胃口：同体重现有动物的 ${appetite.toFixed(2)} 倍`, appetite > 1.35 ? 'desk-warn' : ''),
+      textEl('div', `胃口：同体重现有动物的 ${appetite.toFixed(2)} 倍`, high ? 'desk-warn' : ''),
       scale,
       labels,
     );
@@ -231,7 +244,7 @@ export class DesignDesk {
   private renderDerived(c: CompiledDesign): void {
     const p = c.params;
     const r = p.reproduction;
-    const bird = this.kit.parts.get(this.design.parts.coat)?.bodyPlan === 'bird';
+    const bird = c.bird;
     const diet = [
       ['植物', p.diet.plant],
       ['脊椎动物', p.diet.vertebrate],
@@ -240,7 +253,7 @@ export class DesignDesk {
       .filter(([, v]) => (v as number) > 0)
       .map(([k, v]) => `${k} ${Math.round((v as number) * 100)}%`)
       .join('，');
-    const littersPerYear = Math.max(1, (this.design.breedingMonths * DAYS_PER_MONTH) / r.litterIntervalDays);
+    const littersPerYear = c.littersPerYear;
     const move = [p.movement.flies ? '会飞' : c.tooHeavyToFly ? '有翅膀但飞不起来' : null, p.movement.climbs ? '会爬' : null, p.movement.territorial ? '守领地' : null]
       .filter(Boolean)
       .join('，');
@@ -279,6 +292,15 @@ export class DesignDesk {
 function partText(p: Part): string {
   const why = p.effects.map((e) => e.why).join('；');
   return why ? `${p.blurb}（${why}）` : p.blurb;
+}
+
+function canCompile(d: Design, kit: DesignKit): boolean {
+  try {
+    partsOf(d, kit);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function loadDraft(): Design | null {
@@ -338,17 +360,18 @@ function numberInput(min: number, max: number, value: number, onChange: (v: numb
     const n = Math.floor(Number(i.value));
     if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
   });
-  i.addEventListener('change', () => (i.value = String(Math.max(min, Math.min(max, Math.floor(Number(i.value)) || min)))));
+  // 离开输入框时把超出范围的数改成实际用的数，并且真的用它（显示的和设计里的一致）。
+  i.addEventListener('change', () => {
+    const n = Math.max(min, Math.min(max, Math.floor(Number(i.value)) || min));
+    i.value = String(n);
+    onChange(n);
+  });
   return i;
 }
 
 /** 体重取两位有效数字（滑杆上的值不必那么精确）。 */
 function roundMass(kg: number): number {
   return Number(Math.min(MASS_MAX, Math.max(MASS_MIN, kg)).toPrecision(2));
-}
-
-function massText(kg: number): string {
-  return kg < 1 ? `${Math.round(kg * 1000)} 克` : `${kg} 千克`;
 }
 
 const days = (d: number): string => (d >= 360 ? `${(d / 360).toFixed(1)} 年` : `${d} 天`);

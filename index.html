@@ -87,8 +87,9 @@
       .desk-appetite { position: relative; height: 10px; margin: 4px 0 0; border-bottom: 1.5px solid var(--blueprint); }
       .desk-appetite-mid { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px dashed var(--blueprint); }
       .desk-appetite-marker { position: absolute; top: -2px; width: 3px; height: 14px; margin-left: -1px; background: var(--blueprint); }
-      .desk-appetite-marker.warn, .desk-warn { color: var(--vermilion); background-color: transparent; }
-      .desk-appetite-marker.warn { background: var(--vermilion); }
+      /* 胃口偏大只是提醒，不是警报：不用朱红（朱红同时只给最响的一处警报）。 */
+      .desk-warn { color: var(--ink); font-weight: 600; text-decoration: underline wavy var(--blueprint); }
+      .desk-appetite-marker.warn { background: var(--ink); width: 5px; margin-left: -2px; }
       .desk-appetite-labels { display: flex; justify-content: space-between; }
       .desk-hint { color: var(--blueprint); }
       @media (max-width: 860px) { .desk-body { flex-direction: column; } .desk-left, .desk-controls, .desk-right { flex: 1 1 auto; width: 100%; } }
