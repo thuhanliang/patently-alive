@@ -1,6 +1,7 @@
 import type { Law, ScalingLaws } from '../data/schema/scaling';
 import type { SpeciesParams } from '../data/schema/species';
 import { detExp, detLog, detPow } from './detmath';
+import { DAYS_PER_YEAR } from './time';
 
 /**
  * 体重缩放公式：从"原因"（体重、每窝仔数、食性、是鸟还是兽、会不会飞）推导生活史和活动范围。
@@ -28,12 +29,15 @@ export interface ScaledTraits {
   adultAnnualSurvival: number;
   homeRangeKm2: number;
   dailyRangeM: number;
+  /** 断奶天数、断奶体重（克）：哺乳动物的公式，鸟也借用（育幼的能量、窝里的天数）。 */
+  weaningDays: number;
+  weaningMassG: number;
   /** 基础代谢率（瓦），哺乳动物的公式（鸟也借用）。 */
   basalMetabolismW: number;
   /** 野外代谢率（千焦/天）：鸟和兽各用各的文献公式（Nagy 1999）。飞行的额外代价由翅膀部件另算。 */
   fieldMetabolismKjPerDay: number;
   /** 哪些量是借用哺乳动物公式推导的（鸟没有自己的数据库公式），可信度低一档。 */
-  borrowed: readonly ('homeRangeKm2' | 'dailyRangeM' | 'basalMetabolismW')[];
+  borrowed: readonly ('homeRangeKm2' | 'dailyRangeM' | 'basalMetabolismW' | 'weaningMassG')[];
   /** 会飞但比数据库里最重的飞鸟还重：飞不起来（设计台据此提醒，不禁止）。 */
   tooHeavyToFly: boolean;
 }
@@ -67,7 +71,7 @@ export function scaleTraits(laws: ScalingLaws, c: ScalingCauses): ScaledTraits {
   const vars = { log10MassG: log10(c.bodyMassKg * 1000), log10Litter: log10(c.litterSize), trophicLevel: trophicLevel(c.diet) };
   const lh = c.bird ? laws.bird : laws.mammal;
   const gestationDays = applyLaw(lh.gestationDays, vars);
-  const interval = c.bird ? 365 / applyLaw(laws.bird.clutchesPerYear, vars) : applyLaw(laws.mammal.litterIntervalDays, vars);
+  const interval = c.bird ? DAYS_PER_YEAR / applyLaw(laws.bird.clutchesPerYear, vars) : applyLaw(laws.mammal.litterIntervalDays, vars);
   const maxLifespanYears = applyLaw(lh.maxLifespanYears, vars);
   const k = c.bird ? laws.survival.kBird : laws.survival.kMammal;
   // 鸟没有家域的数据库公式，借用哺乳动物的（同体重、同食性）。
@@ -81,9 +85,11 @@ export function scaleTraits(laws: ScalingLaws, c: ScalingCauses): ScaledTraits {
     adultAnnualSurvival: detExp(-k / maxLifespanYears),
     homeRangeKm2,
     dailyRangeM: laws.dailyRange.c * Math.sqrt(homeRangeKm2 * 1e6),
+    weaningDays: applyLaw(laws.mammal.weaningDays, vars),
+    weaningMassG: applyLaw(laws.mammal.weaningMassG, vars),
     basalMetabolismW: applyLaw(laws.mammal.basalMetabolismW, vars),
     fieldMetabolismKjPerDay: fmr.coef * detPow(c.bodyMassKg * 1000, fmr.exp),
     tooHeavyToFly: c.flies && c.bodyMassKg > laws.flight.maxMassKg,
-    borrowed: c.bird ? ['homeRangeKm2', 'dailyRangeM', 'basalMetabolismW'] : [],
+    borrowed: c.bird ? ['homeRangeKm2', 'dailyRangeM', 'basalMetabolismW', 'weaningMassG'] : [],
   };
 }

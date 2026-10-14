@@ -16,6 +16,8 @@ export const SLOTS = ['coat', 'mouth', 'limbs', 'tail', 'digestion', 'rearing'] 
 export type Slot = (typeof SLOTS)[number];
 
 const Fractions = z.object({ plant: z.number().min(0).max(1), vertebrate: z.number().min(0).max(1), invertebrate: z.number().min(0).max(1) });
+/** 消化效率不能是 0：否则只吃这一类的设计胃口无穷大。 */
+const Efficiencies = z.object({ plant: z.number().min(0.05).max(1), vertebrate: z.number().min(0.05).max(1), invertebrate: z.number().min(0.05).max(1) });
 
 export const PartSchema = z
   .object({
@@ -38,7 +40,7 @@ export const PartSchema = z
     /** 口器是喙（鸟的）而不是牙（兽的）：只用于提醒，不影响推导。 */
     beak: z.boolean().optional(),
     /** 消化方式：三类食物各能吸收多少能量（0–1）。 */
-    digest: Fractions.optional(),
+    digest: Efficiencies.optional(),
     /** 腿、爪、翼：会不会飞、会不会爬（飞不飞得起来还要看体重）。 */
     flies: z.boolean().optional(),
     climbs: z.boolean().optional(),
@@ -55,10 +57,20 @@ export const PartSchema = z
 
 export type Part = z.infer<typeof PartSchema>;
 
-export const PartsFileSchema = z.object({
-  slots: z.array(z.object({ id: z.enum(SLOTS), name: z.string(), visible: z.boolean() })),
-  parts: z.array(PartSchema),
-});
+export const PartsFileSchema = z
+  .object({
+    slots: z.array(z.object({ id: z.enum(SLOTS), name: z.string(), visible: z.boolean() })),
+    parts: z.array(PartSchema),
+  })
+  .superRefine((f, ctx) => {
+    const ids = f.slots.map((s) => s.id);
+    if (ids.length !== SLOTS.length || SLOTS.some((s) => !ids.includes(s))) ctx.addIssue({ code: 'custom', message: `slots 要正好列出 ${SLOTS.join('、')} 各一次` });
+    const partIds = new Set<string>();
+    for (const p of f.parts) {
+      if (partIds.has(p.id)) ctx.addIssue({ code: 'custom', message: `部件 id 重复：${p.id}` });
+      partIds.add(p.id);
+    }
+  });
 
 /** 一份设计：玩家拼出来的东西。本身是数据，可以存档、回放、写进申请书。 */
 export const DesignSchema = z.object({
@@ -80,9 +92,26 @@ export const DesignSchema = z.object({
 
 export type Design = z.infer<typeof DesignSchema>;
 
-/** 设计台提醒的模板：{占位符} 由编译器填。 */
-export const HintTemplatesSchema = z.record(z.string(), z.string());
+/** 设计编译器会发出的提醒（引擎定义）；每个都要有模板。 */
+export const HINT_IDS = [
+  'energyHigh',
+  'energyLow',
+  'dietMismatch',
+  'tooHeavyToFly',
+  'beakOnMammal',
+  'teethOnBird',
+  'wingsOnMammal',
+  'oneLitterSeason',
+  'groundNestLong',
+  'bigLitterShortLife',
+  'carnivoreHomeRange',
+  'borrowedLaw',
+] as const;
+
+/** 设计台提醒的模板：{占位符} 由编译器填。每个提醒都必须有，不能多。 */
+export const HintTemplatesSchema = z.strictObject(Object.fromEntries(HINT_IDS.map((id) => [id, z.string().min(1)])) as Record<(typeof HINT_IDS)[number], z.ZodString>);
 export type HintTemplates = z.infer<typeof HintTemplatesSchema>;
+export type HintId = (typeof HINT_IDS)[number];
 
 /** 现有技术写成的设计（src/data/design/templates.json）。 */
 export const TemplatesFileSchema = z.object({

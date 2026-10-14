@@ -1,9 +1,9 @@
-import { SLOTS, type Design, type EffectTarget, type HintTemplates, type Part, type Slot } from '../data/schema/design';
+import { SLOTS, type Design, type EffectTarget, type HintId, type HintTemplates, type Part, type Slot } from '../data/schema/design';
 import type { ScalingLaws } from '../data/schema/scaling';
 import type { SpeciesParams } from '../data/schema/species';
 import { detExp, detLog } from './detmath';
-import { applyLaw, scaleTraits, type ScaledTraits } from './scaling';
-import { DAYS_PER_MONTH } from './time';
+import { scaleTraits, type ScaledTraits } from './scaling';
+import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
 
 /**
  * 设计编译器（阶段 3）：一份设计 → 物种参数、推导属性、能量收支、提醒。确定、纯函数。
@@ -30,7 +30,7 @@ export interface CompiledDesign {
   params: SpeciesParams;
   /** 缩放公式的原始推导（还没乘部件的钩子），设计台的"推导属性"一栏对照用。 */
   scaled: ScaledTraits;
-  /** 每个钩子的总倍数（各部件相乘）。 */
+  /** 每个钩子的总倍数：各部件相乘；能量例外，是各部件的增减相加（和能量收支的各行一致）。 */
   multipliers: Readonly<Record<EffectTarget, number>>;
   energy: {
     /** 开销：日常代谢、各部件、育幼（千焦/天）。 */
@@ -42,7 +42,7 @@ export interface CompiledDesign {
     appetite: number;
   };
   /** 老同事的提醒（按模板拼出），从不禁止。 */
-  hints: { id: string; text: string }[];
+  hints: { id: HintId; text: string }[];
   /** 会飞但太重：翅膀照长（照样付能量），就是飞不起来。 */
   tooHeavyToFly: boolean;
 }
@@ -59,10 +59,18 @@ const BIRD_RENEST_FACTOR = 1.5;
 const APPETITE_HIGH = 1.35;
 const APPETITE_LOW = 0.75;
 
-/** 各部件的钩子相乘。 */
+/**
+ * 各部件的钩子合起来。能量的各项是分开列在收支上的开销（"翅膀 +15%""早成 +6%"），所以相加；
+ * 其余的钩子作用在同一个量上，相乘。
+ */
 function multipliersOf(parts: readonly Part[]): Record<EffectTarget, number> {
   const m: Record<EffectTarget, number> = { energy: 1, dailyRange: 1, mortality: 1, gestation: 1, nestDays: 1, maturity: 1 };
-  for (const p of parts) for (const e of p.effects) m[e.target] *= e.factor;
+  for (const p of parts) {
+    for (const e of p.effects) {
+      if (e.target === 'energy') m.energy += e.factor - 1;
+      else m[e.target] *= e.factor;
+    }
+  }
   return m;
 }
 
@@ -95,20 +103,21 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
   const climbs = all.some((p) => p.climbs === true);
   const scaled = scaleTraits(kit.laws, { bodyMassKg: design.bodyMassKg, litterSize: design.litterSize, diet, bird, flies: hasWings });
   const m = multipliersOf(all);
-  const vars = { log10MassG: detLog(design.bodyMassKg * 1000) / detLog(10), log10Litter: detLog(design.litterSize) / detLog(10) };
 
   // 繁殖节奏。
   const gestationDays = Math.max(1, Math.round(scaled.gestationDays * m.gestation));
-  const weaningDays = applyLaw(kit.laws.mammal.weaningDays, vars);
   // 窝里的天数：兽从出生算到断奶；鸟从产蛋算起，蛋一直在窝里，部件的钩子只缩短出壳以后那一段。
-  const nestDays = Math.max(1, Math.round(bird ? gestationDays + scaled.gestationDays * BIRD_NESTLING_FACTOR * m.nestDays : weaningDays * m.nestDays));
-  const interval = bird ? nestDays * BIRD_RENEST_FACTOR : gestationDays + LACTATION_OVERLAP * weaningDays;
+  const nestDays = Math.max(1, Math.round(bird ? gestationDays + scaled.gestationDays * BIRD_NESTLING_FACTOR * m.nestDays : scaled.weaningDays * m.nestDays));
+  // 繁殖季里的间隔。缩放公式里的胎间隔是全年平均（含非繁殖季），不能直接用，见 MODEL.md 五之十一。
+  // 兽：哺乳期按窝里天数算（早成的离窝早，下一胎也来得早）。
+  const interval = bird ? nestDays * BIRD_RENEST_FACTOR : gestationDays + LACTATION_OVERLAP * nestDays;
   const litterIntervalDays = Math.max(gestationDays, Math.round(interval));
   // 性成熟至少比出窝晚一截（幼体传送带要在窝外留几段），也不少于引擎要求的 8 天。
   const ageAtMaturityDays = Math.max(8, Math.round(nestDays * 1.5), Math.round(scaled.ageAtMaturityDays * m.maturity));
   const breedingByMonth = Array.from({ length: 12 }, (_, i) => (i < design.breedingMonths ? 1 : 0));
+  // 和引擎一致（physiology 的 litterRate）：繁殖季里每隔一个间隔一窝，繁殖季比间隔还短也有一窝。
   const seasonDays = design.breedingMonths * DAYS_PER_MONTH;
-  const littersPerYear = design.breedingMonths === 12 ? 365 / litterIntervalDays : Math.max(1, seasonDays / litterIntervalDays);
+  const littersPerYear = Math.max(1, seasonDays / litterIntervalDays);
 
   // 存活：部件的钩子乘在死亡率上。
   const mortality = Math.min(0.99, Math.max(0.01, (1 - scaled.adultAnnualSurvival) * m.mortality));
@@ -116,12 +125,14 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
 
   // 能量收支：开销 = 日常代谢 + 部件 + 育幼；胃口 = 开销 ÷ 消化率，按现有技术的平均归一。
   const base = scaled.fieldMetabolismKjPerDay;
+  // 胃口除以日常代谢，所以鸟兽的代谢差在胃口里抵消：推演的摄食公式是按真实动物定的，不分鸟兽，
+  // 设计出来的鸻和真实的鸻要吃得一样多。鸟兽之差体现在缩放公式（寿命、繁殖）上。
   const lines: EnergyLine[] = [{ label: bird ? '日常代谢（鸟）' : '日常代谢（兽）', kjPerDay: base }];
   for (const p of all) {
     for (const e of p.effects) if (e.target === 'energy' && e.factor !== 1) lines.push({ label: `${p.name}：${e.why}`, kjPerDay: base * (e.factor - 1) });
   }
-  const offspringG = design.litterSize * littersPerYear * applyLaw(kit.laws.mammal.weaningMassG, vars);
-  lines.push({ label: `育幼：一年约 ${round1(littersPerYear)} 窝，每窝 ${design.litterSize} 个`, kjPerDay: (offspringG * REPRO_KJ_PER_G) / 365 });
+  const offspringG = design.litterSize * littersPerYear * scaled.weaningMassG;
+  lines.push({ label: `育幼：一年约 ${round1(littersPerYear)} 窝，每窝 ${design.litterSize} 个`, kjPerDay: (offspringG * REPRO_KJ_PER_G) / DAYS_PER_YEAR });
   const needKjPerDay = lines.reduce((s, l) => s + l.kjPerDay, 0);
   const d = parts.digestion.digest!;
   const digestibility = diet.plant * d.plant + diet.vertebrate * d.vertebrate + diet.invertebrate * d.invertebrate;
@@ -159,9 +170,9 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
 
   // 提醒：按固定顺序检查，结果确定。
   const hints: CompiledDesign['hints'] = [];
-  const hint = (id: string, vars: Record<string, string | number> = {}): void => {
-    const t = kit.hints[id];
-    if (t) hints.push({ id, text: fill(t, vars) });
+  // 模板齐不齐由 schema 保证（HINT_IDS 每个都要有）。
+  const hint = (id: HintId, vars: Record<string, string | number> = {}): void => {
+    hints.push({ id, text: fill(kit.hints[id], vars) });
   };
   if (appetite > APPETITE_HIGH) hint('energyHigh', { factor: round1(appetite) });
   if (appetite < APPETITE_LOW) hint('energyLow', { factor: round1(appetite) });

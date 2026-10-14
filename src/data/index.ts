@@ -20,7 +20,6 @@ export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, ty
 /** 体重缩放公式（从 PanTHERIA、AnAge 拟合，见 scripts/data/fit-scaling.mjs）。 */
 export const scalingLaws: ScalingLaws = ScalingLawsSchema.parse(scalingJson);
 
-
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
 
@@ -100,11 +99,13 @@ const partsFile = PartsFileSchema.parse(partsJson);
 export const designSlots = partsFile.slots;
 /** 设计台的部件，按 id 索引，按文件里的顺序。 */
 export const partLibrary: ReadonlyMap<string, Part> = new Map(partsFile.parts.map((p) => [p.id, p] as const));
-if (partLibrary.size !== partsFile.parts.length) throw new Error('parts.json 里有重复的部件 id');
 /** 设计台提醒的模板。 */
 export const hintTemplates: HintTemplates = HintTemplatesSchema.parse(hintsJson);
 /** 现有技术写成的设计：设计台的起点，也是设计编译器的回归测试。 */
 export const designTemplates: ReadonlyArray<{ species: string; design: Design }> = TemplatesFileSchema.parse(templatesJson).templates;
 for (const t of designTemplates) {
   if (!speciesLibrary.has(t.species)) throw new Error(`设计模板引用了不存在的物种：${t.species}`);
+  for (const [slot, id] of Object.entries(t.design.parts)) {
+    if (partLibrary.get(id)?.slot !== slot) throw new Error(`设计模板 ${t.species} 的 ${slot} 槽用了不存在或不属于这个槽的部件：${id}`);
+  }
 }

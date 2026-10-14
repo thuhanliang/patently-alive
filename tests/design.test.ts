@@ -13,6 +13,7 @@ import {
   worldFor,
   type Design,
 } from '../src/data';
+import { HintTemplatesSchema } from '../src/data/schema/design';
 import { cellIndex, checksum, compileDesign, makeDesignKit, scenarioRules, Session, TICKS_PER_DAY, DAYS_PER_YEAR } from '../src/sim';
 
 const kit = makeDesignKit(
@@ -118,6 +119,20 @@ describe('设计编译器', () => {
     const bad = compile({ ...base, parts: { ...base.parts, digestion: 'short_gut' } });
     expect(bad.hints.map((h) => h.id)).toContain('dietMismatch');
     expect(bad.energy.appetite).toBeGreaterThan(good.energy.appetite * 2);
+  });
+
+  it('能量钩子的总倍数和收支各行一致', () => {
+    const base = template('dotterel');
+    const c = compile({ ...base, parts: { ...base.parts, limbs: 'wings', rearing: 'precocial' } });
+    const [daily, ...rest] = c.energy.lines;
+    const parts = rest.slice(0, -1).reduce((s, l) => s + l.kjPerDay, 0);
+    expect(daily!.kjPerDay * c.multipliers.energy).toBeCloseTo(daily!.kjPerDay + parts, 9);
+  });
+
+  it('提醒模板缺一个、多一个都在载入时报错', () => {
+    const { energyHigh: _, ...missing } = hintTemplates;
+    expect(HintTemplatesSchema.safeParse(missing).success).toBe(false);
+    expect(HintTemplatesSchema.safeParse({ ...hintTemplates, extra: 'x' }).success).toBe(false);
   });
 
   it('提醒都按模板拼出，没有没填的占位符', () => {
