@@ -75,6 +75,8 @@ export const SpeciesSchema = z
      * （部件的开销、育幼、消化率），吃不够照样挨饿（阶段 3）。
      */
     energyFactor: z.number().positive().optional(),
+    /** 画法：主色（设计物种在设计台上选；真实物种的主色在 render/palette.ts）。推演不读它。 */
+    appearance: z.object({ color: z.string().regex(/^#[0-9a-f]{6}$/) }).optional(),
     source: z.string(),
   })
   .refine((s) => s.reproduction.litterIntervalDays >= s.reproduction.gestationDays, {

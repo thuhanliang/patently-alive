@@ -3,6 +3,7 @@ import {
   decodeData,
   FixedStepClock,
   LOG_FORMAT,
+  LOG_VERSION,
   meanLandVegetation,
   OpLogSchema,
   SAVE_FORMAT,
@@ -238,6 +239,7 @@ export class SimHost {
       const isSave = json.format === SAVE_FORMAT;
       if (isSave && json.version !== SAVE_VERSION) return { ok: false, message: `存档版本是 ${String(json.version)}，这个版本的游戏只认 ${SAVE_VERSION}` };
       if (!isSave && json.format !== LOG_FORMAT) return { ok: false, message: `不认识的文件格式：${String(json.format)}` };
+      if (!isSave && json.version !== LOG_VERSION) return { ok: false, message: `操作日志版本是 ${String(json.version)}，这个版本的游戏只认 ${LOG_VERSION}（旧版本的日志回放结果会不同）` };
       const parsed = isSave ? SaveSchema.safeParse(decodeData(json)) : OpLogSchema.safeParse(json);
       if (!parsed.success) return { ok: false, message: `${isSave ? '存档' : '操作日志'}内容不对：${parsed.error.issues[0]?.message ?? ''}` };
       const log = 'log' in parsed.data ? parsed.data.log : parsed.data;
@@ -247,8 +249,10 @@ export class SimHost {
         checksum(log.config.world) === checksum(cur.world) &&
         checksum(log.config.species) === checksum(cur.species) &&
         checksum(log.rules) === checksum(this.session.rules) &&
-        checksum(log.config.tools ?? null) === checksum(cur.tools ?? null);
-      if (!same) return { ok: false, message: '这份存档的世界、物种、工具数据或开局规则和当前不同，暂不支持载入' };
+        checksum(log.config.tools ?? null) === checksum(cur.tools ?? null) &&
+        checksum(log.config.design ?? null) === checksum(cur.design ?? null) &&
+        checksum(log.config.catalog ?? null) === checksum(cur.catalog ?? null);
+      if (!same) return { ok: false, message: '这份存档的世界、物种、工具、设计数据或开局规则和当前不同，暂不支持载入' };
       const next = 'log' in parsed.data ? Session.restoreParsed(parsed.data) : Session.replay(log);
       this.replace(next);
       return { ok: true, message: `已${isSave ? '读档' : '回放'}到第 ${next.sim.day} 天` };

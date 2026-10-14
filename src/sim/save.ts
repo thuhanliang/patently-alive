@@ -13,7 +13,7 @@ import type { Quarter, Resources } from './session';
  * 那正是存档要省掉的时间。手改过的存档文件因此不再等于回放；它只是本机的单机存档，接受这一点。
  */
 export const SAVE_FORMAT = 'patently-alive/save';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 const ScoresSchema = z.object({
   recovery: z.number().nullable(),

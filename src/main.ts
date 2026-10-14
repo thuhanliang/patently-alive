@@ -1,10 +1,10 @@
-import { archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, costOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { RECENT_HALF_LIFE_DAYS, costOf, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
-import { speciesColor } from './render/palette';
+import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
 import { DesignDesk } from './ui/designDesk';
@@ -63,7 +63,22 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
 async function main(): Promise<void> {
   const { world, seed: defaultSeed, rules, problem, scenario } = chosenWorld();
   const species = speciesFor(world);
-  const config = { seed: intParam('seed', defaultSeed, 0xffff_ffff), world, species, tools: toolData };
+  // 设计编译的数据：设计台用它，也放进配置，让操作接口能重新编译、核对投放的设计物种（存档、日志自带一份）。
+  const kit = makeDesignKit(
+    partLibrary,
+    scalingLaws,
+    hintTemplates,
+    designTemplates.map((t) => t.design),
+  );
+  // 档案馆的条目也进配置：不附设计的引种必须和其中一条一模一样。
+  const config = {
+    seed: intParam('seed', defaultSeed, 0xffff_ffff),
+    world,
+    species,
+    tools: toolData,
+    design: designDataOf(kit),
+    catalog: [...speciesLibrary.values()],
+  };
 
   // 推演在 Web Worker 里跑（src/runtime/simWorker.ts），主线程只渲染、收输入。
   // 有委托时开局先停着，等玩家读完历史卡。
@@ -100,8 +115,14 @@ async function main(): Promise<void> {
   const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
   let shownQuarters = 0;
   // 自然档案馆：翻看现有技术；情景允许引种时，条目上有"引进到这里"。开着时推演暂停。
-  /** 选好了要引进的物种和数量、等着在地图上点地点；null 表示没在引进。 */
-  let introducing: { id: string; count: number } | null = null;
+  /** 选好了要引进的物种（档案馆的真实物种，或设计台的设计）和数量、等着在地图上点地点；null 表示没在引进。 */
+  let introducing: { species: SpeciesParams; design?: Design; count: number } | null = null;
+  const startIntroducing = (choice: NonNullable<typeof introducing>): void => {
+    tools.stopReleasing();
+    field.stop();
+    introducing = choice;
+    status.textContent = modeHint();
+  };
   const intro = toolData.introduction;
   const archive = new ArchivePanel(
     el('archive'),
@@ -116,20 +137,26 @@ async function main(): Promise<void> {
             const c = costOf({ type: 'introduce', species: p, x: 0, y: 0, count }, toolData, world.cellSizeM);
             return { text: `${c.budget.toLocaleString('zh-CN')} 元（购买、运输、检疫），${c.staff} 支队伍 ${c.days} 天；引进后收不回来`, allowed: true };
           },
-          start: (id, count) => {
-            tools.stopReleasing();
-            field.stop();
-            introducing = { id, count };
-            status.textContent = modeHint();
-          },
+          start: (id, count) => startIntroducing({ species: speciesLibrary.get(id)!, count }),
         }
       : undefined,
   );
   /** 正在等着点地图的模式的提示（状态栏清空时还原它，免得模式开着却看不出来）。 */
   const modeHint = (): string =>
-    introducing ? `在地图上点一下投放 ${introducing.count} 只${speciesLibrary.get(introducing.id)!.name}（按 Esc 取消）` : '';
+    introducing ? `在地图上点一下投放 ${introducing.count} 只${introducing.species.name}（按 Esc 取消）` : '';
+  // Esc：先关开着的档案馆或设计台，再取消引进模式。
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && introducing) {
+    if (e.key !== 'Escape') return;
+    // 正在输入框里打字（比如设计的名字）：Esc 只退出输入框，不关面板。
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) {
+      t.blur();
+      return;
+    }
+    if (archive.isOpen || desk.isOpen) {
+      archive.close();
+      desk.close();
+    } else if (introducing) {
       introducing = null;
       status.textContent = '取消了引进';
     }
@@ -139,14 +166,24 @@ async function main(): Promise<void> {
   archiveBtn.title = '翻看现有技术：真实动物的数据档案和知识卡';
   archiveBtn.addEventListener('click', () => archive.toggle());
   el('office-bar').append(archiveBtn);
-  // 设计台：拼部件、看推导和能量收支。开着时推演暂停。
-  const kit = makeDesignKit(
-    partLibrary,
-    scalingLaws,
-    hintTemplates,
-    designTemplates.map((t) => t.design),
+  // 设计台：拼部件、看推导和能量收支；情景允许时可以把设计投放到地图上。开着时推演暂停。
+  const desk = new DesignDesk(
+    el('design'),
+    kit,
+    designSlots,
+    designTemplates,
+    speciesLibrary,
+    rules.introduction.designs && intro
+      ? {
+          maxAnimals: intro.maxAnimals,
+          quote: (species, count) => {
+            const c = costOf({ type: 'introduce', species, x: 0, y: 0, count }, toolData, world.cellSizeM);
+            return `${c.budget.toLocaleString('zh-CN')} 元（繁育、运输），${c.staff} 支队伍 ${c.days} 天；投放后收不回来`;
+          },
+          start: (design, species, count) => startIntroducing({ species, design, count }),
+        }
+      : undefined,
   );
-  const desk = new DesignDesk(el('design'), kit, designSlots, designTemplates, speciesLibrary);
   const deskBtn = document.createElement('button');
   deskBtn.textContent = '设计台';
   deskBtn.title = '设计一种新动物：选体型、部件和繁殖策略，看推导出来的代价';
@@ -162,7 +199,7 @@ async function main(): Promise<void> {
     el<HTMLCanvasElement>('chart'),
     history,
     world.vegetation.maxBiomass,
-    session.species.map((s) => speciesColor(s.params.id).chart),
+    session.species.map((s) => colorOf(s.params).chart),
   );
   // 点图切换纵轴：各自比例 ↔ 对数（只是看法，不进操作日志）。
   el<HTMLCanvasElement>('chart').addEventListener('click', () => {
@@ -202,7 +239,7 @@ async function main(): Promise<void> {
     captures.setSpecies(session.species);
     if (cards) cards.speciesIds = list.map((s) => s.id);
     history.setSpecies(names);
-    chart.colors = list.map((s) => speciesColor(s.id).chart);
+    chart.colors = session.species.map((s) => colorOf(s.params).chart);
     tools.setSpecies(list);
     field.setSpecies(list);
     layers.setSpecies(names);
@@ -275,14 +312,13 @@ async function main(): Promise<void> {
       // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
       const chosen = introducing;
       introducing = null;
-      const { id, count } = chosen;
-      const species = speciesLibrary.get(id)!;
-      void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count }).then((ok) => {
+      const { species, design, count } = chosen;
+      void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count, ...(design ? { design } : {}) }).then((ok) => {
         if (!ok) {
           introducing = chosen;
           return;
         }
-        status.textContent = `在 (${cell.x}, ${cell.y}) 放出了引进的 ${count} 只${species.name}`;
+        status.textContent = `在 (${cell.x}, ${cell.y}) 放出了${design ? '设计的' : '引进的'} ${count} 只${species.name}`;
       });
       return;
     }

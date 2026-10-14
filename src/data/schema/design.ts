@@ -86,6 +86,8 @@ export const DesignSchema = z.object({
   breedingMonths: z.number().int().min(1).max(12),
   nest: z.enum(['ground', 'burrow']),
   territorial: z.boolean(),
+  /** 在世界里的主色（田野笔记的平涂色，可选的几种见 render/palette.ts 的 DESIGN_COLORS）；不写用墨灰。 */
+  color: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
   /** 每个槽位选一个部件（部件 id）。 */
   parts: z.object(Object.fromEntries(SLOTS.map((s) => [s, z.string()])) as Record<Slot, z.ZodString>),
 });

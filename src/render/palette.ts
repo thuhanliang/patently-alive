@@ -45,6 +45,24 @@ export function speciesColor(id: string): { body: number; chart: number } {
 }
 
 /**
+ * 设计物种可选的主色：田野笔记的低饱和平涂色。避开朱红（警报）、蓝图蓝（玩家的批注），
+ * 也不和任何一种固定物种主色相同（测试会查），免得自己的物种和鼠、兔混在一起。
+ */
+export const DESIGN_COLORS = ['#6f8f72', '#9a6f8a', '#5f6b4e', '#b0805c', '#4f7f86', '#a39a3f', '#7b5e8f', '#8f4f4f'] as const;
+
+/** 固定物种主色（测试用：设计物种的可选色不能和它们重复）。 */
+export const FIXED_SPECIES_COLORS: readonly number[] = Object.values(SPECIES_COLORS).flatMap((c) => [c.body, c.chart]);
+
+/** 按物种参数取主色：设计物种用设计时选的颜色，真实物种查上面的表。 */
+export function colorOf(p: { id: string; appearance?: { color: string } | undefined }): { body: number; chart: number } {
+  if (p.appearance) {
+    const c = parseInt(p.appearance.color.slice(1), 16);
+    return { body: c, chart: c };
+  }
+  return speciesColor(p.id);
+}
+
+/**
  * 地形的水彩色（低饱和、低对比）。陆地按植被多少在"枯"和"茂"之间插值；水按离岸远近在浅、深之间插值。
  */
 export const TERRAIN_COLORS = {

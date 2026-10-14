@@ -14,7 +14,8 @@ import {
   type Design,
 } from '../src/data';
 import { HintTemplatesSchema } from '../src/data/schema/design';
-import { cellIndex, checksum, compileDesign, makeDesignKit, scenarioRules, Session, TICKS_PER_DAY, DAYS_PER_YEAR } from '../src/sim';
+import { DESIGN_COLORS, FIXED_SPECIES_COLORS } from '../src/render/palette';
+import { cellIndex, checksum, compileDesign, designDataOf, makeDesignKit, scenarioRules, Session, TICKS_PER_DAY, DAYS_PER_YEAR } from '../src/sim';
 
 const kit = makeDesignKit(
   partLibrary,
@@ -140,12 +141,76 @@ describe('设计编译器', () => {
   });
 });
 
+describe('投放设计物种（操作接口重新编译核对）', () => {
+  const designData = designDataOf(kit);
+  const island = scenarioLibrary.get('bird-island')!;
+  const islandConfig = { seed: 2, world: worldFor(island), species: speciesFor(worldFor(island)), tools, design: designData };
+  const design: Design = { ...template('stoat'), id: 'd_test', name: '试验鼬' };
+  const species = compile(design).params;
+  const at = (s: Session): { x: number; y: number } => {
+    const { grid } = s.sim.state;
+    for (let i = 0; i < grid.terrain.length; i++) if (grid.terrain[i] !== 0) return { x: i % grid.width, y: Math.floor(i / grid.width) };
+    throw new Error('没有陆地');
+  };
+
+  it('鸟岛：档案馆的真实物种不能引进，自己设计的可以投放', () => {
+    const s = new Session(islandConfig, scenarioRules(island));
+    const r = s.submit({ type: 'introduce', species: speciesLibrary.get('stoat')!, ...at(s), count: 5 });
+    expect(r.ok).toBe(false);
+    expect(s.submit({ type: 'introduce', species, design, ...at(s), count: 5 })).toEqual({ ok: true });
+    expect(s.sim.species.at(-1)!.params.id).toBe('d_test');
+  });
+
+  it('手写的参数冒充设计被拒绝；d_ 开头的物种不附设计也被拒绝', () => {
+    const s = new Session(islandConfig, scenarioRules(island));
+    const forged = { ...species, survival: { adultAnnual: 0.99 } };
+    const r = s.submit({ type: 'introduce', species: forged, design, ...at(s), count: 5 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain('对不上');
+    const sandbox = new Session(islandConfig);
+    expect(sandbox.submit({ type: 'introduce', species, ...at(sandbox), count: 5 }).ok).toBe(false);
+    expect(s.sim.species).toHaveLength(islandConfig.species.length);
+  });
+
+  it('配置带档案馆条目时，不附设计的引种必须和其中一条一模一样', () => {
+    const small = scenarioLibrary.get('bird-island-small')!;
+    const cfg = { seed: 2, world: worldFor(small), species: speciesFor(worldFor(small)), tools, catalog: [...speciesLibrary.values()] };
+    const s = new Session(cfg, scenarioRules(small));
+    const stoat = speciesLibrary.get('stoat')!;
+    const r = s.submit({ type: 'introduce', species: { ...stoat, id: 'superstoat', survival: { adultAnnual: 0.99 } }, ...at(s), count: 5 });
+    expect(r.ok).toBe(false);
+    expect(s.submit({ type: 'introduce', species: stoat, ...at(s), count: 5 })).toEqual({ ok: true });
+  });
+
+  it('设计物种的可选主色不和任何固定物种主色相同', () => {
+    for (const c of DESIGN_COLORS) expect(FIXED_SPECIES_COLORS).not.toContain(parseInt(c.slice(1), 16));
+  });
+
+  it('没有设计数据的世界、不允许设计的委托都拒绝', () => {
+    const { design: _, ...noData } = islandConfig;
+    const a = new Session(noData, scenarioRules(island));
+    expect(a.submit({ type: 'introduce', species, design, ...at(a), count: 5 }).ok).toBe(false);
+    const rules = scenarioRules(island);
+    const b = new Session(islandConfig, { ...rules, introduction: { ...rules.introduction, designs: false } });
+    expect(b.submit({ type: 'introduce', species, design, ...at(b), count: 5 }).ok).toBe(false);
+  });
+
+  it('投放了设计物种的日志能回放，结果一致', () => {
+    const s = new Session(islandConfig, scenarioRules(island));
+    expect(s.submit({ type: 'introduce', species, design, ...at(s), count: 5 }).ok).toBe(true);
+    s.advance(TICKS_PER_DAY * 20);
+    const replayed = Session.replay(JSON.parse(JSON.stringify(s.exportLog())));
+    expect(checksum(replayed.sim.state)).toBe(checksum(s.sim.state));
+  });
+});
+
 describe('设计物种进推演', () => {
   it('编译出的物种可以引进小鸟岛，跑一年不出错，日志回放结果一致', () => {
     const scenario = scenarioLibrary.get('bird-island-small')!;
     const world = worldFor(scenario);
     const rules = { ...scenarioRules(scenario), goal: { ...scenario.goal, years: 1 } };
-    const config = { seed: 3, world, species: speciesFor(world), tools };
+    const designData = designDataOf(kit);
+    const config = { seed: 3, world, species: speciesFor(world), tools, design: designData };
     const design: Design = { ...template('mongoose'), id: 'd_ratcatcher', name: '捕鼠者', activity: 'nocturnal' };
     const species = compile(design).params;
     const run = (): Session => {
@@ -153,7 +218,7 @@ describe('设计物种进推演', () => {
       const { grid } = s.sim.state;
       let at = { x: 24, y: 24 };
       for (let r = 0; grid.terrain[cellIndex(grid, at.x, at.y)] === 0; r++) at = { x: 24 + (r % 12), y: 24 - Math.floor(r / 12) };
-      expect(s.submit({ type: 'introduce', species, ...at, count: 30 })).toEqual({ ok: true });
+      expect(s.submit({ type: 'introduce', species, design, ...at, count: 30 })).toEqual({ ok: true });
       s.advance(TICKS_PER_DAY * DAYS_PER_YEAR);
       return s;
     };

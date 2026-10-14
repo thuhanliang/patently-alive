@@ -168,6 +168,7 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
       ...(climbs ? { climbs: true } : {}),
     },
     initialDensityPerHa: 0,
+    ...(design.color ? { appearance: { color: design.color } } : {}),
     source: `设计：${parts.coat.name}、${parts.mouth.name}、${parts.limbs.name}、${parts.tail.name}、${parts.digestion.name}、${parts.rearing.name}`,
     energyFactor: Math.round(appetite * 1000) / 1000,
   };
@@ -211,4 +212,13 @@ export function calibrate(templates: readonly Design[], kit: Omit<DesignKit, 'ap
 export function makeDesignKit(parts: ReadonlyMap<string, Part>, laws: ScalingLaws, hints: HintTemplates, templates: readonly Design[]): DesignKit {
   const kit = { parts, laws, hints };
   return { ...kit, appetiteBaseline: calibrate(templates, kit) };
+}
+
+/** 配置里的设计数据（DesignData，见 config.ts）和设计台用的 DesignKit 互相转换：两边编译的结果必须一样。 */
+export function designKitFromData(data: { parts: readonly Part[]; laws: ScalingLaws; hints: HintTemplates; appetiteBaseline: number }): DesignKit {
+  return { parts: new Map(data.parts.map((p) => [p.id, p] as const)), laws: data.laws, hints: data.hints, appetiteBaseline: data.appetiteBaseline };
+}
+
+export function designDataOf(kit: DesignKit): { parts: Part[]; laws: ScalingLaws; hints: HintTemplates; appetiteBaseline: number } {
+  return { parts: [...kit.parts.values()], laws: kit.laws, hints: kit.hints, appetiteBaseline: kit.appetiteBaseline };
 }

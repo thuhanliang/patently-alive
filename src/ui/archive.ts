@@ -1,6 +1,7 @@
 import type { ArchiveEntry, SpeciesParams } from '../data';
 import { nearest, traitsOf } from '../sim';
 import { css, speciesColor } from '../render/palette';
+import { countPicker } from './countPicker';
 
 const ACTIVITY: Record<SpeciesParams['activity'], string> = {
   diurnal: '昼行',
@@ -177,37 +178,31 @@ export class ArchivePanel {
 
   /** 引进这一种：选数量，看花费，然后回到地图上点地点。引进不可撤销。 */
   private introduceRow(id: string, hooks: IntroduceHooks): HTMLElement {
-    const row = div('bar archive-introduce');
-    const count = document.createElement('input');
-    count.type = 'number';
-    count.min = '1';
-    count.max = String(hooks.maxAnimals);
-    count.value = String(this.count);
-    count.style.width = '5em';
-    const cost = textEl('span', '', 'note');
-    const chosen = (): number => Math.max(1, Math.min(hooks.maxAnimals, Math.floor(Number(count.value) || 1)));
-    const go = textEl('button', '引进到这里') as HTMLButtonElement;
     const refresh = (): void => {
-      this.count = chosen();
       const q = hooks.quote(id, this.count);
-      cost.textContent = q.text;
-      go.disabled = !q.allowed;
+      picker.note.textContent = q.text;
+      picker.button.disabled = !q.allowed;
     };
-    count.addEventListener('input', refresh);
-    // 填的数超出范围：离开输入框时改成实际会引进的数。
-    count.addEventListener('change', () => (count.value = String(chosen())));
-    go.title = '关掉档案馆，在地图上点投放地点。引进以后收不回来，只能再用兽医手段减少。';
-    go.addEventListener('click', () => {
-      refresh();
-      if (go.disabled) return;
-      this.close();
-      hooks.start(id, this.count);
+    const picker = countPicker({
+      verb: '引进',
+      button: '引进到这里',
+      title: '关掉档案馆，在地图上点投放地点。引进以后收不回来，只能再用兽医手段减少。',
+      max: hooks.maxAnimals,
+      initial: this.count,
+      onCount: (n) => {
+        this.count = n;
+        refresh();
+      },
+      onGo: (n) => {
+        this.count = n;
+        refresh();
+        if (picker.button.disabled) return;
+        this.close();
+        hooks.start(id, n);
+      },
     });
-    const countLabel = document.createElement('label');
-    countLabel.append('引进 ', count, ' 只');
-    row.append(countLabel, go, cost);
     refresh();
-    return row;
+    return picker.row;
   }
 }
 

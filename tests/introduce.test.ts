@@ -61,9 +61,9 @@ describe('引种', () => {
   });
 
   it('不合规的引种被拒绝，什么都不变', () => {
-    const closed = new Session(config, { ...rules, introduction: { allowed: false, banned: [] } });
+    const closed = new Session(config, { ...rules, introduction: { allowed: false, banned: [], designs: false } });
     expect(closed.submit(introduce(closed)).ok).toBe(false);
-    const banned = new Session(config, { ...rules, introduction: { allowed: true, banned: ['mongoose'] } });
+    const banned = new Session(config, { ...rules, introduction: { allowed: true, banned: ['mongoose'], designs: false } });
     const r = banned.submit(introduce(banned));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain('禁止');
