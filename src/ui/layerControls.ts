@@ -38,7 +38,15 @@ export function bindLayerControls(
   const setSpecies = (names: readonly string[]): void => {
     const keep = deathSpecies.value;
     deathSpecies.replaceChildren(...names.map((name, i) => new Option(name, String(i))));
-    if (keep !== '' && Number(keep) < names.length) deathSpecies.value = keep;
+    const keptDeath = keep !== '' && Number(keep) < names.length;
+    if (keptDeath) deathSpecies.value = keep;
+    // 物种变少了（读档）：开着的物种层或死亡热力指的物种没了，就回到植被层或第一个物种。
+    let changed = false;
+    if (typeof active === 'number' && active >= names.length) {
+      active = 'veg';
+      deathRow.style.display = 'none';
+      changed = true;
+    } else if (active === 'deaths' && !keptDeath) changed = true;
     const options: Array<[typeof active, string, () => DataLayer]> = [
       ['veg', '植被', () => ({ kind: 'vegetation' })],
       ...names.map((name, index) => [index, name, () => ({ kind: 'species', index })] as [typeof active, string, () => DataLayer]),
@@ -57,6 +65,7 @@ export function bindLayerControls(
       return b;
     });
     row.replaceChildren(...buttons);
+    if (changed) onChange(options.find(([key]) => key === active)![2]());
   };
   setSpecies(speciesNames);
   for (const sel of [deathSpecies, deathFilter]) sel.addEventListener('change', () => onChange(deathLayer()));

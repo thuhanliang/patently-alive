@@ -53,7 +53,11 @@ export class PopulationHistory {
     if (this.count < this.capacity) this.count += 1;
     else this.start = (this.start + 1) % this.capacity;
     this.days[i] = day;
-    // 物种线比数值多（不该发生）时多出来的记 0；数值多出来的（还没 setSpecies）先不记。
+    // 数值比物种线多（引进了新物种，名字还没随 setSpecies 到）：先加上没名字的线，名字到了再补。
+    while (this.buf.length - 1 < totals.length) {
+      this.buf.splice(this.buf.length - 1, 0, new Float64Array(this.capacity));
+      this.labelList.splice(this.labelList.length - 1, 0, '');
+    }
     for (let s = 0; s < this.buf.length - 1; s++) this.buf[s]![i] = totals[s] ?? 0;
     this.buf[this.buf.length - 1]![i] = veg;
   }

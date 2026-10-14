@@ -15,8 +15,8 @@ const NEST: Record<string, string> = { ground: '地面浅窝', burrow: '洞穴�
 export interface IntroduceHooks {
   /** 一次最多引进几只（工具数据）。 */
   maxAnimals: number;
-  /** 引进 count 只的花费说明；业主禁止引进的物种返回原因。 */
-  quote(id: string, count: number): string;
+  /** 引进 count 只的花费说明；业主禁止引进的物种 allowed 为 false，text 是原因。 */
+  quote(id: string, count: number): { text: string; allowed: boolean };
   /** 选好了物种和数量：档案馆关掉，回到地图上点投放地点。 */
   start(id: string, count: number): void;
 }
@@ -186,15 +186,20 @@ export class ArchivePanel {
     count.style.width = '5em';
     const cost = textEl('span', '', 'note');
     const chosen = (): number => Math.max(1, Math.min(hooks.maxAnimals, Math.floor(Number(count.value) || 1)));
+    const go = textEl('button', '引进到这里') as HTMLButtonElement;
     const refresh = (): void => {
       this.count = chosen();
-      cost.textContent = hooks.quote(id, this.count);
+      const q = hooks.quote(id, this.count);
+      cost.textContent = q.text;
+      go.disabled = !q.allowed;
     };
     count.addEventListener('input', refresh);
-    const go = textEl('button', '引进到这里');
+    // 填的数超出范围：离开输入框时改成实际会引进的数。
+    count.addEventListener('change', () => (count.value = String(chosen())));
     go.title = '关掉档案馆，在地图上点投放地点。引进以后收不回来，只能再用兽医手段减少。';
     go.addEventListener('click', () => {
       refresh();
+      if (go.disabled) return;
       this.close();
       hooks.start(id, this.count);
     });

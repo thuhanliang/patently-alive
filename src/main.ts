@@ -85,6 +85,8 @@ async function main(): Promise<void> {
   session.onError = (message) => (status.textContent = `推演出错：${message}`);
 
   const view = await MapView.mount(el('app'), session.sim.state, session.species);
+  /** 这一局现在的物种（id 和名字），按物种下标排。 */
+  const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
   /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */
   let names = session.species.map((s) => s.params.name);
   const hud = new Hud(el('hud'));
@@ -109,19 +111,22 @@ async function main(): Promise<void> {
           maxAnimals: intro.maxAnimals,
           quote: (id, count) => {
             const p = speciesLibrary.get(id)!;
-            if (rules.introduction.banned.includes(id)) return `业主明令禁止引进${p.name}`;
+            if (rules.introduction.banned.includes(id)) return { text: `业主明令禁止引进${p.name}`, allowed: false };
             const c = costOf({ type: 'introduce', species: p, x: 0, y: 0, count }, toolData, world.cellSizeM);
-            return `${c.budget.toLocaleString('zh-CN')} 元（购买、运输、检疫），${c.staff} 支队伍 ${c.days} 天；引进后收不回来`;
+            return { text: `${c.budget.toLocaleString('zh-CN')} 元（购买、运输、检疫），${c.staff} 支队伍 ${c.days} 天；引进后收不回来`, allowed: true };
           },
           start: (id, count) => {
             tools.stopReleasing();
             field.stop();
             introducing = { id, count };
-            status.textContent = `在地图上点一下投放 ${count} 只${speciesLibrary.get(id)!.name}（按 Esc 取消）`;
+            status.textContent = modeHint();
           },
         }
       : undefined,
   );
+  /** 正在等着点地图的模式的提示（状态栏清空时还原它，免得模式开着却看不出来）。 */
+  const modeHint = (): string =>
+    introducing ? `在地图上点一下投放 ${introducing.count} 只${speciesLibrary.get(introducing.id)!.name}（按 Esc 取消）` : '';
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && introducing) {
       introducing = null;
@@ -149,7 +154,7 @@ async function main(): Promise<void> {
   /** 所有玩家操作都从这里进统一操作接口（在 Worker 里的 Session.submit）；被拒绝时在状态栏说明原因。 */
   const submit = async (op: Op): Promise<boolean> => {
     const r = await session.submit(op);
-    status.textContent = r.ok ? '' : `操作被拒绝：${r.reason}`;
+    status.textContent = r.ok ? modeHint() : `操作被拒绝：${r.reason}`;
     return r.ok;
   };
 
@@ -160,6 +165,7 @@ async function main(): Promise<void> {
     captures.reset();
     alertBanner.reset();
     shownQuarters = session.quarters.length;
+    introducing = null;
     cards?.close();
     history.clear();
     view.redraw();
@@ -169,7 +175,7 @@ async function main(): Promise<void> {
   const syncSpecies = (): void => {
     if (session.speciesVersion === speciesVersion) return;
     speciesVersion = session.speciesVersion;
-    const list = session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
+    const list = speciesList();
     names = list.map((s) => s.name);
     view.setSpecies(session.species);
     deaths.names = names;
@@ -202,7 +208,7 @@ async function main(): Promise<void> {
 
   const tools = bindToolControls(
     el('tool-bar'),
-    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    speciesList(),
     {
       reseed: (seed) => session.reseed(seed),
       exportFile: () => session.saveText().then(({ text, day }) => ({ name: fileName(day), text })),
@@ -236,7 +242,7 @@ async function main(): Promise<void> {
   const field = bindFieldTools(
     el('field-tools'),
     toolData,
-    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    speciesList(),
     world.cellSizeM,
     () => {
       tools.stopReleasing();
@@ -248,11 +254,16 @@ async function main(): Promise<void> {
     const pos = view.camera.screenToWorld(screen);
     const cell = worldToCell(pos);
     if (introducing) {
-      const { id, count } = introducing;
+      // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
+      const chosen = introducing;
+      introducing = null;
+      const { id, count } = chosen;
       const species = speciesLibrary.get(id)!;
       void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count }).then((ok) => {
-        if (!ok) return;
-        introducing = null;
+        if (!ok) {
+          introducing = chosen;
+          return;
+        }
         status.textContent = `在 (${cell.x}, ${cell.y}) 放出了引进的 ${count} 只${species.name}`;
       });
       return;

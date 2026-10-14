@@ -13,6 +13,16 @@ describe('种群曲线的记录', () => {
     expect(h.value(1, 1)).toBe(5);
   });
 
+  it('数值先于名字到：先加一条没名字的线，不丢数', () => {
+    const h = new PopulationHistory(['鸟', '平均植被'], 10);
+    h.recordValues(0, [10, 4], 300);
+    expect(h.labels).toEqual(['鸟', '', '平均植被']);
+    h.setSpecies(['鸟', '獴']);
+    expect(h.labels).toEqual(['鸟', '獴', '平均植被']);
+    expect(h.value(1, 0)).toBe(4);
+    expect(h.value(2, 0)).toBe(300);
+  });
+
   it('读档后物种变少：去掉多出来的线', () => {
     const h = new PopulationHistory(['鸟', '猫', '獴', '平均植被'], 10);
     h.clear();
