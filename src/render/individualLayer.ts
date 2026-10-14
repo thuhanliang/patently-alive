@@ -25,10 +25,11 @@ export class IndividualLayer {
   private outlineKey = '';
 
   constructor(
-    private readonly species: readonly DerivedSpecies[],
+    /** 物种、形状、颜色都按物种下标排；引进新物种后由 MapView.setSpecies 换掉。 */
+    public species: readonly DerivedSpecies[],
     /** 每个物种的形状（同一张底图上的不同区域，见 sprites.ts）。 */
-    private readonly textures: readonly Texture[],
-    private readonly colors: readonly number[],
+    public textures: readonly Texture[],
+    public colors: readonly number[],
   ) {
     this.container.addChild(this.particles, this.outline);
   }

@@ -40,11 +40,11 @@ export class FieldLog {
   constructor(
     private readonly el: HTMLElement,
     private readonly card: HTMLElement,
-    private readonly species: readonly DerivedSpecies[],
+    private species: readonly DerivedSpecies[],
     private readonly tools: Tools | undefined,
     private readonly templates: NecropsyTemplates,
   ) {
-    for (const [s, sp] of species.entries()) this.inferSpecies.add(new Option(sp.params.name, String(s)));
+    this.fillInferSpecies();
     this.inferSpecies.addEventListener('change', () => {
       this.userChose = true;
       this.renderInference();
@@ -53,6 +53,19 @@ export class FieldLog {
     head.className = 'log-head';
     head.append('抽样推断：', this.inferSpecies);
     el.append(this.log, head, this.inference);
+  }
+
+  /** 换物种列表（引进了新物种）：推断的下拉框跟着换，已选的保留，记录下次重画。 */
+  setSpecies(species: readonly DerivedSpecies[]): void {
+    this.species = species;
+    this.fillInferSpecies();
+    this.drawn = false;
+  }
+
+  private fillInferSpecies(): void {
+    const keep = this.inferSpecies.value;
+    this.inferSpecies.replaceChildren(...this.species.map((sp, s) => new Option(sp.params.name, String(s))));
+    if (keep !== '' && Number(keep) < this.species.length) this.inferSpecies.value = keep;
   }
 
   private get names(): string[] {

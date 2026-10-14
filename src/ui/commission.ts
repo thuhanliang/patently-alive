@@ -13,8 +13,8 @@ export class CommissionCards {
   constructor(
     private readonly el: HTMLElement,
     private readonly scenario: Scenario,
-    /** 物种 id，顺序和各方法收到的 names 一致。 */
-    private readonly speciesIds: readonly string[],
+    /** 物种 id，顺序和各方法收到的 names 一致；引进新物种后换掉。 */
+    public speciesIds: readonly string[],
   ) {}
 
   get isOpen(): boolean {

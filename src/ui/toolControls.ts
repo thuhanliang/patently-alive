@@ -23,14 +23,20 @@ export function bindToolControls(
   allowRelease = true,
   /** 打开投放模式时调用（关掉别的点击模式）。 */
   onReleaseStart: () => void = () => {},
-): { isReleasing: () => boolean; stopReleasing: () => void; releaseChoice: () => { id: string; count: number } } {
+): {
+  isReleasing: () => boolean;
+  stopReleasing: () => void;
+  releaseChoice: () => { id: string; count: number };
+  /** 引进了新物种：投放的物种表跟着换（已选的保留）。 */
+  setSpecies: (species: ReadonlyArray<{ id: string; name: string }>) => void;
+} {
   const select = document.createElement('select');
-  for (const s of species) {
-    const o = document.createElement('option');
-    o.value = s.id;
-    o.textContent = s.name;
-    select.appendChild(o);
-  }
+  const setSpecies = (list: ReadonlyArray<{ id: string; name: string }>): void => {
+    const keep = select.value;
+    select.replaceChildren(...list.map((s) => new Option(s.name, s.id)));
+    if (list.some((s) => s.id === keep)) select.value = keep;
+  };
+  setSpecies(species);
   const count = document.createElement('input');
   count.type = 'number';
   count.min = '1';
@@ -117,5 +123,6 @@ export function bindToolControls(
       toggle.classList.remove('active');
     },
     releaseChoice: () => ({ id: select.value, count: Math.max(1, Math.min(10_000, Math.floor(Number(count.value) || 1))) }),
+    setSpecies,
   };
 }

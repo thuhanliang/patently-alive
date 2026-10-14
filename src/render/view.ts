@@ -26,6 +26,7 @@ export class MapView {
   private lastTick = -1;
   private lastDay = -1;
   private layer: DataLayer = { kind: 'vegetation' };
+  private readonly shapes: ReturnType<typeof buildShapeTextures>;
 
   private constructor(
     readonly app: Application,
@@ -33,18 +34,11 @@ export class MapView {
     species: readonly DerivedSpecies[],
   ) {
     const { width, height } = state.grid;
-    const colors = species.map((sp) => speciesColor(sp.params.id));
-    this.grid = new GridLayer(width, height, state.grid.terrain, colors.map((c) => c.chart));
-    const shapes = buildShapeTextures(app.renderer);
-    this.individuals = new IndividualLayer(
-      species,
-      species.map((sp) => shapes[shapeOf(sp.params.id)]),
-      colors.map((c) => c.body),
-    );
-    this.region = new RegionLayer(
-      species.map((sp) => shapes[shapeOf(sp.params.id)]),
-      colors.map((c) => c.body),
-    );
+    this.shapes = buildShapeTextures(app.renderer);
+    this.grid = new GridLayer(width, height, state.grid.terrain, []);
+    this.individuals = new IndividualLayer([], [], []);
+    this.region = new RegionLayer([], []);
+    this.setSpecies(species);
     this.annotations = new AnnotationLayer(state.config.tools);
     this.world.addChild(this.grid.container, this.region.container, this.individuals.container, this.annotations.container);
     app.stage.addChild(this.world);
@@ -64,6 +58,19 @@ export class MapView {
     await app.init({ resizeTo: host, background: PAPER, antialias: true });
     host.appendChild(app.canvas);
     return new MapView(app, state, species);
+  }
+
+  /** 换物种列表（开局、引进了新物种、读档后物种不同时）：各图层的形状和主色按新的物种下标排。 */
+  setSpecies(species: readonly DerivedSpecies[]): void {
+    const colors = species.map((sp) => speciesColor(sp.params.id));
+    const textures = species.map((sp) => this.shapes[shapeOf(sp.params.id)]);
+    this.grid.speciesColors = colors.map((c) => c.chart);
+    this.individuals.species = species;
+    this.individuals.textures = textures;
+    this.individuals.colors = colors.map((c) => c.body);
+    this.region.textures = textures;
+    this.region.colors = colors.map((c) => c.body);
+    this.redraw();
   }
 
   /** 屏幕中心对着哪一格，以及屏幕上看得见几格宽、几格高。 */
