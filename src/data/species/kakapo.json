@@ -1,0 +1,46 @@
+{
+  "id": "kakapo",
+  "name": "鸮鹦鹉",
+  "scientificName": "Strigops habroptilus",
+  "diet": {
+    "plant": 1,
+    "vertebrate": 0,
+    "invertebrate": 0
+  },
+  "bodyMassKg": 1.75,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 2.5,
+    "gestationDays": 30,
+    "litterIntervalDays": 365,
+    "ageAtMaturityDays": 3650,
+    "breedingByMonth": [
+      0,
+      0,
+      0,
+      0,
+      0.3,
+      0.3,
+      0.3,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "nestDays": 100,
+    "nest": "ground"
+  },
+  "survival": {
+    "adultAnnual": 0.97
+  },
+  "maxLifespanYears": 60,
+  "movement": {
+    "dailyRangeM": 500,
+    "homeRangeKm2": 0.3,
+    "territorial": false,
+    "climbs": true
+  },
+  "initialDensityPerHa": 0.02,
+  "source": "AnAge 记作 Strigops habroptila（核对时按这个名字查）。体重（1.75 千克）、每窝蛋数（2.5）、孵化期（30 天）、雌性性成熟（3650 天）、最长寿命（60 年）取 AnAge Build 15（Tacutu et al. 2018）；PanTHERIA 无记录。以下为估计（见 docs/MODEL.md）：只在罗汉松大量结果的年份繁殖，两到四年一次，这里用繁殖月份的比例 0.3 表示\"大约三年一次\"；雏鸟在窝里约 10 周；成体年存活率约 0.97；家域彼此重叠；只吃植物。不会飞，但善于爬树。"
+}

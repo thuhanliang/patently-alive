@@ -22,11 +22,21 @@ const SPECIES_COLORS: Record<string, { body: number; chart: number }> = {
   dotterel: { body: 0xf7f5f0, chart: 0x3a3a3a },
   rabbit: { body: 0xc9a97a, chart: 0xb08a55 },
   rat: { body: 0x7d8a99, chart: 0x6b7889 },
-  vole: { body: 0x7d8a99, chart: 0x6b7889 },
+  vole: { body: 0x8c8270, chart: 0x7a705e },
   cat: { body: 0xd98a3d, chart: 0xd98a3d },
   // 阶段 0 的鼬：CLAUDE.md 没定主色，取两种深浅的栗褐，和猫的橘色分得开。
   weasel: { body: 0xa8714a, chart: 0xa8714a },
   stoat: { body: 0x6e4a33, chart: 0x6e4a33 },
+  brownrat: { body: 0x6f665c, chart: 0x6f665c },
+  kiore: { body: 0x9c8a72, chart: 0x8a785f },
+  mouse: { body: 0x9a968e, chart: 0x86827a },
+  mongoose: { body: 0x8a7a4e, chart: 0x8a7a4e },
+  ferret: { body: 0xe2d3b0, chart: 0xa89870 },
+  fox: { body: 0xc4622d, chart: 0xc4622d },
+  possum: { body: 0x8e9196, chart: 0x74777c },
+  kiwi: { body: 0x7a5b3a, chart: 0x7a5b3a },
+  weka: { body: 0x8b5e34, chart: 0x8b5e34 },
+  kakapo: { body: 0x7c9a4a, chart: 0x7c9a4a },
 };
 const FALLBACK = { body: 0x8a857c, chart: 0x6a655c };
 

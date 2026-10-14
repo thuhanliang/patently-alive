@@ -85,13 +85,18 @@ if (!pantheria || !anage) {
 const PAN_ACTIVITY = { 1: '夜行', 2: '夜行 / 晨昏 / 全天 / 昼行混合', 3: '昼行' };
 
 // ---------- 抽取：两个数据库各取用得到的字段（不整行复制）
+/** 数据库沿用旧分类时的对照名（见 sources.json 的 synonyms）。 */
+const synonyms = manifest.synonyms ?? {};
+
 function extract(scientificName) {
-  const [genus, epithet] = scientificName.split(' ');
-  const p = pantheria.find((r) => r.MSW05_Binomial === scientificName) ?? null;
+  const lookup = typeof synonyms[scientificName] === 'string' ? synonyms[scientificName] : scientificName;
+  const [genus, epithet] = lookup.split(' ');
+  const p = pantheria.find((r) => r.MSW05_Binomial === lookup) ?? null;
   const a = anage.find((r) => r.Genus === genus && r.Species === epithet) ?? null;
   const homeRangeKm2 = num(p, 'HomeRange_km2');
   return {
     scientificName,
+    ...(lookup !== scientificName ? { lookedUpAs: lookup } : {}),
     pantheria: p && {
       adultBodyMassG: num(p, 'AdultBodyMass_g'),
       litterSize: num(p, 'LitterSize'),
@@ -169,7 +174,7 @@ for (const sp of species) {
   const homeDiamM = P.homeRangeKm2 != null ? 2 * Math.sqrt((P.homeRangeKm2 * 1e6) / Math.PI) : null;
   out.push(`## ${sp.name}（*${sp.scientificName}*）`);
   out.push('');
-  out.push(`PanTHERIA：${r.pantheria ? '有记录' : '**无记录**'}；AnAge：${r.anage ? `有记录（数据质量 ${A.dataQuality ?? '—'}，样本 ${A.sampleSize ?? '—'}）` : '**无记录**'}`);
+  out.push(`${r.lookedUpAs ? `按 *${r.lookedUpAs}* 查。` : ''}PanTHERIA：${r.pantheria ? '有记录' : '**无记录**'}；AnAge：${r.anage ? `有记录（数据质量 ${A.dataQuality ?? '—'}，样本 ${A.sampleSize ?? '—'}）` : '**无记录**'}`);
   out.push('');
   out.push('| 项 | 我们用的 | PanTHERIA | AnAge | 结论 |');
   out.push('| --- | --- | --- | --- | --- |');

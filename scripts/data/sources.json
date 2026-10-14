@@ -24,24 +24,15 @@
   ],
   "extraTaxa": {
     "说明": "游戏里还没有、但后续阶段会用到的物种：一并摘录进 traits-reference.json，免得以后再下载。",
-    "阶段 1（野猫与鸟岛）": [
-      "Felis catus",
-      "Rattus rattus",
-      "Rattus norvegicus",
-      "Rattus exulans",
-      "Mus musculus"
-    ],
-    "阶段 2（档案馆与引种）": [
-      "Herpestes auropunctatus",
-      "Mustela furo",
-      "Vulpes vulpes",
-      "Trichosurus vulpecula"
-    ],
     "鸟类（只有 AnAge 有）": [
-      "Apteryx mantelli",
-      "Philesturnus carunculatus",
-      "Strigops habroptilus",
-      "Gallirallus australis"
+      "Philesturnus carunculatus"
     ]
+  },
+  "synonyms": {
+    "说明": "数据库沿用旧分类、和我们的学名不同时，核对时按右边的名字查（写明理由见各物种 source）。",
+    "Herpestes auropunctatus": "Herpestes javanicus",
+    "Mustela furo": "Mustela putorius",
+    "Apteryx mantelli": "Apteryx australis",
+    "Strigops habroptilus": "Strigops habroptila"
   }
 }

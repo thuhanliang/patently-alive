@@ -1,0 +1,45 @@
+{
+  "id": "ferret",
+  "name": "雪貂",
+  "scientificName": "Mustela furo",
+  "diet": {
+    "plant": 0.05,
+    "vertebrate": 0.85,
+    "invertebrate": 0.1
+  },
+  "bodyMassKg": 0.9,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 7,
+    "gestationDays": 42,
+    "litterIntervalDays": 150,
+    "ageAtMaturityDays": 300,
+    "breedingByMonth": [
+      0.5,
+      1,
+      1,
+      1,
+      0.5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "nestDays": 50,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.45
+  },
+  "maxLifespanYears": 11,
+  "movement": {
+    "dailyRangeM": 1500,
+    "homeRangeKm2": 0.53,
+    "territorial": true
+  },
+  "initialDensityPerHa": 0.01,
+  "source": "雪貂是欧洲林鼬驯化来的，两个数据库没有单列，核对时按 Mustela putorius（欧洲林鼬）查。体重（976 / 809 克）、窝仔数（8.5 / 7.5）、妊娠期（41 / 42 天）、性成熟（253 / 322 天）、最长寿命（AnAge 11.1 年）取 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）；家域面积（0.53 平方公里）、夜行、种群密度（0.8 只/平方公里）取 PanTHERIA。以下为估计（见 docs/MODEL.md）：新西兰的野生雪貂以兔为主食；每年一到两窝；断奶约 7 周；成体年存活率约 0.45；守同性领地；不善爬树。"
+}

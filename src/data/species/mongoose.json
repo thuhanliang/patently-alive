@@ -1,0 +1,45 @@
+{
+  "id": "mongoose",
+  "name": "红颊獴",
+  "scientificName": "Herpestes auropunctatus",
+  "diet": {
+    "plant": 0.1,
+    "vertebrate": 0.45,
+    "invertebrate": 0.45
+  },
+  "bodyMassKg": 0.6,
+  "activity": "diurnal",
+  "reproduction": {
+    "litterSize": 2,
+    "gestationDays": 49,
+    "litterIntervalDays": 150,
+    "ageAtMaturityDays": 167,
+    "breedingByMonth": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      0.5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.5
+    ],
+    "nestDays": 35,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.4
+  },
+  "maxLifespanYears": 10,
+  "movement": {
+    "dailyRangeM": 600,
+    "homeRangeKm2": 0.22,
+    "territorial": false
+  },
+  "initialDensityPerHa": 0.4,
+  "source": "两个数据库按旧分类把小印度獴并在 Herpestes javanicus 里（核对时按这个名字查）。窝仔数（2.2 / 2）、妊娠期（48 / 49 天）、两窝间隔（152 天）、最长寿命（PanTHERIA 120 个月）、家域面积（0.22 平方公里）、性成熟（167 天）、白天活动、种群密度（0.4 只/公顷）取 PanTHERIA 1.0（Jones et al. 2009）；AnAge Build 15（Tacutu et al. 2018）的雌性性成熟（301 天）是体型更大的爪哇獴圈养记录，没有采用。体重取 0.6 千克：两库的 750–800 克包括体型更大的爪哇獴，夏威夷的小印度獴多在 0.4–0.65 千克。以下为估计（见 docs/MODEL.md）：食谱是脊椎动物（鼠、鸟、蜥蜴、蛋）和昆虫各约一半，少量果实；幼崽在洞里约 5 周；成体年存活率约 0.4；夏威夷的繁殖期在春夏。獴不善爬树。"
+}

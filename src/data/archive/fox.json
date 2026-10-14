@@ -1,0 +1,14 @@
+{
+  "species": "fox",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "食肉目",
+    "family": "犬科"
+  },
+  "range": "分布遍及北半球；19 世纪被引入澳大利亚。",
+  "card": [
+    "赤狐是分布最广的野生食肉动物。",
+    "它在 19 世纪被引入澳大利亚，是许多小型有袋类和地面鸟类减少乃至灭绝的原因之一。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Red fox、Red foxes in Australia"
+}

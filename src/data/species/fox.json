@@ -1,0 +1,45 @@
+{
+  "id": "fox",
+  "name": "赤狐",
+  "scientificName": "Vulpes vulpes",
+  "diet": {
+    "plant": 0.25,
+    "vertebrate": 0.6,
+    "invertebrate": 0.15
+  },
+  "bodyMassKg": 4.5,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 4.5,
+    "gestationDays": 52,
+    "litterIntervalDays": 365,
+    "ageAtMaturityDays": 304,
+    "breedingByMonth": [
+      1,
+      0.5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "nestDays": 49,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.5
+  },
+  "maxLifespanYears": 15,
+  "movement": {
+    "dailyRangeM": 4000,
+    "homeRangeKm2": 3.5,
+    "territorial": true
+  },
+  "initialDensityPerHa": 0.011,
+  "source": "体重（4.8 / 4.1 千克）、窝仔数（4.6 / 5）、妊娠期（52 天）、一年一窝、性成熟（AnAge 雌性 304 天）取 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）；最长寿命取 PanTHERIA（15 年，AnAge 的 21 年是圈养记录）；家域面积（3.5 平方公里）、夜行、种群密度（1.1 只/平方公里）取 PanTHERIA。以下为估计（见 docs/MODEL.md）：食谱约六成是小型脊椎动物，其余是果实和昆虫；幼崽在洞里约 7 周；成体年存活率约 0.5；守领地。"
+}

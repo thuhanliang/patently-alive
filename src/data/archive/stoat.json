@@ -1,0 +1,14 @@
+{
+  "species": "stoat",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "食肉目",
+    "family": "鼬科"
+  },
+  "range": "分布于欧亚大陆和北美；1880 年代被引入新西兰。",
+  "card": [
+    "白鼬的受精卵会延迟着床，从交配到产仔可长达近一年。",
+    "1880 年代为控制兔子被引入新西兰，后来成为本地鸟类的头号天敌之一。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Stoat、Stoats in New Zealand"
+}

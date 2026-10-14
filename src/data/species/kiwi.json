@@ -1,0 +1,45 @@
+{
+  "id": "kiwi",
+  "name": "褐几维",
+  "scientificName": "Apteryx mantelli",
+  "diet": {
+    "plant": 0.05,
+    "vertebrate": 0,
+    "invertebrate": 0.95
+  },
+  "bodyMassKg": 2.6,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 1,
+    "gestationDays": 75,
+    "litterIntervalDays": 120,
+    "ageAtMaturityDays": 1461,
+    "breedingByMonth": [
+      1,
+      1,
+      1,
+      1,
+      0.5,
+      0.3,
+      0,
+      0,
+      0,
+      0.3,
+      0.5,
+      1
+    ],
+    "nestDays": 90,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.95
+  },
+  "maxLifespanYears": 35,
+  "movement": {
+    "dailyRangeM": 600,
+    "homeRangeKm2": 0.4,
+    "territorial": true
+  },
+  "initialDensityPerHa": 0.05,
+  "source": "AnAge 按旧分类记作 Apteryx australis（褐几维，核对时按这个名字查）。体重（2.6 千克）、每窝一枚蛋、孵化期（75 天）、雌性性成熟（1461 天）、最长寿命（35 年）取 AnAge Build 15（Tacutu et al. 2018）；PanTHERIA 是哺乳动物数据库，无记录。以下为估计（见 docs/MODEL.md）：一季常产两窝；雏鸟出壳后在洞里待两三周；繁殖期在南半球冬季到夏季；成体年存活率约 0.95；守约 40 公顷的领地；吃落叶层里的无脊椎动物，少量果实。不会飞。"
+}

@@ -1,0 +1,14 @@
+{
+  "species": "rabbit",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "兔形目",
+    "family": "兔科"
+  },
+  "range": "原产伊比利亚半岛一带，被人带到澳大利亚、新西兰和许多海岛。",
+  "card": [
+    "欧洲穴兔群居在地下的洞穴网里。",
+    "19 世纪被引入澳大利亚和新西兰后数量暴增，啃光植被，成为两国最严重的入侵物种之一。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：European rabbit、Rabbits in Australia"
+}

@@ -1,0 +1,14 @@
+{
+  "species": "cat",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "食肉目",
+    "family": "猫科"
+  },
+  "range": "由近东的非洲野猫驯化而来，随人类遍布世界，在许多海岛上野化。",
+  "card": [
+    "家猫在约一万年前的近东开始和人类一起生活。",
+    "野化的家猫在海岛上捕食本地的鸟、蜥蜴和昆虫；新西兰已把野猫列入 Predator Free 2050 的清除目标。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Cat、Feral cat、Predator Free 2050"
+}

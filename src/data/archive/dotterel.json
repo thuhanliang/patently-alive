@@ -1,0 +1,14 @@
+{
+  "species": "dotterel",
+  "taxonomy": {
+    "class": "鸟纲",
+    "order": "鸻形目",
+    "family": "鸻科"
+  },
+  "range": "新西兰特有的繁殖鸟，部分个体到澳大利亚越冬。",
+  "card": [
+    "双斑鸻在河滩、海滩的光秃地面上做一个浅窝，蛋的颜色和砾石很像。",
+    "繁殖后，一部分个体飞越塔斯曼海到澳大利亚东南部越冬。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Double-banded plover"
+}

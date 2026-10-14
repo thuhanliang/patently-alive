@@ -5,10 +5,11 @@ import { ToolsSchema, type Tools } from './schema/tools';
 import toolsJson from './tools/tools.json';
 import { NecropsyTemplatesSchema, type NecropsyTemplates } from './schema/report';
 import necropsyJson from './reports/necropsy.json';
+import { ArchiveEntrySchema, type ArchiveEntry } from './schema/archive';
 
 export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, GoalSchema, type Goal, ToolsSchema, type Tools };
 
-export { NecropsyTemplatesSchema, type NecropsyTemplates };
+export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, type ArchiveEntry };
 
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
@@ -19,6 +20,7 @@ export const tools: Tools = ToolsSchema.parse(toolsJson);
 const speciesFiles = import.meta.glob('./species/*.json', { eager: true, import: 'default' });
 const worldFiles = import.meta.glob('./world/*.json', { eager: true, import: 'default' });
 const scenarioFiles = import.meta.glob('./scenarios/*.json', { eager: true, import: 'default' });
+const archiveFiles = import.meta.glob('./archive/*.json', { eager: true, import: 'default' });
 
 /** 文件名（不含目录和 .json）。 */
 function baseName(path: string): string {
@@ -32,6 +34,21 @@ export const speciesLibrary: ReadonlyMap<string, SpeciesParams> = new Map(
     return [s.id, s] as const;
   }),
 );
+
+/**
+ * 自然档案馆：所有现有技术，按物种 id 索引，按文件名顺序排列。
+ * 每条都必须有能推演的物种数据；反过来，每个物种也都是一条现有技术（真实动物都收在档案馆里）。
+ */
+export const archiveLibrary: ReadonlyMap<string, ArchiveEntry> = new Map(
+  Object.values(archiveFiles).map((json) => {
+    const e = ArchiveEntrySchema.parse(json);
+    if (!speciesLibrary.has(e.species)) throw new Error(`档案馆条目引用了不存在的物种：${e.species}`);
+    return [e.species, e] as const;
+  }),
+);
+for (const id of speciesLibrary.keys()) {
+  if (!archiveLibrary.has(id)) throw new Error(`物种 ${id} 没有档案馆条目（src/data/archive/${id}.json）`);
+}
 
 /** 所有世界数据，按文件名索引。 */
 export const worldLibrary: ReadonlyMap<string, WorldParams> = new Map(

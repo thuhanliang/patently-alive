@@ -1,0 +1,14 @@
+{
+  "species": "ferret",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "食肉目",
+    "family": "鼬科"
+  },
+  "range": "由欧洲林鼬驯化而来；1880 年代被放归新西兰。",
+  "card": [
+    "雪貂是人类驯化了两千多年的鼬，常被用来把兔子赶出洞。",
+    "1880 年代新西兰为控制兔子放归了大量雪貂，它们在当地形成了野生种群。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Ferret、Ferrets in New Zealand"
+}
