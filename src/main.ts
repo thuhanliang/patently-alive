@@ -1,4 +1,4 @@
-import { grassland, necropsyTemplates, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { archiveLibrary, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
 import { RECENT_HALF_LIFE_DAYS, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
@@ -6,6 +6,7 @@ import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
 import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
+import { ArchivePanel } from './ui/archive';
 import { bindCameraControls } from './ui/cameraControls';
 import { CommissionCards } from './ui/commission';
 import { PopulationChart } from './ui/chart';
@@ -94,6 +95,13 @@ async function main(): Promise<void> {
   // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
   const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
   let shownQuarters = 0;
+  // 自然档案馆：翻看现有技术。开着时推演暂停。
+  const archive = new ArchivePanel(el('archive'), archiveLibrary, speciesLibrary);
+  const archiveBtn = document.createElement('button');
+  archiveBtn.textContent = '档案馆';
+  archiveBtn.title = '翻看现有技术：真实动物的数据档案和知识卡';
+  archiveBtn.addEventListener('click', () => archive.toggle());
+  el('office-bar').append(archiveBtn);
   cards?.briefing(names);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(
@@ -208,7 +216,7 @@ async function main(): Promise<void> {
     () => session.speed,
     (speed) => void submit({ type: 'setSpeed', speed }),
     () => {
-      if (!cards?.isOpen) session.stepDay();
+      if (!cards?.isOpen && !archive.isOpen) session.stepDay();
     },
   );
 
@@ -243,7 +251,7 @@ async function main(): Promise<void> {
       shownQuarters = session.quarters.length;
       cards.quarter(session.quarters.at(-1)!, session, names);
     }
-    session.hold(cards?.isOpen ?? false);
+    session.hold((cards?.isOpen ?? false) || archive.isOpen);
     view.setFenceStart(field.fenceStart());
     alertBanner.update(session.sim.day, session.alerts);
     view.setAlertAt(session.alerts[0]?.at ?? null);
