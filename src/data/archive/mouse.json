@@ -1,0 +1,14 @@
+{
+  "species": "mouse",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "啮齿目",
+    "family": "鼠科"
+  },
+  "range": "原产亚洲西南部一带，随人类遍布世界。",
+  "card": [
+    "小家鼠繁殖极快，雌鼠出生约六周就能怀孕。",
+    "在南大西洋的高夫岛上，没有天敌的小家鼠会啃食信天翁的雏鸟。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：House mouse、Gough Island"
+}

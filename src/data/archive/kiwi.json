@@ -1,0 +1,14 @@
+{
+  "species": "kiwi",
+  "taxonomy": {
+    "class": "鸟纲",
+    "order": "无翼鸟目",
+    "family": "无翼鸟科"
+  },
+  "range": "新西兰北岛特有。",
+  "card": [
+    "几维的鼻孔长在长喙的尖端，靠嗅觉在落叶层里找虫子。",
+    "它的蛋相对母鸟体重是鸟类里最大的之一，约占母鸟体重的五分之一。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：North Island brown kiwi、Kiwi (bird)"
+}

@@ -1,0 +1,46 @@
+{
+  "id": "mouse",
+  "name": "小家鼠",
+  "scientificName": "Mus musculus",
+  "diet": {
+    "plant": 0.6,
+    "vertebrate": 0,
+    "invertebrate": 0.4
+  },
+  "bodyMassKg": 0.02,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 6,
+    "gestationDays": 19,
+    "litterIntervalDays": 30,
+    "ageAtMaturityDays": 42,
+    "breedingByMonth": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      0.7,
+      0.4,
+      0.2,
+      0.1,
+      0.1,
+      0.2,
+      0.6
+    ],
+    "nestDays": 21,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.1
+  },
+  "maxLifespanYears": 4,
+  "movement": {
+    "dailyRangeM": 60,
+    "homeRangeKm2": 0.0005,
+    "territorial": false,
+    "climbs": true
+  },
+  "initialDensityPerHa": 10,
+  "source": "体重（19 / 21 克）、窝仔数（5.5 / 7）、妊娠期（20 / 19 天）取 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）；两窝间隔（30 天）、雌性性成熟（42 天）、最长寿命（4 年）取 AnAge；家域面积取 PanTHERIA（0.0005 平方公里）。以下为估计（见 docs/MODEL.md）：食谱以种子为主，昆虫约四成；断奶约 21 天；成体年存活率约 0.1；开局密度取每公顷 10 只（PanTHERIA 的 50 只/公顷是高密度口径）。"
+}

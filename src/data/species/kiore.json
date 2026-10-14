@@ -1,0 +1,46 @@
+{
+  "id": "kiore",
+  "name": "太平洋鼠",
+  "scientificName": "Rattus exulans",
+  "diet": {
+    "plant": 0.7,
+    "vertebrate": 0.05,
+    "invertebrate": 0.25
+  },
+  "bodyMassKg": 0.05,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 4,
+    "gestationDays": 21,
+    "litterIntervalDays": 40,
+    "ageAtMaturityDays": 60,
+    "breedingByMonth": [
+      0.3,
+      0.7,
+      1,
+      1,
+      1,
+      1,
+      0.5,
+      0.2,
+      0,
+      0,
+      0,
+      0
+    ],
+    "nestDays": 24,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.1
+  },
+  "maxLifespanYears": 3,
+  "movement": {
+    "dailyRangeM": 150,
+    "homeRangeKm2": 0.00094,
+    "territorial": false,
+    "climbs": true
+  },
+  "initialDensityPerHa": 5,
+  "source": "体重（51 克）、窝仔数（3.7）、妊娠期（21 天）、性成熟（57 天）、家域面积（0.00094 平方公里）取 PanTHERIA 1.0（Jones et al. 2009）；AnAge 无记录。以下为估计（见 docs/MODEL.md）：最长寿命约 3 年；两窝间隔 40 天，只在温暖月份繁殖（PanTHERIA 每年约 3.9 窝）；食谱以种子、果实为主，昆虫约两成半，偶尔吃蛋和雏鸟；成体年存活率约 0.1；开局密度取每公顷 5 只（PanTHERIA 的 72 只/公顷是高密度生境的口径）。太平洋鼠会爬树。"
+}

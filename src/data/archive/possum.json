@@ -1,0 +1,14 @@
+{
+  "species": "possum",
+  "taxonomy": {
+    "class": "哺乳纲",
+    "order": "双门齿目",
+    "family": "袋貂科"
+  },
+  "range": "原产澳大利亚；1837 年起被引入新西兰。",
+  "card": [
+    "帚尾袋貂为了皮毛贸易被引入新西兰，在那里没有天敌，数量一度达到数千万只。",
+    "它啃食森林的树冠，也吃鸟蛋和雏鸟。"
+  ],
+  "cardSource": "据维基百科（CC BY-SA 4.0）相关条目改写：Common brushtail possum、Common brushtail possum in New Zealand"
+}

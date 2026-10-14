@@ -1,0 +1,46 @@
+{
+  "id": "possum",
+  "name": "帚尾袋貂",
+  "scientificName": "Trichosurus vulpecula",
+  "diet": {
+    "plant": 0.95,
+    "vertebrate": 0.02,
+    "invertebrate": 0.03
+  },
+  "bodyMassKg": 2.5,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 1,
+    "gestationDays": 17,
+    "litterIntervalDays": 274,
+    "ageAtMaturityDays": 315,
+    "breedingByMonth": [
+      0.3,
+      0.3,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0.5,
+      0,
+      0,
+      0
+    ],
+    "nestDays": 150,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.75
+  },
+  "maxLifespanYears": 14,
+  "movement": {
+    "dailyRangeM": 300,
+    "homeRangeKm2": 0.03,
+    "territorial": false,
+    "climbs": true
+  },
+  "initialDensityPerHa": 1.2,
+  "source": "体重（2.7 / 2.4 千克）、每胎一仔、妊娠期（17 天）、两胎间隔（274 天）、雌性性成熟（AnAge 315 天）取 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）；最长寿命取两库之间（14.7 / 15.9 年）；家域面积（0.03 平方公里）、夜行、种群密度（1.2 只/公顷）取 PanTHERIA。以下为估计（见 docs/MODEL.md）：食谱以叶、花、果为主，偶尔吃鸟蛋、雏鸟和昆虫；有袋类的幼崽在育儿袋和树洞里约 5 个月，模型把这段算作\"在窝里\"；新西兰的繁殖高峰在秋季，春季还有一次小高峰；成体年存活率约 0.75。帚尾袋貂善于爬树。"
+}

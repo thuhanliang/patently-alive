@@ -1,0 +1,45 @@
+{
+  "id": "weka",
+  "name": "威卡秧鸡",
+  "scientificName": "Gallirallus australis",
+  "diet": {
+    "plant": 0.35,
+    "vertebrate": 0.15,
+    "invertebrate": 0.5
+  },
+  "bodyMassKg": 0.9,
+  "activity": "diurnal",
+  "reproduction": {
+    "litterSize": 3,
+    "gestationDays": 26,
+    "litterIntervalDays": 90,
+    "ageAtMaturityDays": 363,
+    "breedingByMonth": [
+      1,
+      1,
+      1,
+      0.7,
+      0.5,
+      0.3,
+      0.2,
+      0.2,
+      0.3,
+      0.5,
+      0.7,
+      1
+    ],
+    "nestDays": 30,
+    "nest": "ground"
+  },
+  "survival": {
+    "adultAnnual": 0.7
+  },
+  "maxLifespanYears": 13.8,
+  "movement": {
+    "dailyRangeM": 300,
+    "homeRangeKm2": 0.05,
+    "territorial": true
+  },
+  "initialDensityPerHa": 0.3,
+  "source": "体重（899 克）、雌性性成熟（363 天）、最长寿命（13.8 年）取 AnAge Build 15（Tacutu et al. 2018）；PanTHERIA 无记录。以下为估计（见 docs/MODEL.md）：每窝 2–4 枚蛋，孵化约 26 天，雏鸟几天后离窝，这里窝里天数取 30 天；一年可育几窝，春季最多；食谱约一半是无脊椎动物，三成多是果实和种子，其余是蜥蜴、鼠、蛋和雏鸟；成体年存活率约 0.7；守几公顷的领地。不会飞。"
+}

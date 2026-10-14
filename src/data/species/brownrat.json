@@ -1,0 +1,46 @@
+{
+  "id": "brownrat",
+  "name": "褐家鼠",
+  "scientificName": "Rattus norvegicus",
+  "diet": {
+    "plant": 0.55,
+    "vertebrate": 0.15,
+    "invertebrate": 0.3
+  },
+  "bodyMassKg": 0.3,
+  "activity": "nocturnal",
+  "reproduction": {
+    "litterSize": 9,
+    "gestationDays": 21,
+    "litterIntervalDays": 40,
+    "ageAtMaturityDays": 75,
+    "breedingByMonth": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      0.7,
+      0.4,
+      0.2,
+      0.1,
+      0.1,
+      0.2,
+      0.6
+    ],
+    "nestDays": 23,
+    "nest": "burrow"
+  },
+  "survival": {
+    "adultAnnual": 0.15
+  },
+  "maxLifespanYears": 3.8,
+  "movement": {
+    "dailyRangeM": 200,
+    "homeRangeKm2": 0.0029,
+    "territorial": false,
+    "climbs": false
+  },
+  "initialDensityPerHa": 3,
+  "source": "体重（283 / 300 克）、窝仔数（9.0 / 9.9）、妊娠期（22 / 21 天）取 PanTHERIA 1.0（Jones et al. 2009）与 AnAge Build 15（Tacutu et al. 2018）；性成熟取两库之间（55 / 90 天）；最长寿命取 AnAge（3.8 年）；家域面积取 PanTHERIA（0.0029 平方公里），不守领地。以下为估计（见 docs/MODEL.md）：两窝间隔 40 天（两库每年 3.5–3.7 窝）；食谱比船鼠更偏动物性（植物约五成半，昆虫约三成，脊椎动物约一成半）；断奶约 23 天；成体年存活率约 0.15；开局密度取每公顷 3 只（PanTHERIA 无密度记录）。褐家鼠善游泳、挖洞，爬树不如船鼠，这里按不会爬算。"
+}
