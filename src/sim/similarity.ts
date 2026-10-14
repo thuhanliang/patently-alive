@@ -74,8 +74,9 @@ export function traitsOf(p: SpeciesParams): Required<TraitQuery> {
   };
 }
 
-/** 数量按倍数比：差 fold 倍算 1。 */
+/** 数量按倍数比：差 fold 倍算 1。不是正数（查询里填了 0）时按最大差距算，免得出 NaN。 */
 function foldDistance(a: number, b: number, fold: number): number {
+  if (!(a > 0 && b > 0)) return a === b ? 0 : MAX_TRAIT_DISTANCE;
   return Math.abs(detLog(a / b)) / detLog(fold);
 }
 

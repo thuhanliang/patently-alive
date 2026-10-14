@@ -38,6 +38,12 @@ describe('性状相似度', () => {
     expect(nearest(q, all, 1)[0]!.id).toBe('rat');
   });
 
+  it('查询里填了 0 也不会出 NaN', () => {
+    const m = compare({ bodyMassKg: 0, litterSize: 0 }, 'rat', sp('rat'));
+    expect(Number.isFinite(m.similarity)).toBe(true);
+    expect(m.similarity).toBeGreaterThan(0);
+  });
+
   it('一项性状也没给时相似度为 0', () => {
     expect(compare({}, 'rat', sp('rat')).similarity).toBe(0);
   });
