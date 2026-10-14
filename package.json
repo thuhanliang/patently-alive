@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "data:fetch": "node scripts/data/fetch.mjs",
     "data:check": "node scripts/data/check-traits.mjs",
+    "data:fit": "node scripts/data/fit-scaling.mjs",
     "sweep": "vitest run --config vitest.sweep.config.ts --silent=false scripts/sweep.bench.ts",
     "routes": "vitest run --config vitest.sweep.config.ts --silent=false scripts/routes.bench.ts"
   },

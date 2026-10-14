@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readTsv } from './tsv.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const root = join(here, '..', '..');
@@ -22,14 +23,6 @@ const species = readdirSync(speciesDir)
   .map((f) => JSON.parse(readFileSync(join(speciesDir, f), 'utf8')));
 
 // ---------- 读数据库
-function readTsv(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
-  const header = lines[0].split('\t').map((h) => h.trim());
-  return lines.slice(1).map((l) => {
-    const cells = l.split('\t');
-    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()]));
-  });
-}
 
 function loadPantheria() {
   const path = join(dirs[srcOf('pantheria').dir], srcOf('pantheria').file);
