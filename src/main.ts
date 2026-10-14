@@ -1,5 +1,5 @@
-import { archiveLibrary, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, costOf, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { RECENT_HALF_LIFE_DAYS, costOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -7,6 +7,7 @@ import { MapView } from './render/view';
 import { speciesColor } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
+import { DesignDesk } from './ui/designDesk';
 import { bindCameraControls } from './ui/cameraControls';
 import { CommissionCards } from './ui/commission';
 import { PopulationChart } from './ui/chart';
@@ -138,6 +139,23 @@ async function main(): Promise<void> {
   archiveBtn.title = '翻看现有技术：真实动物的数据档案和知识卡';
   archiveBtn.addEventListener('click', () => archive.toggle());
   el('office-bar').append(archiveBtn);
+  // 设计台：拼部件、看推导和能量收支。开着时推演暂停。
+  const kit = makeDesignKit(
+    partLibrary,
+    scalingLaws,
+    hintTemplates,
+    designTemplates.map((t) => t.design),
+  );
+  const desk = new DesignDesk(el('design'), kit, designSlots, designTemplates, speciesLibrary);
+  const deskBtn = document.createElement('button');
+  deskBtn.textContent = '设计台';
+  deskBtn.title = '设计一种新动物：选体型、部件和繁殖策略，看推导出来的代价';
+  deskBtn.addEventListener('click', () => {
+    archive.close();
+    desk.toggle();
+  });
+  archiveBtn.addEventListener('click', () => desk.close());
+  el('office-bar').append(deskBtn);
   cards?.briefing(names);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(
@@ -294,7 +312,7 @@ async function main(): Promise<void> {
     () => session.speed,
     (speed) => void submit({ type: 'setSpeed', speed }),
     () => {
-      if (!cards?.isOpen && !archive.isOpen) session.stepDay();
+      if (!cards?.isOpen && !archive.isOpen && !desk.isOpen) session.stepDay();
     },
   );
 
@@ -329,7 +347,7 @@ async function main(): Promise<void> {
       shownQuarters = session.quarters.length;
       cards.quarter(session.quarters.at(-1)!, session, names);
     }
-    session.hold((cards?.isOpen ?? false) || archive.isOpen);
+    session.hold((cards?.isOpen ?? false) || archive.isOpen || desk.isOpen);
     view.setFenceStart(field.fenceStart());
     alertBanner.update(session.sim.day, session.alerts);
     view.setAlertAt(session.alerts[0]?.at ?? null);

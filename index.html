@@ -69,6 +69,30 @@
       .archive-data { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0; }
       .archive-introduce { margin: 6px 0; padding: 4px 6px; border: 1.5px dashed var(--blueprint); border-radius: 3px; flex-wrap: wrap; }
       .archive-introduce button { color: var(--blueprint); border-color: var(--blueprint); }
+      #design { position: fixed; inset: 0; background: rgba(31, 29, 26, 0.25); display: flex; align-items: center; justify-content: center; z-index: 9; }
+      .desk-card { position: relative; max-width: 1080px; width: calc(100% - 32px); }
+      .desk-body { display: flex; gap: 14px; align-items: flex-start; }
+      .desk-left { flex: 0 0 340px; min-width: 0; }
+      .desk-controls { flex: 0 0 300px; min-width: 0; }
+      .desk-right { flex: 1; min-width: 0; }
+      .desk-blueprint { width: 100%; height: 230px; display: block; border: 1px solid rgba(47, 93, 138, 0.35); }
+      .desk-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+      .desk-row select, .desk-row input[type='range'] { flex: 1; min-width: 0; }
+      .desk-row input:not([type]) { flex: 1; min-width: 0; font: inherit; }
+      .desk-label { flex: 0 0 5.5em; color: var(--ink-soft); }
+      .desk-blurb { margin: 0 0 4px 5.5em; }
+      .desk-card .log-head { color: var(--blueprint); font-weight: 600; margin-top: 8px; }
+      .desk-energy-bar { display: flex; height: 12px; border: 1px solid var(--blueprint); margin: 4px 0; }
+      .desk-energy-seg { min-width: 1px; }
+      .desk-appetite { position: relative; height: 10px; margin: 4px 0 0; border-bottom: 1.5px solid var(--blueprint); }
+      .desk-appetite-mid { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px dashed var(--blueprint); }
+      .desk-appetite-marker { position: absolute; top: -2px; width: 3px; height: 14px; margin-left: -1px; background: var(--blueprint); }
+      /* 胃口偏大只是提醒，不是警报：不用朱红（朱红同时只给最响的一处警报）。 */
+      .desk-warn { color: var(--ink); font-weight: 600; text-decoration: underline wavy var(--blueprint); }
+      .desk-appetite-marker.warn { background: var(--ink); width: 5px; margin-left: -2px; }
+      .desk-appetite-labels { display: flex; justify-content: space-between; }
+      .desk-hint { color: var(--blueprint); }
+      @media (max-width: 860px) { .desk-body { flex-direction: column; } .desk-left, .desk-controls, .desk-right { flex: 1 1 auto; width: 100%; } }
       .archive-data dt { color: var(--ink-soft); }
       .archive-data dd { margin: 0; }
       .swatch { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 50%; vertical-align: -1px; }
@@ -87,6 +111,7 @@
     <div id="alert"></div>
     <div id="modal" style="display: none"></div>
     <div id="archive" style="display: none"></div>
+    <div id="design" style="display: none"></div>
     <div id="toolbar">
       <div class="bar" id="office-bar"></div>
       <div class="bar" id="time-bar"></div>
