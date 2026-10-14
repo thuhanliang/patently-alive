@@ -33,7 +33,7 @@
 | `vole` | 田鼠 | a field vole, short tail, blunt nose | 灰褐 `#8C8270` |
 | `weasel` | 伶鼬 | a least weasel, slender long body, brown back white belly | 栗色 `#A8714A` |
 | `stoat` | 白鼬 | a stoat, long body, black tail tip | 深栗 `#6E4A33` |
-| `norway-rat` | 褐家鼠 | a brown rat, stocky, shorter tail than a ship rat | 褐灰 `#6F665C` |
+| `brownrat` | 褐家鼠 | a brown rat, stocky, shorter tail than a ship rat | 褐灰 `#6F665C` |
 | `kiore` | 太平洋鼠 | a Pacific rat (kiore), small slender rat | 浅褐 `#9C8A72` |
 | `mouse` | 小家鼠 | a house mouse, tiny, large ears | 灰 `#9A968E` |
 | `mongoose` | 红颊獴 | a small Indian mongoose, slender, grizzled olive-brown fur, pointed snout | 橄榄褐 `#8A7A4E` |
