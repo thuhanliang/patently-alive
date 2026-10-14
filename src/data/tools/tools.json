@@ -13,14 +13,15 @@
     },
     {
       "id": "rat-cage",
-      "name": "鼠笼（花生酱饵）",
+      "name": "鼠笼网（花生酱饵）",
       "minMassKg": 0.02,
       "maxMassKg": 1,
       "bait": { "plant": 1, "vertebrate": 0.1, "invertebrate": 0.3 },
-      "cages": 20,
-      "setupCost": 800,
-      "nightlyCost": 100,
-      "source": "小型活捕笼，花生酱、谷物作饵，吸引吃种子和植物的动物；地面活动的小鸟也会进笼，所以新西兰的灭鼠站多半套上隧道。价格为假设值（见 docs/MODEL.md）。"
+      "cages": 50,
+      "spreadCells": 5,
+      "setupCost": 2000,
+      "nightlyCost": 250,
+      "source": "五十个小型活捕笼摊成一张网（半径约 250 米，笼距几十米，和新西兰保护地面筑巢鸟时沿繁殖地布的陷阱网相当），花生酱、谷物作饵，吸引吃种子和植物的动物；地面活动的小鸟也会进笼，所以新西兰的灭鼠站多半套上隧道。价格为假设值（见 docs/MODEL.md）。"
     }
   ],
   "cull": {

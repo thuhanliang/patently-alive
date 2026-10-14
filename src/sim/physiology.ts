@@ -24,14 +24,12 @@ export const INVERTEBRATE_YIELD = 0.001;
 /** 脊椎动物在食谱里占到这个比例以上，才算会追捕会跑的猎物的"捕食者"；以下的（例如鼠）只吃跑不掉的：蛋、雏鸟、窝里的幼崽。 */
 export const PURSUIT_DIET_SHARE = 0.5;
 /** 会飞的猎物（成体、出了窝的幼体）被捕食者碰上时，只有这个比例来不及飞走。 */
-export const FLIGHT_ESCAPE = 0.3;
+export const FLIGHT_ESCAPE = 0.45;
 /**
- * 窝是藏起来的：捕食者再多、再饿，一天里也只能找到窝里幼体的这么一部分（乘在 nest 权重上）。
- * 没有这一条，捕食者一多，每天就有一半以上的蛋被吃掉，掩护再好也没用。
- * 取 0.05：捕食者充足时，没有掩护的地面浅窝熬过约 67 天巢期的只有约 3%，灌丛长满时约四分之一
- * （地面筑巢鸟在有外来捕食者的地方，巢成功率常低到一两成）。
+ * 窝是藏起来的：捕食者走到窝边（CATCH_RADIUS_CELLS 以内）时，只有这个比例会发现它（乘在 nest 权重上）。
+ * 窝被找到的概率随捕食者的密度上升（见 nestSearchCells）：鼠少的地方窝能熬过巢期，鼠多的地方很难。
  */
-export const NEST_DISCOVERY = 0.05;
+export const NEST_DISCOVERY = 0.055;
 /** 洞穴、巢穴里的幼崽，比放在外面难找到这么多（乘在被抓的概率上）。 */
 export const BURROW_EXPOSURE = 0.3;
 /** 地面浅窝：掩护（0–1）最好时，被发现的概率降低这么多。 */
@@ -149,6 +147,11 @@ export interface DerivedSpecies {
   readonly hourlyStepCells: number;
   /** 个体：一天里活动的小时数。 */
   readonly activeHours: number;
+  /**
+   * 一只捕食者一天里"仔细搜过"的面积（格）= 走过的路 × 发现半径的两倍 × 碰上后的成功率，和个体模型的捕猎一致。
+   * 格子模型里窝里幼体被找到的概率 = 1 − exp(−捕食者每格只数 × 这个面积 × 窝权重)：捕食者越密，窝越难藏。
+   */
+  readonly nestSearchCells: number;
   /** 个体：体内储备上限（天）。 */
   readonly maxReserveDays: number;
   readonly maxAgeDays: number;
@@ -164,7 +167,7 @@ export interface DerivedSpecies {
 function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
   const byMass = typicalPerKm2 * CROWDING_FACTOR;
   const home = p.movement.homeRangeKm2;
-  return p.movement.territorial && home !== undefined ? Math.min(byMass, TERRITORY_OVERLAP / home) : byMass;
+  return home !== undefined ? Math.min(byMass, TERRITORY_OVERLAP / home) : byMass;
 }
 
 export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
@@ -201,18 +204,24 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
     hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
     activeHours: activeHoursPerDay(p.activity),
+    nestSearchCells: 2 * CATCH_RADIUS_CELLS * cellsPerDay * CATCH_SUCCESS,
     maxReserveDays: RESERVE_COEF * detPow(p.bodyMassKg, 0.25),
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
     territorial: p.movement.territorial === true && p.movement.homeRangeKm2 !== undefined,
   };
 }
 
-/** 家域边长折合几个区块，取 (边长 / 区块边长 − 1) / 2 四舍五入：窗口 (2r+1)² 个区块和家域差不多大。 */
+/**
+ * 家域边长折合几个区块，取 (边长 / 区块边长 − 1) / 2 向上取整：窗口 (2r+1)² 个区块不小于家域。
+ * 向下取的话，家域比一个区块大一点的物种（例如 0.5 平方公里）窗口只有一个区块，按领地算一个区块住不下一只，
+ * 一只就"住满"，再也不繁殖。
+ */
 function crowdingRadius(p: SpeciesParams, cellSizeM: number): number {
   const home = p.movement.homeRangeKm2;
   if (home === undefined) return 0;
   const blockKm = (CROWDING_BLOCK_CELLS * cellSizeM) / 1000;
-  return Math.max(0, Math.round((Math.sqrt(home) / blockKm - 1) / 2));
+  // 减一个极小量：边长正好是奇数个区块时，浮点误差不会把窗口多算一圈。
+  return Math.max(0, Math.ceil((Math.sqrt(home) / blockKm - 1) / 2 - 1e-9));
 }
 
 /** 幼体传送带的段数、窝里的段数、每段天数（见 JUVENILE_STAGES、MIN_STAGES）。 */

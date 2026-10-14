@@ -22,6 +22,11 @@ export const TrapTypeSchema = z
     bait: food,
     /** 一组陷阱有几个笼子；一个笼子一晚最多抓一只。 */
     cages: z.number().int().min(1),
+    /**
+     * 笼子散布的半径（格）：0 表示都放在一处；大于 0 是一张陷阱网，笼子摊开在这么大的范围里，
+     * 网里的动物和走到一处陷阱边一样容易碰上，所以能覆盖的面积大得多（见 src/sim/jobs.ts）。
+     */
+    spreadCells: z.number().int().min(0).max(12).default(0),
     /** 布设一组的固定费用（元）和每晚的费用（元）。 */
     setupCost: z.number().int().min(0),
     nightlyCost: z.number().int().min(0),

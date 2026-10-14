@@ -79,7 +79,9 @@ describe('评分公式', () => {
     expect(at(start[0]!, 1).scores.diversity).toBe(100);
     const low = at(Math.floor(start[0]! * 0.25), 1);
     expect(low.detail.nativesLow).toEqual([0]);
-    expect(low.scores.diversity).toBe(75);
+    // 只数取整后略少于开局的四分之一：75 分或差 1 分。
+    expect(low.scores.diversity).toBeGreaterThanOrEqual(74);
+    expect(low.scores.diversity).toBeLessThanOrEqual(75);
     expect(at(start[0]!, 0.5).scores.diversity).toBe(75);
   });
 

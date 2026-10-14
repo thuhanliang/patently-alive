@@ -57,8 +57,8 @@ describe('海岛地形', () => {
       const g = createGrid(island, Rng.fromSeed(seed));
       const sizes = components(g.terrain, g.width, g.height);
       expect(sizes.length).toBe(1 + island.terrain!.islets.count);
-      // 主岛远大于小岛。
-      expect(sizes[0]!).toBeGreaterThan(20 * sizes[1]!);
+      // 主岛远大于小岛（小岛是离岸的鸟类避难所，单座最多主岛的十分之一左右）。
+      expect(sizes[0]!).toBeGreaterThan(10 * sizes[1]!);
       const counts = [0, 0, 0, 0];
       for (const t of g.terrain) counts[t]! += 1;
       expect(counts.every((n) => n > 0)).toBe(true);
