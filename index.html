@@ -57,6 +57,20 @@
       .quarter-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
       .quarter-table th, .quarter-table td { padding: 1px 8px; text-align: right; border-bottom: 1px dotted rgba(31, 29, 26, 0.25); }
       @media (max-width: 760px) { .score-table { grid-template-columns: auto 60px 2.5em; } .score-table .note { grid-column: 1 / -1; } }
+      #archive { position: fixed; inset: 0; background: rgba(31, 29, 26, 0.25); display: flex; align-items: center; justify-content: center; z-index: 9; }
+      .archive-card { position: relative; max-width: 760px; width: calc(100% - 32px); }
+      .archive-body { display: flex; gap: 14px; }
+      .archive-left { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+      .archive-search { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--ink-soft); border-radius: 3px; padding: 2px 6px; }
+      .archive-list { max-height: 60vh; overflow-y: auto; }
+      .archive-entry { flex: 1; min-width: 0; }
+      .archive-entry .log-head { color: var(--blueprint); font-weight: 600; margin-top: 8px; }
+      .archive-name { font-size: 15px; font-weight: 600; }
+      .archive-data { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0; }
+      .archive-data dt { color: var(--ink-soft); }
+      .archive-data dd { margin: 0; }
+      .swatch { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 50%; vertical-align: -1px; }
+      @media (max-width: 760px) { .archive-body { flex-direction: column; } .archive-list { max-height: 20vh; } }
       #chart { cursor: pointer; position: fixed; left: 8px; right: 8px; bottom: 8px; height: 180px; width: calc(100% - 16px); }
     </style>
   </head>
@@ -70,7 +84,9 @@
     <div id="exam-card" style="display: none"></div>
     <div id="alert"></div>
     <div id="modal" style="display: none"></div>
+    <div id="archive" style="display: none"></div>
     <div id="toolbar">
+      <div class="bar" id="office-bar"></div>
       <div class="bar" id="time-bar"></div>
       <div class="bar" id="camera-bar"></div>
       <div id="layer-bar"></div>
