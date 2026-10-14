@@ -20,3 +20,4 @@ export { summarize, wilson, meanCi, THIN_BCS, GOOD_BCS, type SampleSummary, type
 export { necropsyFindings, biteSizeMm, type NecropsyFindings, type Bite, type Decomposition } from './necropsy';
 export { type Alert, type AlertKind } from './alerts';
 export { SUBSTANTIALLY_SAME, TRAIT_WEIGHTS, compare, nearest, traitsOf, type Match, type TraitKey, type TraitQuery } from './similarity';
+export { applyLaw, errorFactor, scaleTraits, trophicLevel, type ScaledTraits, type ScalingCauses } from './scaling';

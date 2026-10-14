@@ -1,0 +1,174 @@
+{
+  "说明": "体重缩放公式，由 scripts/data/fit-scaling.mjs 从数据库拟合（npm run data:fit），不要手改。公式形如 log10(y) = intercept + Σ 系数 · 自变量；log10MassG 是体重（克）的常用对数，log10Litter 是每窝仔数（鸟是每窝蛋数）的常用对数。residualSdLog10 是拟合误差：真实物种通常落在预测值的 10^±sd 倍以内。",
+  "mammal": {
+    "gestationDays": {
+      "name": "妊娠期",
+      "unit": "天",
+      "intercept": 1.46,
+      "terms": {
+        "log10MassG": 0.1716,
+        "log10Litter": -0.5112
+      },
+      "n": 1079,
+      "r2": 0.691,
+      "residualSdLog10": 0.224,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）"
+    },
+    "ageAtMaturityDays": {
+      "name": "性成熟",
+      "unit": "天",
+      "intercept": 1.9637,
+      "terms": {
+        "log10MassG": 0.2179,
+        "log10Litter": -0.3214
+      },
+      "n": 861,
+      "r2": 0.527,
+      "residualSdLog10": 0.333,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）"
+    },
+    "maxLifespanYears": {
+      "name": "最长寿命",
+      "unit": "年",
+      "intercept": 0.4613,
+      "terms": {
+        "log10MassG": 0.201,
+        "log10Litter": -0.3004
+      },
+      "n": 824,
+      "r2": 0.644,
+      "residualSdLog10": 0.241,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "数据库的最长寿命多来自圈养记录，比野外长"
+    },
+    "litterIntervalDays": {
+      "name": "两窝间隔",
+      "unit": "天",
+      "intercept": 1.654,
+      "terms": {
+        "log10MassG": 0.2216,
+        "log10Litter": -0.1801
+      },
+      "n": 616,
+      "r2": 0.471,
+      "residualSdLog10": 0.339,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "数据库的胎间隔；推导时不短于妊娠期"
+    },
+    "homeRangeKm2": {
+      "name": "家域面积",
+      "unit": "平方公里",
+      "intercept": -5.7657,
+      "terms": {
+        "log10MassG": 1.1351,
+        "trophicLevel": 0.7035
+      },
+      "n": 527,
+      "r2": 0.762,
+      "residualSdLog10": 0.785,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "营养级 1 = 食草，2 = 杂食，3 = 吃动物（含食虫）；设计里按动物性食物比例 a 取 1 + 2a"
+    },
+    "basalMetabolismW": {
+      "name": "基础代谢率",
+      "unit": "瓦",
+      "intercept": -1.6258,
+      "terms": {
+        "log10MassG": 0.6933
+      },
+      "n": 484,
+      "r2": 0.916,
+      "residualSdLog10": 0.218,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "耗氧量按 1 毫升氧 ≈ 20.1 焦换算"
+    }
+  },
+  "bird": {
+    "gestationDays": {
+      "name": "孵化期",
+      "unit": "天",
+      "intercept": 1.0472,
+      "terms": {
+        "log10MassG": 0.1683,
+        "log10Litter": -0.1933
+      },
+      "n": 565,
+      "r2": 0.693,
+      "residualSdLog10": 0.102,
+      "source": "AnAge（Tacutu et al. 2018），鸟纲"
+    },
+    "ageAtMaturityDays": {
+      "name": "性成熟",
+      "unit": "天",
+      "intercept": 2.6472,
+      "terms": {
+        "log10MassG": 0.1492,
+        "log10Litter": -0.4609
+      },
+      "n": 526,
+      "r2": 0.521,
+      "residualSdLog10": 0.175,
+      "source": "AnAge（Tacutu et al. 2018），鸟纲"
+    },
+    "maxLifespanYears": {
+      "name": "最长寿命",
+      "unit": "年",
+      "intercept": 0.8854,
+      "terms": {
+        "log10MassG": 0.209,
+        "log10Litter": -0.2711
+      },
+      "n": 560,
+      "r2": 0.575,
+      "residualSdLog10": 0.168,
+      "source": "AnAge（Tacutu et al. 2018），鸟纲",
+      "note": "数据库的最长寿命多来自环志和圈养记录"
+    },
+    "clutchesPerYear": {
+      "name": "每年窝数",
+      "unit": "窝/年",
+      "intercept": 0.1739,
+      "terms": {
+        "log10MassG": -0.0448,
+        "log10Litter": -0.0073
+      },
+      "n": 471,
+      "r2": 0.067,
+      "residualSdLog10": 0.134,
+      "source": "AnAge（Tacutu et al. 2018），鸟纲",
+      "note": "AnAge 没有鸟的窝间隔；推导时两窝间隔取 365 / 每年窝数，不短于孵化期"
+    }
+  },
+  "survival": {
+    "name": "成体年存活率",
+    "formula": "s = exp(−k / 最长寿命（年）)",
+    "kMammal": 8.104,
+    "kBird": 2.927,
+    "n": {
+      "mammal": 13,
+      "bird": 4
+    },
+    "residualSdLog10": {
+      "mammal": 0.128,
+      "bird": 0.241
+    },
+    "source": "现有技术条目（src/data/species，各条出处见 docs/DATA_CHECK.md）",
+    "note": "数据库没有野外存活率，按现有技术条目校准；k 取几何平均"
+  },
+  "dailyRange": {
+    "name": "每天活动范围",
+    "formula": "dailyRangeM = c · √(家域面积（平方米）)",
+    "c": 2.368,
+    "n": 15,
+    "residualSdLog10": 0.246,
+    "source": "现有技术条目（src/data/species，各条出处见 docs/DATA_CHECK.md）",
+    "note": "数据库没有每天的活动距离，按现有技术条目校准；c 取几何平均"
+  },
+  "flight": {
+    "maxMassKg": 13,
+    "heaviestFlyer": "Cygnus buccinator",
+    "source": "AnAge（Tacutu et al. 2018），鸟纲，排除不会飞的目（鸵鸟、美洲鸵、鹤鸵、几维、企鹅、恐鸟）和不会飞的种",
+    "energyFactor": 1.51,
+    "energySource": "Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247：野外代谢率 鸟 10.5·M^0.681，哺乳动物 4.82·M^0.734（千焦/天，M 为克），取 1 千克时的比值"
+  }
+}

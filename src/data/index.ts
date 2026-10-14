@@ -6,10 +6,15 @@ import toolsJson from './tools/tools.json';
 import { NecropsyTemplatesSchema, type NecropsyTemplates } from './schema/report';
 import necropsyJson from './reports/necropsy.json';
 import { ArchiveEntrySchema, type ArchiveEntry } from './schema/archive';
+import { ScalingLawsSchema, type ScalingLaws } from './schema/scaling';
+import scalingJson from './scaling/laws.json';
 
 export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, GoalSchema, type Goal, ToolsSchema, type Tools };
 
-export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, type ArchiveEntry };
+export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, type ArchiveEntry, ScalingLawsSchema, type ScalingLaws };
+
+/** 体重缩放公式（从 PanTHERIA、AnAge 拟合，见 scripts/data/fit-scaling.mjs）。 */
+export const scalingLaws: ScalingLaws = ScalingLawsSchema.parse(scalingJson);
 
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
