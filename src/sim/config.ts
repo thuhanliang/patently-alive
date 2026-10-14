@@ -2,6 +2,19 @@ import { z } from 'zod';
 import { SpeciesSchema } from '../data/schema/species';
 import { WorldParamsSchema } from '../data/schema/world';
 import { ToolsSchema } from '../data/schema/tools';
+import { HintTemplatesSchema, PartSchema } from '../data/schema/design';
+import { ScalingLawsSchema } from '../data/schema/scaling';
+
+/**
+ * 设计编译要用的数据（部件、缩放公式、提醒模板、胃口基准）。放进配置，存档和日志自己就能重新编译、核对设计物种。
+ */
+export const DesignDataSchema = z.object({
+  parts: z.array(PartSchema),
+  laws: ScalingLawsSchema,
+  hints: HintTemplatesSchema,
+  appetiteBaseline: z.number().positive(),
+});
+export type DesignData = z.infer<typeof DesignDataSchema>;
 
 /** 创建一次推演所需的全部输入。同一份配置 + 同一份操作日志 = 同一个结果。 */
 export const SimConfigSchema = z
@@ -12,6 +25,8 @@ export const SimConfigSchema = z
     species: z.array(SpeciesSchema),
     /** 兽医工具的参数（陷阱、搜捕）。不写就不能用工具（只看推演的测试、阶段 0 的草原）。 */
     tools: ToolsSchema.optional(),
+    /** 设计编译的数据。不写就不能投放设计物种。 */
+    design: DesignDataSchema.optional(),
   })
   .refine((c) => c.species.map((s) => s.id).join() === c.world.species.join(), {
     message: 'species 必须与 world.species 列出的 id 一一对应、顺序一致',

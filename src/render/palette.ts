@@ -44,6 +44,15 @@ export function speciesColor(id: string): { body: number; chart: number } {
   return SPECIES_COLORS[id] ?? FALLBACK;
 }
 
+/** 按物种参数取主色：设计物种用设计时选的颜色，真实物种查上面的表。 */
+export function colorOf(p: { id: string; appearance?: { color: string } | undefined }): { body: number; chart: number } {
+  if (p.appearance) {
+    const c = parseInt(p.appearance.color.slice(1), 16);
+    return { body: c, chart: c };
+  }
+  return speciesColor(p.id);
+}
+
 /**
  * 地形的水彩色（低饱和、低对比）。陆地按植被多少在"枯"和"茂"之间插值；水按离岸远近在浅、深之间插值。
  */

@@ -1,4 +1,5 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
+import { DESIGN_COLORS } from '../data/schema/design';
 import { checksum, compileDesign, partsOf, nearest, traitsOf, type CompiledDesign, type DesignKit } from '../sim';
 import { BLUEPRINT, cssAlpha } from '../render/palette';
 import { drawBlueprint, massText } from './blueprint';
@@ -16,6 +17,15 @@ const MASS_MAX = 100;
 /** 浏览器里的草稿（只是方便，读不到也照常工作）。 */
 const DRAFT_KEY = 'patently-alive-design-draft';
 
+/** 设计台上"投放到这里"要的东西；情景不允许投放设计物种时不传，就不显示这一栏。 */
+export interface ReleaseHooks {
+  maxAnimals: number;
+  /** 投放 count 只的花费说明。 */
+  quote(species: SpeciesParams, count: number): string;
+  /** 选好了数量：设计台关掉，回到地图上点投放地点。 */
+  start(design: Design, species: SpeciesParams, count: number): void;
+}
+
 /**
  * 设计台（阶段 3）：拼部件、调性状，实时看蓝图线稿、能量收支、推导属性和老同事的提醒。
  * 设计台只编译、不改推演；打开时推演暂停（由 main 看 isOpen 决定）。信息只放这一屏。
@@ -30,6 +40,8 @@ export class DesignDesk {
   private readonly hintBox = div('desk-hints');
   /** 拖滑杆时一帧里会来好几次输入：线稿每帧只画一次。 */
   private drawPending = false;
+  private count = 20;
+  private readonly releaseCost = textEl('span', '', 'note');
 
   constructor(
     private readonly el: HTMLElement,
@@ -38,11 +50,12 @@ export class DesignDesk {
     private readonly templates: ReadonlyArray<{ species: string; design: Design }>,
     /** 比对"最像的现有技术"用。 */
     private readonly priorArt: ReadonlyMap<string, SpeciesParams>,
+    private readonly release?: ReleaseHooks,
   ) {
     // 草稿里的部件可能已经改名或删掉了：编译不了就不用它。
     const draft = loadDraft();
     const usable = draft !== null && canCompile(draft, kit);
-    this.design = usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计' };
+    this.design = usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计', color: DESIGN_COLORS[0] };
     el.addEventListener('click', (e) => {
       if (e.target === el) this.close();
     });
@@ -91,7 +104,7 @@ export class DesignDesk {
     head.append(closeBtn);
 
     const left = div('desk-left');
-    left.append(this.canvas, this.energyBox);
+    left.append(this.canvas, ...(this.release ? [this.releaseRow(this.release)] : []), this.energyBox);
     const right = div('desk-right');
     right.append(this.derivedBox, this.hintBox);
     const body = div('desk-body');
@@ -99,6 +112,39 @@ export class DesignDesk {
     card.append(head, body);
     this.el.replaceChildren(card);
     this.update();
+  }
+
+  /** 投放这个设计：选数量、看花费，然后回到地图上点地点。投放后收不回来。 */
+  private releaseRow(hooks: ReleaseHooks): HTMLElement {
+    const box = div('bar archive-introduce');
+    const count = document.createElement('input');
+    count.type = 'number';
+    count.min = '1';
+    count.max = String(hooks.maxAnimals);
+    count.value = String(this.count);
+    count.style.width = '5em';
+    const chosen = (): number => Math.max(1, Math.min(hooks.maxAnimals, Math.floor(Number(count.value) || 1)));
+    count.addEventListener('input', () => {
+      this.count = chosen();
+      this.quoteRelease();
+    });
+    count.addEventListener('change', () => (count.value = String(chosen())));
+    const go = textEl('button', '投放到这里');
+    go.title = '关掉设计台，在地图上点投放地点。投放后收不回来，只能再用兽医手段减少。';
+    go.addEventListener('click', () => {
+      this.count = chosen();
+      const { design, compiled } = this.current;
+      this.close();
+      hooks.start(design, compiled.params, this.count);
+    });
+    const label = document.createElement('label');
+    label.append('投放 ', count, ' 只');
+    box.append(label, go, this.releaseCost);
+    return box;
+  }
+
+  private quoteRelease(): void {
+    if (this.release && this.compiled) this.releaseCost.textContent = this.release.quote(this.compiled.params, this.count);
   }
 
   /** 中间一栏：从现有技术开始、名字、性状、各槽位的部件。 */
@@ -112,7 +158,7 @@ export class DesignDesk {
     from.addEventListener('change', () => {
       const t = this.templates.find((x) => x.species === from.value);
       if (!t) return;
-      this.design = { ...t.design, name: `仿${t.design.name}`.slice(0, 20) };
+      this.design = { ...t.design, name: `仿${t.design.name}`.slice(0, 20), color: this.design.color ?? DESIGN_COLORS[0] };
       saveDraft(this.design);
       this.render();
     });
@@ -138,6 +184,21 @@ export class DesignDesk {
       this.set({ bodyMassKg: kg });
     });
     box.append(row('体重', mass, massLabel));
+
+    // 主色：田野笔记的几种平涂色。
+    const colors = div('desk-colors');
+    for (const c of DESIGN_COLORS) {
+      const b = document.createElement('button');
+      b.className = `desk-color${(d.color ?? '') === c ? ' active' : ''}`;
+      b.style.background = c;
+      b.title = '在世界里的主色';
+      b.addEventListener('click', () => {
+        colors.querySelectorAll('.desk-color').forEach((x) => x.classList.toggle('active', x === b));
+        this.set({ color: c });
+      });
+      colors.append(b);
+    }
+    box.append(row('主色', colors));
 
     const litter = numberInput(1, 16, d.litterSize, (v) => this.set({ litterSize: v }));
     box.append(row('每窝', litter, textEl('span', '个', 'note')));
@@ -202,6 +263,7 @@ export class DesignDesk {
     this.renderEnergy(c);
     this.renderDerived(c);
     this.renderHints(c);
+    this.quoteRelease();
   }
 
   private renderEnergy(c: CompiledDesign): void {

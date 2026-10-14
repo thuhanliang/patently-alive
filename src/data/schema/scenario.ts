@@ -54,8 +54,11 @@ export const ScenarioSchema = z.object({
    */
   introduction: z
     .object({
+      /** 能不能从档案馆引进真实物种。 */
       allowed: z.boolean(),
       banned: z.array(z.string()).default([]),
+      /** 能不能投放事务所自己设计的物种（阶段 3）。设计物种的能力全由性状推导，操作接口会重新编译核对。 */
+      designs: z.boolean().default(false),
     })
     .optional(),
   /** 开局资源：预算（元）、人手（兽医队数量）、客户满意度（0–100）。 */

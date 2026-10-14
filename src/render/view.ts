@@ -8,7 +8,7 @@ import { IndividualLayer } from './individualLayer';
 import { RegionLayer } from './regionLayer';
 import { CLOSE_UP_CELL_PX } from './camera';
 import { CELL_PX, mapWorldSize } from './projection';
-import { PAPER, speciesColor } from './palette';
+import { PAPER, colorOf } from './palette';
 
 /** 格线在一格放大到多少屏幕像素以上时出现。 */
 
@@ -62,7 +62,7 @@ export class MapView {
 
   /** 换物种列表（开局、引进了新物种、读档后物种不同时）：各图层的形状和主色按新的物种下标排。 */
   setSpecies(species: readonly DerivedSpecies[]): void {
-    const colors = species.map((sp) => speciesColor(sp.params.id));
+    const colors = species.map((sp) => colorOf(sp.params));
     const textures = species.map((sp) => this.shapes[shapeOf(sp.params.id)]);
     this.grid.speciesColors = colors.map((c) => c.chart);
     this.individuals.species = species;

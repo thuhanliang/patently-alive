@@ -168,6 +168,7 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
       ...(climbs ? { climbs: true } : {}),
     },
     initialDensityPerHa: 0,
+    ...(design.color ? { appearance: { color: design.color } } : {}),
     source: `设计：${parts.coat.name}、${parts.mouth.name}、${parts.limbs.name}、${parts.tail.name}、${parts.digestion.name}、${parts.rearing.name}`,
     energyFactor: Math.round(appetite * 1000) / 1000,
   };

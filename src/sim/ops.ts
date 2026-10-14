@@ -3,6 +3,7 @@ import { SimConfigSchema } from './config';
 import type { Tools } from '../data/schema/tools';
 import { GoalSchema, type Scenario } from '../data/schema/scenario';
 import { SpeciesSchema } from '../data/schema/species';
+import { DesignSchema } from '../data/schema/design';
 import { fenceLengthCells } from './fence';
 
 /**
@@ -37,6 +38,11 @@ export const OpSchema = z.discriminatedUnion('type', [
     x: z.number().int(),
     y: z.number().int(),
     count: z.number().int().min(1).max(10_000),
+    /**
+     * 自己设计的物种：附上设计本身。操作接口用这一局的设计数据重新编译，编译结果必须和 species 一模一样
+     * （能力只能由性状推导，不能手写参数冒充设计，铁律 5）。
+     */
+    design: DesignSchema.optional(),
   }),
   /** 设置关注区（展开成个体的区域）；null 表示全部收拢。 */
   z.object({ type: z.literal('setFocus'), focus: FocusRectSchema.nullable() }),
@@ -91,7 +97,10 @@ export const RulesSchema = z.object({
   /** 能不能直接投放这片世界已有的物种（沙盒的调试手段，不花钱）：沙盒可以，情景里不行。 */
   allowRelease: z.boolean(),
   /** 引种（introduce）：允不允许，以及业主禁止引进的物种。来自情景数据；沙盒允许。 */
-  introduction: z.object({ allowed: z.boolean(), banned: z.array(z.string()) }).default({ allowed: false, banned: [] }),
+  /** designs：能不能投放自己设计的物种（阶段 3）。 */
+  introduction: z
+    .object({ allowed: z.boolean(), banned: z.array(z.string()), designs: z.boolean().default(false) })
+    .default({ allowed: false, banned: [], designs: false }),
   /** 每移除一只某物种，满意度降多少（情景的 sentiment）。没列出的不扣。 */
   sentiment: z.record(z.string(), z.number().min(0)),
   /** 委托目标（情景的 goal）：有了它才按季度结算、评分；沙盒为 null。 */
@@ -105,7 +114,11 @@ export function scenarioRules(scenario: Scenario): Rules {
     scenario: scenario.id,
     ...scenario.resources,
     allowRelease: false,
-    introduction: { allowed: scenario.introduction?.allowed ?? false, banned: scenario.introduction?.banned ?? [] },
+    introduction: {
+      allowed: scenario.introduction?.allowed ?? false,
+      banned: scenario.introduction?.banned ?? [],
+      designs: scenario.introduction?.designs ?? false,
+    },
     sentiment: scenario.sentiment,
     goal: scenario.goal,
   };
@@ -117,7 +130,7 @@ export const SANDBOX_RULES: Rules = {
   staff: 99,
   satisfaction: 100,
   allowRelease: true,
-  introduction: { allowed: true, banned: [] },
+  introduction: { allowed: true, banned: [], designs: true },
   sentiment: {},
   goal: null,
 };

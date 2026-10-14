@@ -3,6 +3,8 @@ import { checksum, cloneData, shapeMismatch } from './data';
 import { costOf, LOG_FORMAT, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
 import { Sim, speciesOf, type SimState } from './sim';
 import type { SpeciesParams } from '../data/schema/species';
+import type { Design } from '../data/schema/design';
+import { compileDesign, type DesignKit } from './design';
 import { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
@@ -359,7 +361,14 @@ export class Session {
       }
       case 'introduce': {
         const intro = this.rules.introduction;
-        if (!intro.allowed) return '这份委托不允许往岛上引进新物种';
+        if (op.design) {
+          if (!intro.designs) return '这份委托不允许投放自己设计的物种';
+          const problem = this.designProblem(op.design, op.species);
+          if (problem) return problem;
+        } else {
+          if (!intro.allowed) return '这份委托不允许从档案馆引进物种';
+          if (op.species.id.startsWith('d_')) return '设计物种（d_ 开头）要附上设计本身';
+        }
         if (!this.config.tools?.introduction) return '这片世界没有引种的工具数据';
         if (intro.banned.includes(op.species.id)) return `业主明令禁止引进${op.species.name}`;
         const max = this.config.tools.introduction.maxAnimals;
@@ -422,6 +431,32 @@ export class Session {
   }
 
   /** 这一局现在的全部物种 id（开局的 + 引进的），顺序和推演里的物种下标一致。 */
+  /** 设计编译的数据，按需从配置组装一次。 */
+  private designKitCache: DesignKit | null = null;
+
+  /**
+   * 设计物种的核对：用这一局的设计数据重新编译，结果必须和操作里的物种参数一模一样。
+   * 能力只能由性状推导（铁律 5）：不能手写一份参数冒充设计。
+   */
+  private designProblem(design: Design, species: SpeciesParams): string | null {
+    const data = this.config.design;
+    if (!data) return '这片世界没有设计数据，不能投放设计物种';
+    this.designKitCache ??= {
+      parts: new Map(data.parts.map((p) => [p.id, p] as const)),
+      laws: data.laws,
+      hints: data.hints,
+      appetiteBaseline: data.appetiteBaseline,
+    };
+    let compiled: SpeciesParams;
+    try {
+      compiled = compileDesign(design, this.designKitCache).params;
+    } catch (e) {
+      return `设计编译不了：${(e as Error).message}`;
+    }
+    if (checksum(compiled) !== checksum(species)) return '物种参数和设计对不上：设计物种的能力只能由设计推导';
+    return null;
+  }
+
   private speciesIds(): string[] {
     return this.simulation.species.map((d) => d.params.id);
   }
