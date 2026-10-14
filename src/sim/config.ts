@@ -27,6 +27,11 @@ export const SimConfigSchema = z
     tools: ToolsSchema.optional(),
     /** 设计编译的数据。不写就不能投放设计物种。 */
     design: DesignDataSchema.optional(),
+    /**
+     * 能从档案馆引进的现有技术（真实物种的完整参数）。写了的话，不附设计的引种必须和其中一条一模一样：
+     * 不能手写一份参数说它是真实动物（铁律 5）。不写就不核对（只看推演的测试）。
+     */
+    catalog: z.array(SpeciesSchema).optional(),
   })
   .refine((c) => c.species.map((s) => s.id).join() === c.world.species.join(), {
     message: 'species 必须与 world.species 列出的 id 一一对应、顺序一致',

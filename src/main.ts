@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, costOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { RECENT_HALF_LIFE_DAYS, costOf, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -70,8 +70,15 @@ async function main(): Promise<void> {
     hintTemplates,
     designTemplates.map((t) => t.design),
   );
-  const designData = { parts: [...partLibrary.values()], laws: scalingLaws, hints: hintTemplates, appetiteBaseline: kit.appetiteBaseline };
-  const config = { seed: intParam('seed', defaultSeed, 0xffff_ffff), world, species, tools: toolData, design: designData };
+  // 档案馆的条目也进配置：不附设计的引种必须和其中一条一模一样。
+  const config = {
+    seed: intParam('seed', defaultSeed, 0xffff_ffff),
+    world,
+    species,
+    tools: toolData,
+    design: designDataOf(kit),
+    catalog: [...speciesLibrary.values()],
+  };
 
   // 推演在 Web Worker 里跑（src/runtime/simWorker.ts），主线程只渲染、收输入。
   // 有委托时开局先停着，等玩家读完历史卡。
@@ -140,6 +147,12 @@ async function main(): Promise<void> {
   // Esc：先关开着的档案馆或设计台，再取消引进模式。
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    // 正在输入框里打字（比如设计的名字）：Esc 只退出输入框，不关面板。
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) {
+      t.blur();
+      return;
+    }
     if (archive.isOpen || desk.isOpen) {
       archive.close();
       desk.close();

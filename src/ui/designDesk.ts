@@ -1,7 +1,7 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
-import { DESIGN_COLORS } from '../data/schema/design';
 import { checksum, compileDesign, partsOf, nearest, traitsOf, type CompiledDesign, type DesignKit } from '../sim';
-import { BLUEPRINT, cssAlpha } from '../render/palette';
+import { BLUEPRINT, DESIGN_COLORS, cssAlpha } from '../render/palette';
+import { countPicker } from './countPicker';
 import { drawBlueprint, massText } from './blueprint';
 
 const ACTIVITY: Array<[Design['activity'], string]> = [
@@ -41,7 +41,7 @@ export class DesignDesk {
   /** 拖滑杆时一帧里会来好几次输入：线稿每帧只画一次。 */
   private drawPending = false;
   private count = 20;
-  private readonly releaseCost = textEl('span', '', 'note');
+  private releaseNote: HTMLElement | null = null;
 
   constructor(
     private readonly el: HTMLElement,
@@ -116,35 +116,29 @@ export class DesignDesk {
 
   /** 投放这个设计：选数量、看花费，然后回到地图上点地点。投放后收不回来。 */
   private releaseRow(hooks: ReleaseHooks): HTMLElement {
-    const box = div('bar archive-introduce');
-    const count = document.createElement('input');
-    count.type = 'number';
-    count.min = '1';
-    count.max = String(hooks.maxAnimals);
-    count.value = String(this.count);
-    count.style.width = '5em';
-    const chosen = (): number => Math.max(1, Math.min(hooks.maxAnimals, Math.floor(Number(count.value) || 1)));
-    count.addEventListener('input', () => {
-      this.count = chosen();
-      this.quoteRelease();
+    const picker = countPicker({
+      verb: '投放',
+      button: '投放到这里',
+      title: '关掉设计台，在地图上点投放地点。投放后收不回来，只能再用兽医手段减少。',
+      max: hooks.maxAnimals,
+      initial: this.count,
+      onCount: (n) => {
+        this.count = n;
+        this.quoteRelease();
+      },
+      onGo: (n) => {
+        this.count = n;
+        const { design, compiled } = this.current;
+        this.close();
+        hooks.start(design, compiled.params, n);
+      },
     });
-    count.addEventListener('change', () => (count.value = String(chosen())));
-    const go = textEl('button', '投放到这里');
-    go.title = '关掉设计台，在地图上点投放地点。投放后收不回来，只能再用兽医手段减少。';
-    go.addEventListener('click', () => {
-      this.count = chosen();
-      const { design, compiled } = this.current;
-      this.close();
-      hooks.start(design, compiled.params, this.count);
-    });
-    const label = document.createElement('label');
-    label.append('投放 ', count, ' 只');
-    box.append(label, go, this.releaseCost);
-    return box;
+    this.releaseNote = picker.note;
+    return picker.row;
   }
 
   private quoteRelease(): void {
-    if (this.release && this.compiled) this.releaseCost.textContent = this.release.quote(this.compiled.params, this.count);
+    if (this.release && this.compiled && this.releaseNote) this.releaseNote.textContent = this.release.quote(this.compiled.params, this.count);
   }
 
   /** 中间一栏：从现有技术开始、名字、性状、各槽位的部件。 */

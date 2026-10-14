@@ -1,10 +1,10 @@
 import { SimConfigSchema, type SimConfig } from './config';
 import { checksum, cloneData, shapeMismatch } from './data';
-import { costOf, LOG_FORMAT, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
+import { costOf, LOG_FORMAT, LOG_VERSION, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
 import { Sim, speciesOf, type SimState } from './sim';
 import type { SpeciesParams } from '../data/schema/species';
 import type { Design } from '../data/schema/design';
-import { compileDesign, type DesignKit } from './design';
+import { compileDesign, designKitFromData, type DesignKit } from './design';
 import { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
@@ -247,7 +247,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: LOG_FORMAT,
-      version: 7,
+      version: LOG_VERSION,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
@@ -368,6 +368,8 @@ export class Session {
         } else {
           if (!intro.allowed) return '这份委托不允许从档案馆引进物种';
           if (op.species.id.startsWith('d_')) return '设计物种（d_ 开头）要附上设计本身';
+          const catalog = this.config.catalog;
+          if (catalog && !catalog.some((p) => checksum(p) === checksum(op.species))) return `档案馆里没有和「${op.species.name}」一模一样的条目`;
         }
         if (!this.config.tools?.introduction) return '这片世界没有引种的工具数据';
         if (intro.banned.includes(op.species.id)) return `业主明令禁止引进${op.species.name}`;
@@ -430,7 +432,6 @@ export class Session {
     return null;
   }
 
-  /** 这一局现在的全部物种 id（开局的 + 引进的），顺序和推演里的物种下标一致。 */
   /** 设计编译的数据，按需从配置组装一次。 */
   private designKitCache: DesignKit | null = null;
 
@@ -441,12 +442,7 @@ export class Session {
   private designProblem(design: Design, species: SpeciesParams): string | null {
     const data = this.config.design;
     if (!data) return '这片世界没有设计数据，不能投放设计物种';
-    this.designKitCache ??= {
-      parts: new Map(data.parts.map((p) => [p.id, p] as const)),
-      laws: data.laws,
-      hints: data.hints,
-      appetiteBaseline: data.appetiteBaseline,
-    };
+    this.designKitCache ??= designKitFromData(data);
     let compiled: SpeciesParams;
     try {
       compiled = compileDesign(design, this.designKitCache).params;
@@ -457,6 +453,7 @@ export class Session {
     return null;
   }
 
+  /** 这一局现在的全部物种 id（开局的 + 引进的），顺序和推演里的物种下标一致。 */
   private speciesIds(): string[] {
     return this.simulation.species.map((d) => d.params.id);
   }

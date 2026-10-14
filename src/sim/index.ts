@@ -9,7 +9,7 @@ export { type DerivedSpecies } from './physiology';
 export * from './time';
 export { FOCUS_BLOCK, FOCUS_MAX_CELLS, focusAround, inFocus, sameFocus, type FocusRect } from './focus';
 export { isJuvenileAt, type Individuals } from './individuals';
-export { LOG_FORMAT, OpSchema, OpLogSchema, RulesSchema, SANDBOX_RULES, costOf, scenarioRules, type Op, type OpLog, type LogEntry, type Cost, type Rules } from './ops';
+export { LOG_FORMAT, LOG_VERSION, OpSchema, OpLogSchema, RulesSchema, SANDBOX_RULES, costOf, scenarioRules, type Op, type OpLog, type LogEntry, type Cost, type Rules } from './ops';
 export { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 export { Session, type SubmitResult, type Resources, type Quarter } from './session';
 export { QUARTER_DAYS, QUARTERS_PER_YEAR, SCORE_KEYS, type ScoreKey, type Scores, type ScoreDetail } from './score';
@@ -21,4 +21,4 @@ export { necropsyFindings, biteSizeMm, type NecropsyFindings, type Bite, type De
 export { type Alert, type AlertKind } from './alerts';
 export { SUBSTANTIALLY_SAME, TRAIT_WEIGHTS, compare, nearest, traitsOf, type Match, type TraitKey, type TraitQuery } from './similarity';
 export { applyLaw, errorFactor, scaleTraits, trophicLevel, type ScaledTraits, type ScalingCauses } from './scaling';
-export { REPRO_KJ_PER_G, calibrate, compileDesign, makeDesignKit, partsOf, type CompiledDesign, type DesignKit, type EnergyLine } from './design';
+export { REPRO_KJ_PER_G, calibrate, compileDesign, designDataOf, designKitFromData, makeDesignKit, partsOf, type CompiledDesign, type DesignKit, type EnergyLine } from './design';

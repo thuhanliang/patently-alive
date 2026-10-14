@@ -14,7 +14,8 @@ import {
   type Design,
 } from '../src/data';
 import { HintTemplatesSchema } from '../src/data/schema/design';
-import { cellIndex, checksum, compileDesign, makeDesignKit, scenarioRules, Session, TICKS_PER_DAY, DAYS_PER_YEAR } from '../src/sim';
+import { DESIGN_COLORS, FIXED_SPECIES_COLORS } from '../src/render/palette';
+import { cellIndex, checksum, compileDesign, designDataOf, makeDesignKit, scenarioRules, Session, TICKS_PER_DAY, DAYS_PER_YEAR } from '../src/sim';
 
 const kit = makeDesignKit(
   partLibrary,
@@ -141,7 +142,7 @@ describe('设计编译器', () => {
 });
 
 describe('投放设计物种（操作接口重新编译核对）', () => {
-  const designData = { parts: [...partLibrary.values()], laws: scalingLaws, hints: hintTemplates, appetiteBaseline: kit.appetiteBaseline };
+  const designData = designDataOf(kit);
   const island = scenarioLibrary.get('bird-island')!;
   const islandConfig = { seed: 2, world: worldFor(island), species: speciesFor(worldFor(island)), tools, design: designData };
   const design: Design = { ...template('stoat'), id: 'd_test', name: '试验鼬' };
@@ -171,6 +172,20 @@ describe('投放设计物种（操作接口重新编译核对）', () => {
     expect(s.sim.species).toHaveLength(islandConfig.species.length);
   });
 
+  it('配置带档案馆条目时，不附设计的引种必须和其中一条一模一样', () => {
+    const small = scenarioLibrary.get('bird-island-small')!;
+    const cfg = { seed: 2, world: worldFor(small), species: speciesFor(worldFor(small)), tools, catalog: [...speciesLibrary.values()] };
+    const s = new Session(cfg, scenarioRules(small));
+    const stoat = speciesLibrary.get('stoat')!;
+    const r = s.submit({ type: 'introduce', species: { ...stoat, id: 'superstoat', survival: { adultAnnual: 0.99 } }, ...at(s), count: 5 });
+    expect(r.ok).toBe(false);
+    expect(s.submit({ type: 'introduce', species: stoat, ...at(s), count: 5 })).toEqual({ ok: true });
+  });
+
+  it('设计物种的可选主色不和任何固定物种主色相同', () => {
+    for (const c of DESIGN_COLORS) expect(FIXED_SPECIES_COLORS).not.toContain(parseInt(c.slice(1), 16));
+  });
+
   it('没有设计数据的世界、不允许设计的委托都拒绝', () => {
     const { design: _, ...noData } = islandConfig;
     const a = new Session(noData, scenarioRules(island));
@@ -194,7 +209,7 @@ describe('设计物种进推演', () => {
     const scenario = scenarioLibrary.get('bird-island-small')!;
     const world = worldFor(scenario);
     const rules = { ...scenarioRules(scenario), goal: { ...scenario.goal, years: 1 } };
-    const designData = { parts: [...partLibrary.values()], laws: scalingLaws, hints: hintTemplates, appetiteBaseline: kit.appetiteBaseline };
+    const designData = designDataOf(kit);
     const config = { seed: 3, world, species: speciesFor(world), tools, design: designData };
     const design: Design = { ...template('mongoose'), id: 'd_ratcatcher', name: '捕鼠者', activity: 'nocturnal' };
     const species = compile(design).params;

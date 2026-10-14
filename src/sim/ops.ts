@@ -140,12 +140,13 @@ export const SANDBOX_RULES: Rules = {
  * 同一份日志回放出同一个结果。
  */
 export const LOG_FORMAT = 'patently-alive/oplog';
+/** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。8：设计物种（配置带设计数据、操作附设计）。 */
+export const LOG_VERSION = 8;
 
 export const OpLogSchema = z
   .object({
     format: z.literal(LOG_FORMAT),
-    /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(7),
+    version: z.literal(LOG_VERSION),
     config: SimConfigSchema,
     rules: RulesSchema,
     entries: z.array(LogEntrySchema),

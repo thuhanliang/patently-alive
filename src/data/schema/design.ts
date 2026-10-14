@@ -72,9 +72,6 @@ export const PartsFileSchema = z
     }
   });
 
-/** 设计物种可选的主色：田野笔记的低饱和平涂色，避开朱红（警报）和蓝图蓝（玩家的批注）。 */
-export const DESIGN_COLORS = ['#8a7a4e', '#6f8f72', '#a8714a', '#7d8a99', '#9a6f8a', '#c9a97a', '#5f6b4e', '#b0805c'] as const;
-
 /** 一份设计：玩家拼出来的东西。本身是数据，可以存档、回放、写进申请书。 */
 export const DesignSchema = z.object({
   /** 物种 id；设计的都以 d_ 开头，不会和现有技术撞上。 */
@@ -89,7 +86,7 @@ export const DesignSchema = z.object({
   breedingMonths: z.number().int().min(1).max(12),
   nest: z.enum(['ground', 'burrow']),
   territorial: z.boolean(),
-  /** 在世界里的主色（田野笔记的平涂色，见 DESIGN_COLORS）；不写用墨灰。 */
+  /** 在世界里的主色（田野笔记的平涂色，可选的几种见 render/palette.ts 的 DESIGN_COLORS）；不写用墨灰。 */
   color: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
   /** 每个槽位选一个部件（部件 id）。 */
   parts: z.object(Object.fromEntries(SLOTS.map((s) => [s, z.string()])) as Record<Slot, z.ZodString>),
