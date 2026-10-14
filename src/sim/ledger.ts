@@ -67,6 +67,31 @@ export function createLedger(species: number, blocks: number): DeathLedger {
   };
 }
 
+/**
+ * 物种数增加时（引种）把账本换成新的布局：死因数随物种数变（每个物种多两种"被它捕食"的死因），
+ * 已有的账目原样搬过去，新物种和新死因从 0 开始。返回新账本，旧账本不动。
+ */
+export function growLedger(old: DeathLedger, species: number): DeathLedger {
+  if (species < old.species) throw new RangeError(`物种数只能增加：${old.species} → ${species}`);
+  const next = createLedger(species, old.blocks);
+  next.freshSlot = old.freshSlot;
+  const B = old.blocks;
+  for (let s = 0; s < old.species; s++) {
+    for (let c = 0; c < old.causes; c++) {
+      const from = s * old.causes + c;
+      const to = s * next.causes + c;
+      next.today[to] = old.today[from]!;
+      next.lastDay[to] = old.lastDay[from]!;
+      next.recent.set(old.recent.subarray(from * B, (from + 1) * B), to * B);
+      for (let slot = 0; slot < FRESH_DAYS; slot++) {
+        const f = freshIndex(old, slot, s, c, 0);
+        next.fresh.set(old.fresh.subarray(f, f + B), freshIndex(next, slot, s, c, 0));
+      }
+    }
+  }
+  return next;
+}
+
 /** 记一笔：物种 s 在区块 block 因 cause 死了 n 只。 */
 export function recordDeaths(ledger: DeathLedger, s: number, cause: number, block: number, n: number): void {
   if (n === 0) return;

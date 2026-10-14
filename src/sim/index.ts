@@ -1,6 +1,6 @@
 export { Rng, assertSeed, type RngState } from './rng';
 export { SimConfigSchema, type SimConfig } from './config';
-export { Sim, createInitialState, type SimState } from './sim';
+export { Sim, createInitialState, speciesOf, type SimState } from './sim';
 export { FixedStepClock, type FixedStepClockOptions } from './clock';
 export { checksum, cloneData, serialize, deserialize, decodeData } from './data';
 export { cellIndex, meanLandVegetation, type Grid } from './grid';

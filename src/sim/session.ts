@@ -1,7 +1,8 @@
 import { SimConfigSchema, type SimConfig } from './config';
 import { checksum, cloneData, shapeMismatch } from './data';
 import { costOf, LOG_FORMAT, OpLogSchema, OpSchema, RulesSchema, SANDBOX_RULES, type Cost, type LogEntry, type Op, type OpLog, type Rules } from './ops';
-import { Sim, type SimState } from './sim';
+import { Sim, speciesOf, type SimState } from './sim';
+import type { SpeciesParams } from '../data/schema/species';
 import { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 import type { Alert } from './alerts';
 import { fenceLengthCells } from './fence';
@@ -182,10 +183,11 @@ export class Session {
 
   private afterDay(): void {
     const { sentiment } = this.rules;
+    const ids = this.speciesIds();
     let loss = 0;
     this.simulation.state.lastDay.forEach((d, s) => {
       this.removedBySpecies[s] = this.removedBySpecies[s]! + d.removed;
-      if (d.removed > 0) loss += d.removed * (sentiment[this.config.species[s]!.id] ?? 0);
+      if (d.removed > 0) loss += d.removed * (sentiment[ids[s]!] ?? 0);
     });
     if (loss > 0) this.res.satisfaction = Math.max(0, this.res.satisfaction - loss);
     const day = this.simulation.tick / TICKS_PER_DAY;
@@ -243,7 +245,7 @@ export class Session {
   exportLog(): OpLog {
     return {
       format: LOG_FORMAT,
-      version: 6,
+      version: 7,
       config: cloneData(this.config),
       rules: cloneData(this.rules),
       entries: cloneData(this.log),
@@ -286,9 +288,11 @@ export class Session {
     if (state.tick !== log.endTick) throw new Error(`存档的快照在第 ${state.tick} tick，日志停在第 ${log.endTick} tick，对不上`);
     if (checksum(state.config) !== checksum(session.config)) throw new Error('存档的快照和日志不是同一个世界');
     const fresh = session.simulation.state;
+    // 快照里有引进的物种：新建的局也登记上，形状才对得上。
+    for (const p of state.introduced ?? []) session.addSpecies(p);
     const bad = shapeMismatch(state, fresh, fresh.grid.width * fresh.grid.height);
     if (bad) throw new Error(`存档的快照格式和这个版本不一样（${bad}），可能是旧版本的存档`);
-    const n = session.config.species.length;
+    const n = session.speciesIds().length;
     const s = save.session;
     if (s.removed.length !== n || s.resources.busyUntil.length !== session.rules.staff) throw new Error('存档里的资源和开局规则对不上');
     // Sim 的构造函数自己会拷贝一份。
@@ -348,7 +352,18 @@ export class Session {
         return null;
       case 'release': {
         if (!this.rules.allowRelease) return '管理员身份不能往岛上引入动物（引种在下一阶段解锁）';
-        if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
+        return this.landProblem(op.x, op.y);
+      }
+      case 'introduce': {
+        const intro = this.rules.introduction;
+        if (!intro.allowed) return '这份委托不允许往岛上引进新物种';
+        if (intro.banned.includes(op.species.id)) return `业主明令禁止引进${op.species.name}`;
+        const max = this.config.tools?.introduction?.maxAnimals;
+        if (max !== undefined && op.count > max) return `一次最多引进 ${max} 只`;
+        // 同一个 id 已经在这一局里了：只能是同一种（性状完全一样），否则是另一个物种，得换个 id。
+        const known = speciesOf(this.simulation.state).find((s) => s.id === op.species.id);
+        if (known && checksum(known) !== checksum(op.species)) return `这一局已经有「${op.species.id}」了，但性状不一样`;
         return this.landProblem(op.x, op.y);
       }
       case 'setFocus': {
@@ -364,23 +379,23 @@ export class Session {
         const tools = this.config.tools;
         if (!tools) return '这片世界没有兽医工具';
         if (!tools.traps.some((t) => t.id === op.trap)) return `没有这种陷阱：${op.trap}`;
-        const bad = op.remove.find((id) => !this.config.species.some((s) => s.id === id));
+        const bad = op.remove.find((id) => !this.hasSpecies(id));
         if (bad !== undefined) return `移除名单里的「${bad}」不是这片世界的物种`;
         return this.landProblem(op.x, op.y);
       }
       case 'cull': {
         if (!this.config.tools) return '这片世界没有兽医工具';
-        if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
       case 'sample': {
         if (!this.config.tools) return '这片世界没有兽医工具';
-        if (!this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
       case 'necropsy': {
         if (!this.config.tools) return '这片世界没有兽医工具';
-        if (op.species !== null && !this.config.species.some((s) => s.id === op.species)) return `这片世界里没有物种「${op.species}」`;
+        if (op.species !== null && !this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
       case 'fence': {
@@ -403,8 +418,28 @@ export class Session {
     return null;
   }
 
+  /** 这一局现在的全部物种 id（开局的 + 引进的），顺序和推演里的物种下标一致。 */
+  private speciesIds(): string[] {
+    return speciesOf(this.simulation.state).map((s) => s.id);
+  }
+
+  private hasSpecies(id: string): boolean {
+    return this.speciesIds().includes(id);
+  }
+
   private speciesIndex(id: string): number {
-    return this.config.species.findIndex((s) => s.id === id);
+    return this.speciesIds().indexOf(id);
+  }
+
+  /** 登记一个新物种：推演里加上它，按物种排的记录（移除只数、评分的本地 / 外来、开局基准）跟着加一项。引进的都算外来。 */
+  private addSpecies(params: SpeciesParams): number {
+    const index = this.simulation.introduce(params);
+    this.removedBySpecies.push(0);
+    if (this.scoring) {
+      (this.scoring.goal.native as boolean[]).push(false);
+      this.scoring.base.totals.push(0);
+    }
+    return index;
   }
 
   private apply(op: Op): void {
@@ -413,13 +448,14 @@ export class Session {
         this.currentSpeed = op.speed;
         return;
       case 'release':
-        this.simulation.release(
-          this.config.species.findIndex((s) => s.id === op.species),
-          op.x,
-          op.y,
-          op.count,
-        );
+        this.simulation.release(this.speciesIndex(op.species), op.x, op.y, op.count);
         return;
+      case 'introduce': {
+        const known = this.speciesIndex(op.species.id);
+        const index = known >= 0 ? known : this.addSpecies(op.species);
+        this.simulation.release(index, op.x, op.y, op.count);
+        return;
+      }
       case 'setFocus':
         this.simulation.setFocus(op.focus);
         return;

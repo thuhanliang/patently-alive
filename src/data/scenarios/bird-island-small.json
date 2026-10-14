@@ -1,0 +1,28 @@
+{
+  "id": "bird-island-small",
+  "name": "小鸟岛（试验场）",
+  "world": "island-small",
+  "seed": 1,
+  "history": {
+    "title": "档案馆历史卡 · 外来者登岛",
+    "paragraphs": [
+      "这座岛上原本没有陆生哺乳动物。地面筑巢的鸟类在这里繁衍了很久，蛋就下在草丛和灌丛下的浅坑里。",
+      "十九世纪起，船只带来了老鼠；捕鲸人和牧民放养了兔子，作为食物来源；为了控制老鼠和兔子，又有人放了猫。",
+      "三者都留了下来。本地鸟的数量从那以后一直在下降。",
+      "参照：新西兰的 Predator Free 2050 计划要在 2050 年前清除外来的鼠、鼬和负鼠，后来又把野猫列入清除目标；许多离岸岛屿已经清空了外来捕食者，成了本地鸟的避难所。"
+    ],
+    "source": "新西兰保护部（Department of Conservation）Predator Free 2050 计划；GDD「情景库」。"
+  },
+  "client": {
+    "name": "鸟岛保护信托 · 管理员",
+    "letter": [
+      "事务所的各位：",
+      "岛上的鸟一年比一年少。我们怀疑是猫，但没有证据，也不知道该从哪里下手。",
+      "希望你们查明原因，让鸟的数量回升。预算有限，人手更少；另外，岛民不太愿意看到大规模扑杀。"
+    ]
+  },
+  "sentiment": { "cat": 0.5, "rabbit": 0.02, "rat": 0, "dotterel": 5 },
+  "goal": { "target": "dotterel", "recovery": 1.3, "native": ["dotterel"], "years": 3, "quarterlyBudget": 15000 },
+  "introduction": { "allowed": true, "banned": [] },
+  "resources": { "budget": 120000, "staff": 2, "satisfaction": 70 }
+}
