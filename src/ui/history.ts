@@ -13,13 +13,31 @@ export class PopulationHistory {
   private count = 0;
   private lastDay = -1;
 
+  private labelList: string[];
+
   constructor(
-    readonly labels: readonly string[],
+    labels: readonly string[],
     capacity = 360 * 12,
   ) {
     this.capacity = capacity;
+    this.labelList = [...labels];
     this.buf = labels.map(() => new Float64Array(capacity));
     this.days = new Int32Array(capacity);
+  }
+
+  /** 各条线的名字；最后一条是平均植被。 */
+  get labels(): readonly string[] {
+    return this.labelList;
+  }
+
+  /**
+   * 换物种线的名字（引进了新物种，或读档后物种不同）：多出来的物种线插在植被线前面，引进以前的日子记为 0；
+   * 少了的从后面去掉（只在换了一局时发生，那时记录也已经清空）。
+   */
+  setSpecies(names: readonly string[]): void {
+    while (this.buf.length - 1 < names.length) this.buf.splice(this.buf.length - 1, 0, new Float64Array(this.capacity));
+    if (this.buf.length - 1 > names.length) this.buf.splice(names.length, this.buf.length - 1 - names.length);
+    this.labelList = [...names, this.labelList.at(-1)!];
   }
 
   /** 每天最多记一次；同一天重复调用会被忽略。 */
@@ -35,7 +53,12 @@ export class PopulationHistory {
     if (this.count < this.capacity) this.count += 1;
     else this.start = (this.start + 1) % this.capacity;
     this.days[i] = day;
-    totals.forEach((n, s) => (this.buf[s]![i] = n));
+    // 数值比物种线多（引进了新物种，名字还没随 setSpecies 到）：先加上没名字的线，名字到了再补。
+    while (this.buf.length - 1 < totals.length) {
+      this.buf.splice(this.buf.length - 1, 0, new Float64Array(this.capacity));
+      this.labelList.splice(this.labelList.length - 1, 0, '');
+    }
+    for (let s = 0; s < this.buf.length - 1; s++) this.buf[s]![i] = totals[s] ?? 0;
     this.buf[this.buf.length - 1]![i] = veg;
   }
 

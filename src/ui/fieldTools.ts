@@ -18,6 +18,8 @@ export interface FieldToolsHandle {
   click(cell: Point, corner: Point): Op | null;
   /** 正在画的围栏的起点（没在画时为 null）。 */
   fenceStart(): Point | null;
+  /** 引进了新物种：各处的物种表跟着换。 */
+  setSpecies(species: ReadonlyArray<{ id: string; name: string }>): void;
 }
 
 interface Point {
@@ -51,34 +53,24 @@ export function bindFieldTools(
   nights.style.width = '4em';
   const nightsLabel = label('放', nights, '晚');
 
-  // 陷阱：抓到哪些就移除（其余放生）。搜捕：移除哪一种。
-  const removeBoxes = species.map((s) => {
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.value = s.id;
-    return { box, wrap: label('', box, s.name) };
-  });
+  // 陷阱：抓到哪些就移除（其余放生）。搜捕：移除哪一种。物种表在下面的 setSpecies 里填。
+  let removeBoxes: { box: HTMLInputElement; wrap: HTMLLabelElement }[] = [];
   const removeRow = document.createElement('div');
   removeRow.className = 'bar';
-  removeRow.append(text('抓到就移除：'), ...removeBoxes.map((b) => b.wrap));
 
   const target = document.createElement('select');
-  for (const s of species) target.add(new Option(s.name, s.id));
   const targetRow = document.createElement('div');
   targetRow.className = 'bar';
   targetRow.append(text('移除：'), target);
 
   // 体检采样：抓哪一种（检查完放生）。
   const sampleTarget = document.createElement('select');
-  for (const s of species) sampleTarget.add(new Option(s.name, s.id));
   const sampleRow = document.createElement('div');
   sampleRow.className = 'bar';
   sampleRow.append(text('抓：'), sampleTarget, text('检查后放生'));
 
   // 找尸体：要哪个物种的（默认不限）。
   const carcass = document.createElement('select');
-  carcass.add(new Option('不限物种', ''));
-  for (const s of species) carcass.add(new Option(s.name, s.id));
   const carcassRow = document.createElement('div');
   carcassRow.className = 'bar';
   carcassRow.append(text('找：'), carcass, text('的新鲜尸体'));
@@ -136,11 +128,35 @@ export function bindFieldTools(
     const extra = c.satisfaction < 0 ? `，满意度 ${c.satisfaction}` : '';
     cost.textContent = `${c.budget.toLocaleString('zh-CN')} 元，${c.staff} 支队伍 ${c.days} 天${extra}`;
   };
+  /** 填物种表；已经选了的（勾选的、下拉框里选中的）保留。引进了新物种时再调一次。 */
+  const setSpecies = (list: ReadonlyArray<{ id: string; name: string }>): void => {
+    const checked = new Set(removeBoxes.filter((b) => b.box.checked).map((b) => b.box.value));
+    removeBoxes = list.map((s) => {
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = s.id;
+      box.checked = checked.has(s.id);
+      box.addEventListener('change', refresh);
+      return { box, wrap: label('', box, s.name) };
+    });
+    removeRow.replaceChildren(text('抓到就移除：'), ...removeBoxes.map((b) => b.wrap));
+    for (const [sel, extra] of [
+      [target, []],
+      [sampleTarget, []],
+      [carcass, [new Option('不限物种', '')]],
+    ] as [HTMLSelectElement, HTMLOptionElement[]][]) {
+      const keep = sel.value;
+      sel.replaceChildren(...extra, ...list.map((s) => new Option(s.name, s.id)));
+      if (keep !== '' && list.some((s) => s.id === keep)) sel.value = keep;
+    }
+  };
+  setSpecies(species);
   tool.addEventListener('change', () => setPlacing(false));
-  for (const elm of [tool, nights, target, carcass, sampleTarget, ...removeBoxes.map((b) => b.box)]) elm.addEventListener('change', refresh);
+  for (const elm of [tool, nights, target, carcass, sampleTarget]) elm.addEventListener('change', refresh);
   nights.addEventListener('input', refresh);
   // 默认：猫笼抓到猫就移除，搜捕也默认找猫（默认值不该是本地鸟）。
-  removeBoxes.find((b) => b.box.value === 'cat')?.box.setAttribute('checked', '');
+  const catBox = removeBoxes.find((b) => b.box.value === 'cat');
+  if (catBox) catBox.box.checked = true;
   if (species.some((s) => s.id === 'cat')) target.value = 'cat';
   refresh();
 
@@ -153,6 +169,7 @@ export function bindFieldTools(
     isPlacing: () => placing,
     stop: () => setPlacing(false),
     fenceStart: () => start,
+    setSpecies,
     click: (cell, corner) => {
       if (!isFence()) return pointOp(cell.x, cell.y);
       if (!start) {

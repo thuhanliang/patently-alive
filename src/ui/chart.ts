@@ -28,8 +28,8 @@ export class PopulationChart {
     private readonly canvas: HTMLCanvasElement,
     private readonly history: PopulationHistory,
     private readonly vegMax: number,
-    /** 各物种线的颜色（物种主色，见 palette.ts）。 */
-    private readonly colors: readonly number[],
+    /** 各物种线的颜色（物种主色，见 palette.ts）；引进新物种后换掉。 */
+    public colors: readonly number[],
   ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('无法创建 2D 画布');
@@ -43,7 +43,7 @@ export class PopulationChart {
     const h = canvas.clientHeight;
     // 只有记录或尺寸变了才重画（暂停时不白画）。
     const n0 = history.length;
-    const key = `${n0}:${n0 > 0 ? history.day(n0 - 1) : -1}:${w}x${h}:${dpr}:${this.scale}`;
+    const key = `${n0}:${n0 > 0 ? history.day(n0 - 1) : -1}:${w}x${h}:${dpr}:${this.scale}:${history.labels.length}`;
     if (key === this.drawnKey) return;
     this.drawnKey = key;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {

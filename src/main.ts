@@ -1,5 +1,5 @@
 import { archiveLibrary, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { RECENT_HALF_LIFE_DAYS, costOf, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -85,7 +85,10 @@ async function main(): Promise<void> {
   session.onError = (message) => (status.textContent = `推演出错：${message}`);
 
   const view = await MapView.mount(el('app'), session.sim.state, session.species);
-  const names = session.species.map((s) => s.params.name);
+  /** 这一局现在的物种（id 和名字），按物种下标排。 */
+  const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
+  /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */
+  let names = session.species.map((s) => s.params.name);
   const hud = new Hud(el('hud'));
   const deaths = new DeathPanel(el('deaths'), names);
   const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
@@ -95,8 +98,41 @@ async function main(): Promise<void> {
   // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
   const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
   let shownQuarters = 0;
-  // 自然档案馆：翻看现有技术。开着时推演暂停。
-  const archive = new ArchivePanel(el('archive'), archiveLibrary, speciesLibrary);
+  // 自然档案馆：翻看现有技术；情景允许引种时，条目上有"引进到这里"。开着时推演暂停。
+  /** 选好了要引进的物种和数量、等着在地图上点地点；null 表示没在引进。 */
+  let introducing: { id: string; count: number } | null = null;
+  const intro = toolData.introduction;
+  const archive = new ArchivePanel(
+    el('archive'),
+    archiveLibrary,
+    speciesLibrary,
+    rules.introduction.allowed && intro
+      ? {
+          maxAnimals: intro.maxAnimals,
+          quote: (id, count) => {
+            const p = speciesLibrary.get(id)!;
+            if (rules.introduction.banned.includes(id)) return { text: `业主明令禁止引进${p.name}`, allowed: false };
+            const c = costOf({ type: 'introduce', species: p, x: 0, y: 0, count }, toolData, world.cellSizeM);
+            return { text: `${c.budget.toLocaleString('zh-CN')} 元（购买、运输、检疫），${c.staff} 支队伍 ${c.days} 天；引进后收不回来`, allowed: true };
+          },
+          start: (id, count) => {
+            tools.stopReleasing();
+            field.stop();
+            introducing = { id, count };
+            status.textContent = modeHint();
+          },
+        }
+      : undefined,
+  );
+  /** 正在等着点地图的模式的提示（状态栏清空时还原它，免得模式开着却看不出来）。 */
+  const modeHint = (): string =>
+    introducing ? `在地图上点一下投放 ${introducing.count} 只${speciesLibrary.get(introducing.id)!.name}（按 Esc 取消）` : '';
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && introducing) {
+      introducing = null;
+      status.textContent = '取消了引进';
+    }
+  });
   const archiveBtn = document.createElement('button');
   archiveBtn.textContent = '档案馆';
   archiveBtn.title = '翻看现有技术：真实动物的数据档案和知识卡';
@@ -118,7 +154,7 @@ async function main(): Promise<void> {
   /** 所有玩家操作都从这里进统一操作接口（在 Worker 里的 Session.submit）；被拒绝时在状态栏说明原因。 */
   const submit = async (op: Op): Promise<boolean> => {
     const r = await session.submit(op);
-    status.textContent = r.ok ? '' : `操作被拒绝：${r.reason}`;
+    status.textContent = r.ok ? modeHint() : `操作被拒绝：${r.reason}`;
     return r.ok;
   };
 
@@ -129,12 +165,33 @@ async function main(): Promise<void> {
     captures.reset();
     alertBanner.reset();
     shownQuarters = session.quarters.length;
+    introducing = null;
     cards?.close();
     history.clear();
     view.redraw();
   };
+  // 物种列表变了（引进了新物种，或读档后物种不同）：各处按物种下标排的名字、颜色、选项跟着换。
+  let speciesVersion = session.speciesVersion;
+  const syncSpecies = (): void => {
+    if (session.speciesVersion === speciesVersion) return;
+    speciesVersion = session.speciesVersion;
+    const list = speciesList();
+    names = list.map((s) => s.name);
+    view.setSpecies(session.species);
+    deaths.names = names;
+    deaths.reset();
+    alertBanner.names = names;
+    captures.setSpecies(session.species);
+    if (cards) cards.speciesIds = list.map((s) => s.id);
+    history.setSpecies(names);
+    chart.colors = list.map((s) => speciesColor(s.id).chart);
+    tools.setSpecies(list);
+    field.setSpecies(list);
+    layers.setSpecies(names);
+  };
   session.onView = (days, regenerated) => {
     if (regenerated) restart();
+    syncSpecies();
     for (const d of days) history.recordValues(d.day, d.totals, d.veg);
   };
   for (const d of firstDays) history.recordValues(d.day, d.totals, d.veg);
@@ -151,7 +208,7 @@ async function main(): Promise<void> {
 
   const tools = bindToolControls(
     el('tool-bar'),
-    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    speciesList(),
     {
       reseed: (seed) => session.reseed(seed),
       exportFile: () => session.saveText().then(({ text, day }) => ({ name: fileName(day), text })),
@@ -177,19 +234,40 @@ async function main(): Promise<void> {
       },
     },
     rules.allowRelease,
-    () => field.stop(),
+    () => {
+      field.stop();
+      introducing = null;
+    },
   );
   const field = bindFieldTools(
     el('field-tools'),
     toolData,
-    session.species.map((s) => ({ id: s.params.id, name: s.params.name })),
+    speciesList(),
     world.cellSizeM,
-    () => tools.stopReleasing(),
+    () => {
+      tools.stopReleasing();
+      introducing = null;
+    },
   );
 
   const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'), (screen) => {
     const pos = view.camera.screenToWorld(screen);
     const cell = worldToCell(pos);
+    if (introducing) {
+      // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
+      const chosen = introducing;
+      introducing = null;
+      const { id, count } = chosen;
+      const species = speciesLibrary.get(id)!;
+      void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count }).then((ok) => {
+        if (!ok) {
+          introducing = chosen;
+          return;
+        }
+        status.textContent = `在 (${cell.x}, ${cell.y}) 放出了引进的 ${count} 只${species.name}`;
+      });
+      return;
+    }
     if (field.isPlacing()) {
       const op = field.click(cell, worldToCorner(pos));
       if (!op) {

@@ -9,7 +9,8 @@ export class DeathPanel {
 
   constructor(
     private readonly el: HTMLElement,
-    private readonly names: readonly string[],
+    /** 物种名，按物种下标排；引进新物种后换掉。 */
+    public names: readonly string[],
   ) {}
 
   reset(): void {

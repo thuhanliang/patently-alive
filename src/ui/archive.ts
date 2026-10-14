@@ -11,6 +11,16 @@ const ACTIVITY: Record<SpeciesParams['activity'], string> = {
 
 const NEST: Record<string, string> = { ground: '地面浅窝', burrow: '洞穴或巢穴', none: '—' };
 
+/** 档案馆里"引进到这里"要的东西；情景不允许引种时不传，就不显示这一栏。 */
+export interface IntroduceHooks {
+  /** 一次最多引进几只（工具数据）。 */
+  maxAnimals: number;
+  /** 引进 count 只的花费说明；业主禁止引进的物种 allowed 为 false，text 是原因。 */
+  quote(id: string, count: number): { text: string; allowed: boolean };
+  /** 选好了物种和数量：档案馆关掉，回到地图上点投放地点。 */
+  start(id: string, count: number): void;
+}
+
 /**
  * 自然档案馆（极简版）：翻看现有技术的条目、数据档案、知识卡，以及按性状算出的"最接近的现有技术"。
  * 只读数据，不改推演；打开时推演暂停（由 main 看 isOpen 决定）。
@@ -19,11 +29,13 @@ export class ArchivePanel {
   private open = false;
   private selected: string;
   private filter = '';
+  private count = 10;
 
   constructor(
     private readonly el: HTMLElement,
     private readonly entries: ReadonlyMap<string, ArchiveEntry>,
     private readonly species: ReadonlyMap<string, SpeciesParams>,
+    private readonly introduce?: IntroduceHooks,
   ) {
     this.selected = entries.keys().next().value ?? '';
     // 点遮罩空白处关闭。
@@ -131,6 +143,7 @@ export class ArchivePanel {
     title.append(swatch(id), document.createTextNode(` ${p.name}`), textEl('i', ` ${p.scientificName}`, 'note'));
     box.append(
       title,
+      ...(this.introduce ? [this.introduceRow(id, this.introduce)] : []),
       textEl('p', `${e.taxonomy.class} · ${e.taxonomy.order} · ${e.taxonomy.family}`, 'note'),
       textEl('p', e.range),
       dl([
@@ -160,6 +173,41 @@ export class ArchivePanel {
       box.append(row);
     }
     return box;
+  }
+
+  /** 引进这一种：选数量，看花费，然后回到地图上点地点。引进不可撤销。 */
+  private introduceRow(id: string, hooks: IntroduceHooks): HTMLElement {
+    const row = div('bar archive-introduce');
+    const count = document.createElement('input');
+    count.type = 'number';
+    count.min = '1';
+    count.max = String(hooks.maxAnimals);
+    count.value = String(this.count);
+    count.style.width = '5em';
+    const cost = textEl('span', '', 'note');
+    const chosen = (): number => Math.max(1, Math.min(hooks.maxAnimals, Math.floor(Number(count.value) || 1)));
+    const go = textEl('button', '引进到这里') as HTMLButtonElement;
+    const refresh = (): void => {
+      this.count = chosen();
+      const q = hooks.quote(id, this.count);
+      cost.textContent = q.text;
+      go.disabled = !q.allowed;
+    };
+    count.addEventListener('input', refresh);
+    // 填的数超出范围：离开输入框时改成实际会引进的数。
+    count.addEventListener('change', () => (count.value = String(chosen())));
+    go.title = '关掉档案馆，在地图上点投放地点。引进以后收不回来，只能再用兽医手段减少。';
+    go.addEventListener('click', () => {
+      refresh();
+      if (go.disabled) return;
+      this.close();
+      hooks.start(id, this.count);
+    });
+    const countLabel = document.createElement('label');
+    countLabel.append('引进 ', count, ' 只');
+    row.append(countLabel, go, cost);
+    refresh();
+    return row;
   }
 }
 

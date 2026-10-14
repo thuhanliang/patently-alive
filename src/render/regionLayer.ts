@@ -26,8 +26,9 @@ export class RegionLayer {
   private readonly pool: Sprite[] = [];
 
   constructor(
-    private readonly textures: readonly Texture[],
-    private readonly colors: readonly number[],
+    /** 按物种下标排；引进新物种后由 MapView.setSpecies 换掉。 */
+    public textures: readonly Texture[],
+    public colors: readonly number[],
   ) {}
 
   private blocks: { width: number; blockOf: Int32Array; blocks: number } | null = null;
