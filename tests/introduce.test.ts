@@ -121,6 +121,32 @@ describe('引种', () => {
     expect(checksum(loaded.sim.state)).toBe(checksum(s.sim.state));
   }, 120_000);
 
+  it('按物种排的状态数组都跟着加了一项', () => {
+    const s = new Session(config, rules);
+    const n = s.sim.species.length;
+    const perSpecies = (st: object): string[] =>
+      Object.entries(st)
+        // 随机数状态碰巧也是 4 个数，不是按物种排的。
+        .filter(([k, v]) => k !== 'rng' && Array.isArray(v) && v.length === n)
+        .map(([k]) => k);
+    const keys = perSpecies(s.sim.state);
+    expect(keys.length).toBeGreaterThanOrEqual(5);
+    expect(s.submit(introduce(s)).ok).toBe(true);
+    for (const k of keys) expect((s.sim.state as unknown as Record<string, unknown[]>)[k], k).toHaveLength(n + 1);
+    for (const c of s.sim.state.census) expect(c.totals).toHaveLength(n + 1);
+  });
+
+  it('没有引种的工具数据时不能引种；存档里引进的物种和日志对不上时拒绝读档', () => {
+    const noTools = new Session({ ...config, tools: { ...tools, introduction: undefined } }, rules);
+    expect(noTools.submit(introduce(noTools)).ok).toBe(false);
+    const s = new Session(config, rules);
+    expect(s.submit(introduce(s)).ok).toBe(true);
+    s.advance(TICKS_PER_DAY);
+    const save = s.save();
+    const state = { ...save.state, introduced: [{ ...mongoose, bodyMassKg: 2 }] };
+    expect(() => Session.restore({ ...save, state })).toThrow('引进的物种');
+  });
+
   it('账本换布局时旧账原样搬过去', () => {
     const l = createLedger(2, 3);
     recordDeaths(l, 0, CAUSE.predation(1), 2, 4);

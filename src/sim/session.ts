@@ -288,8 +288,10 @@ export class Session {
     if (state.tick !== log.endTick) throw new Error(`存档的快照在第 ${state.tick} tick，日志停在第 ${log.endTick} tick，对不上`);
     if (checksum(state.config) !== checksum(session.config)) throw new Error('存档的快照和日志不是同一个世界');
     const fresh = session.simulation.state;
-    // 快照里有引进的物种：新建的局也登记上，形状才对得上。
-    for (const p of state.introduced ?? []) session.addSpecies(p);
+    // 快照里有引进的物种：必须正是日志里那几次引种引进的（同样的先后、同样的性状），新建的局也按这个登记上，形状才对得上。
+    const expected = introducedBy(log.config.species.map((s) => s.id), log.entries);
+    if (checksum(state.introduced ?? []) !== checksum(expected)) throw new Error('存档的快照里引进的物种和日志对不上');
+    for (const p of expected) session.addSpecies(p);
     const bad = shapeMismatch(state, fresh, fresh.grid.width * fresh.grid.height);
     if (bad) throw new Error(`存档的快照格式和这个版本不一样（${bad}），可能是旧版本的存档`);
     const n = session.speciesIds().length;
@@ -358,9 +360,10 @@ export class Session {
       case 'introduce': {
         const intro = this.rules.introduction;
         if (!intro.allowed) return '这份委托不允许往岛上引进新物种';
+        if (!this.config.tools?.introduction) return '这片世界没有引种的工具数据';
         if (intro.banned.includes(op.species.id)) return `业主明令禁止引进${op.species.name}`;
-        const max = this.config.tools?.introduction?.maxAnimals;
-        if (max !== undefined && op.count > max) return `一次最多引进 ${max} 只`;
+        const max = this.config.tools.introduction.maxAnimals;
+        if (op.count > max) return `一次最多引进 ${max} 只`;
         // 同一个 id 已经在这一局里了：只能是同一种（性状完全一样），否则是另一个物种，得换个 id。
         const known = speciesOf(this.simulation.state).find((s) => s.id === op.species.id);
         if (known && checksum(known) !== checksum(op.species)) return `这一局已经有「${op.species.id}」了，但性状不一样`;
@@ -420,7 +423,7 @@ export class Session {
 
   /** 这一局现在的全部物种 id（开局的 + 引进的），顺序和推演里的物种下标一致。 */
   private speciesIds(): string[] {
-    return speciesOf(this.simulation.state).map((s) => s.id);
+    return this.simulation.species.map((d) => d.params.id);
   }
 
   private hasSpecies(id: string): boolean {
@@ -486,4 +489,16 @@ export class Session {
       }
     }
   }
+}
+
+/** 按日志里的引种操作，依次引进了哪些开局没有的物种（每个 id 只算第一次）。日志里的物种数据已经过 schema 校验。 */
+function introducedBy(initial: readonly string[], entries: readonly LogEntry[]): SpeciesParams[] {
+  const seen = new Set(initial);
+  const out: SpeciesParams[] = [];
+  for (const { op } of entries) {
+    if (op.type !== 'introduce' || seen.has(op.species.id)) continue;
+    seen.add(op.species.id);
+    out.push(op.species);
+  }
+  return out;
 }
