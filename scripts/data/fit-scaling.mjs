@@ -5,18 +5,15 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readTsv } from './tsv.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const root = join(here, '..', '..');
 
-function readTsv(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
-  const header = lines[0].split('\t').map((h) => h.trim());
-  return lines.slice(1).map((l) => {
-    const cells = l.split('\t');
-    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()]));
-  });
-}
+const manifest = JSON.parse(readFileSync(join(here, 'sources.json'), 'utf8'));
+/** 数据库文件的位置按 sources.json 来（和 check-traits 一致）。AnAge 用仓库里解压好的那份。 */
+const pantheriaPath = join(root, 'data-external', manifest.sources.find((x) => x.id === 'pantheria').file);
+const anagePath = join(root, 'data-external', 'anage', 'anage_data.txt');
 
 /** 数据库里的正数；缺失（PanTHERIA 的 -999、AnAge 的空格）返回 null。 */
 function pos(v) {
@@ -83,8 +80,8 @@ export function fitLaws() {
   const lg = Math.log10;
 
   // ---------- 哺乳动物：PanTHERIA
-  const pan = readTsv(readFileSync(join(root, 'data-external', 'PanTHERIA_1-0_WR05_Aug2008.txt'), 'latin1'));
-  // 只用陆生的（12-2 Terrestriality：1 = 地栖为主，2 = 树栖为主），不用翼手目、鲸目、海牛目、鳍足类（游戏只模拟陆生走兽）。
+  const pan = readTsv(readFileSync(pantheriaPath, 'latin1'));
+  // 游戏只模拟陆生走兽：去掉翼手目、鲸目、海牛目和鳍足类（按目和科排除，不看 Terrestriality 一栏，那一栏缺得多）。
   const SKIP_ORDERS = new Set(['Chiroptera', 'Cetacea', 'Sirenia']);
   const SKIP_FAMILIES = new Set(['Phocidae', 'Otariidae', 'Odobenidae']);
   const mammals = pan
@@ -133,7 +130,7 @@ export function fitLaws() {
   };
 
   // ---------- 鸟：AnAge
-  const anage = readTsv(readFileSync(join(root, 'data-external', 'anage', 'anage_data.txt'), 'utf8'));
+  const anage = readTsv(readFileSync(anagePath, 'utf8'));
   const birdRows = anage.filter((r) => r.Class === 'Aves');
   const birds = birdRows
     .map((r) => ({
@@ -169,6 +166,8 @@ export function fitLaws() {
     .map((f) => JSON.parse(readFileSync(join(speciesDir, f), 'utf8')));
   const birdIds = new Set(
     readdirSync(join(root, 'src', 'data', 'archive'))
+      .filter((f) => f.endsWith('.json'))
+      .sort()
       .map((f) => JSON.parse(readFileSync(join(root, 'src', 'data', 'archive', f), 'utf8')))
       .filter((e) => e.taxonomy.class === '鸟纲')
       .map((e) => e.species),
@@ -218,7 +217,7 @@ export function fitLaws() {
       maxMassKg: round(heaviest.massG / 1000, 2),
       heaviestFlyer: heaviest.binomial,
       source: `${ANAGE}，排除不会飞的目（鸵鸟、美洲鸵、鹤鸵、几维、企鹅、恐鸟）和不会飞的种`,
-      /** 会飞的额外能量代价：鸟和哺乳动物野外代谢率之比（同体重 1 千克）。 */
+      /** 鸟（和会飞的兽）的额外能量：鸟和哺乳动物野外代谢率之比（同体重 1 千克）。 */
       energyFactor: round((10.5 * 1000 ** 0.681) / (4.82 * 1000 ** 0.734), 2),
       energySource: 'Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247：野外代谢率 鸟 10.5·M^0.681，哺乳动物 4.82·M^0.734（千焦/天，M 为克），取 1 千克时的比值',
     },

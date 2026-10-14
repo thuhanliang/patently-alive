@@ -27,10 +27,14 @@ export interface ScaledTraits {
   adultAnnualSurvival: number;
   homeRangeKm2: number;
   dailyRangeM: number;
-  /** 基础代谢率（瓦），哺乳动物的公式；会飞的另乘 flightEnergyFactor。 */
+  /** 基础代谢率（瓦），哺乳动物的公式；鸟和会飞的另乘 energyFactor。 */
   basalMetabolismW: number;
-  /** 能量需求的倍数：会飞的是鸟和兽野外代谢率之比，不会飞的是 1。 */
-  flightEnergyFactor: number;
+  /**
+   * 能量需求的倍数：鸟和会飞的兽取鸟和兽野外代谢率之比（Nagy 1999 是全体鸟类的平均，不会飞的鸟也算），其余是 1。
+   */
+  energyFactor: number;
+  /** 哪些量是借用哺乳动物公式推导的（鸟没有自己的数据库公式），可信度低一档。 */
+  borrowed: readonly ('homeRangeKm2' | 'dailyRangeM' | 'basalMetabolismW')[];
   /** 会飞但比数据库里最重的飞鸟还重：飞不起来（设计台据此提醒，不禁止）。 */
   tooHeavyToFly: boolean;
 }
@@ -39,10 +43,14 @@ const LN10 = detLog(10);
 const log10 = (x: number): number => detLog(x) / LN10;
 const pow10 = (y: number): number => detExp(y * LN10);
 
-/** 代入一条公式。自变量缺了算 0（公式里没有的项不影响）。 */
+/** 代入一条公式。公式里有、vars 里没给的自变量直接报错（数据改了名，不能悄悄当 0 算）。 */
 export function applyLaw(law: Law, vars: Readonly<Record<string, number>>): number {
   let y = law.intercept;
-  for (const [k, b] of Object.entries(law.terms)) y += b * (vars[k] ?? 0);
+  for (const [k, b] of Object.entries(law.terms)) {
+    const v = vars[k];
+    if (v === undefined) throw new Error(`公式「${law.name}」要自变量 ${k}，推导时没有给`);
+    y += b * v;
+  }
   return pow10(y);
 }
 
@@ -74,7 +82,8 @@ export function scaleTraits(laws: ScalingLaws, c: ScalingCauses): ScaledTraits {
     homeRangeKm2,
     dailyRangeM: laws.dailyRange.c * Math.sqrt(homeRangeKm2 * 1e6),
     basalMetabolismW: applyLaw(laws.mammal.basalMetabolismW, vars),
-    flightEnergyFactor: c.flies ? laws.flight.energyFactor : 1,
+    energyFactor: c.bird || c.flies ? laws.flight.energyFactor : 1,
     tooHeavyToFly: c.flies && c.bodyMassKg > laws.flight.maxMassKg,
+    borrowed: c.bird ? ['homeRangeKm2', 'dailyRangeM', 'basalMetabolismW'] : [],
   };
 }
