@@ -1,0 +1,362 @@
+{
+  "说明": "现有技术写成设计：设计台可以从它们开始改；回归测试用它们核对设计编译器（推导值要接近数据库值）；胃口基准按它们校准。部件按各物种的真实身体构造挑选。",
+  "templates": [
+    {
+      "species": "brownrat",
+      "design": {
+        "id": "d_brownrat",
+        "name": "褐家鼠",
+        "bodyMassKg": 0.3,
+        "litterSize": 9,
+        "activity": "nocturnal",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "mixed_teeth",
+          "limbs": "digging_claws",
+          "tail": "balance_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "rat",
+      "design": {
+        "id": "d_rat",
+        "name": "船鼠",
+        "bodyMassKg": 0.15,
+        "litterSize": 6,
+        "activity": "nocturnal",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "gnawing_incisors",
+          "limbs": "climbing_claws",
+          "tail": "balance_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "kiore",
+      "design": {
+        "id": "d_kiore",
+        "name": "太平洋鼠",
+        "bodyMassKg": 0.05,
+        "litterSize": 4,
+        "activity": "nocturnal",
+        "breedingMonths": 6,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "gnawing_incisors",
+          "limbs": "climbing_claws",
+          "tail": "balance_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "mouse",
+      "design": {
+        "id": "d_mouse",
+        "name": "小家鼠",
+        "bodyMassKg": 0.02,
+        "litterSize": 6,
+        "activity": "nocturnal",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "gnawing_incisors",
+          "limbs": "climbing_claws",
+          "tail": "balance_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "vole",
+      "design": {
+        "id": "d_vole",
+        "name": "田鼠",
+        "bodyMassKg": 0.03,
+        "litterSize": 5,
+        "activity": "cathemeral",
+        "breedingMonths": 8,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "grinding_molars",
+          "limbs": "short_legs",
+          "tail": "short_tail",
+          "digestion": "hindgut_fermenter",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "rabbit",
+      "design": {
+        "id": "d_rabbit",
+        "name": "穴兔",
+        "bodyMassKg": 1.6,
+        "litterSize": 5,
+        "activity": "crepuscular",
+        "breedingMonths": 6,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "grinding_molars",
+          "limbs": "digging_claws",
+          "tail": "short_tail",
+          "digestion": "hindgut_fermenter",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "possum",
+      "design": {
+        "id": "d_possum",
+        "name": "帚尾袋貂",
+        "bodyMassKg": 2.5,
+        "litterSize": 1,
+        "activity": "nocturnal",
+        "breedingMonths": 3,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "dense_fur",
+          "mouth": "grinding_molars",
+          "limbs": "climbing_claws",
+          "tail": "bushy_tail",
+          "digestion": "hindgut_fermenter",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "cat",
+      "design": {
+        "id": "d_cat",
+        "name": "野猫",
+        "bodyMassKg": 3.3,
+        "litterSize": 4,
+        "activity": "nocturnal",
+        "breedingMonths": 6,
+        "nest": "burrow",
+        "territorial": true,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "carnassials",
+          "limbs": "climbing_claws",
+          "tail": "balance_tail",
+          "digestion": "short_gut",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "stoat",
+      "design": {
+        "id": "d_stoat",
+        "name": "白鼬",
+        "bodyMassKg": 0.25,
+        "litterSize": 7,
+        "activity": "cathemeral",
+        "breedingMonths": 1,
+        "nest": "burrow",
+        "territorial": true,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "carnassials",
+          "limbs": "climbing_claws",
+          "tail": "short_tail",
+          "digestion": "short_gut",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "weasel",
+      "design": {
+        "id": "d_weasel",
+        "name": "伶鼬",
+        "bodyMassKg": 0.078,
+        "litterSize": 6,
+        "activity": "cathemeral",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "carnassials",
+          "limbs": "climbing_claws",
+          "tail": "short_tail",
+          "digestion": "short_gut",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "ferret",
+      "design": {
+        "id": "d_ferret",
+        "name": "雪貂",
+        "bodyMassKg": 0.9,
+        "litterSize": 7,
+        "activity": "nocturnal",
+        "breedingMonths": 5,
+        "nest": "burrow",
+        "territorial": true,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "carnassials",
+          "limbs": "walking_legs",
+          "tail": "short_tail",
+          "digestion": "short_gut",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "fox",
+      "design": {
+        "id": "d_fox",
+        "name": "赤狐",
+        "bodyMassKg": 4.5,
+        "litterSize": 5,
+        "activity": "nocturnal",
+        "breedingMonths": 2,
+        "nest": "burrow",
+        "territorial": true,
+        "parts": {
+          "coat": "dense_fur",
+          "mouth": "carnassials",
+          "limbs": "running_legs",
+          "tail": "bushy_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "mongoose",
+      "design": {
+        "id": "d_mongoose",
+        "name": "红颊獴",
+        "bodyMassKg": 0.6,
+        "litterSize": 2,
+        "activity": "diurnal",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": false,
+        "parts": {
+          "coat": "short_fur",
+          "mouth": "mixed_teeth",
+          "limbs": "walking_legs",
+          "tail": "balance_tail",
+          "digestion": "simple_stomach",
+          "rearing": "altricial"
+        }
+      }
+    },
+    {
+      "species": "dotterel",
+      "design": {
+        "id": "d_dotterel",
+        "name": "双斑鸻",
+        "bodyMassKg": 0.059,
+        "litterSize": 3,
+        "activity": "cathemeral",
+        "breedingMonths": 5,
+        "nest": "ground",
+        "territorial": true,
+        "parts": {
+          "coat": "feathers",
+          "mouth": "probe_bill",
+          "limbs": "wings",
+          "tail": "short_tail",
+          "digestion": "crop_gizzard",
+          "rearing": "precocial"
+        }
+      }
+    },
+    {
+      "species": "weka",
+      "design": {
+        "id": "d_weka",
+        "name": "威卡秧鸡",
+        "bodyMassKg": 0.9,
+        "litterSize": 3,
+        "activity": "diurnal",
+        "breedingMonths": 8,
+        "nest": "ground",
+        "territorial": true,
+        "parts": {
+          "coat": "feathers",
+          "mouth": "stout_bill",
+          "limbs": "walking_legs",
+          "tail": "short_tail",
+          "digestion": "crop_gizzard",
+          "rearing": "precocial"
+        }
+      }
+    },
+    {
+      "species": "kiwi",
+      "design": {
+        "id": "d_kiwi",
+        "name": "褐几维",
+        "bodyMassKg": 2.6,
+        "litterSize": 1,
+        "activity": "nocturnal",
+        "breedingMonths": 7,
+        "nest": "burrow",
+        "territorial": true,
+        "parts": {
+          "coat": "feathers",
+          "mouth": "probe_bill",
+          "limbs": "walking_legs",
+          "tail": "short_tail",
+          "digestion": "crop_gizzard",
+          "rearing": "precocial"
+        }
+      }
+    },
+    {
+      "species": "kakapo",
+      "design": {
+        "id": "d_kakapo",
+        "name": "鸮鹦鹉",
+        "bodyMassKg": 1.75,
+        "litterSize": 3,
+        "activity": "nocturnal",
+        "breedingMonths": 1,
+        "nest": "ground",
+        "territorial": false,
+        "parts": {
+          "coat": "feathers",
+          "mouth": "seed_beak",
+          "limbs": "climbing_claws",
+          "tail": "short_tail",
+          "digestion": "crop_gizzard",
+          "rearing": "altricial"
+        }
+      }
+    }
+  ]
+}

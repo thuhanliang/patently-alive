@@ -1,0 +1,220 @@
+{
+  "slots": [
+    { "id": "coat", "name": "体表", "visible": true },
+    { "id": "mouth", "name": "头与口器", "visible": true },
+    { "id": "limbs", "name": "腿、爪、翼", "visible": true },
+    { "id": "tail", "name": "尾", "visible": true },
+    { "id": "digestion", "name": "消化", "visible": false },
+    { "id": "rearing", "name": "育幼", "visible": false }
+  ],
+  "parts": [
+    { "id": "short_fur", "slot": "coat", "name": "短毛", "blurb": "贴身的短毛，兽类的标准装备。", "bodyPlan": "mammal" },
+    {
+      "id": "dense_fur",
+      "slot": "coat",
+      "name": "厚绒毛",
+      "blurb": "两层毛，底绒很密。",
+      "bodyPlan": "mammal",
+      "effects": [{ "target": "energy", "factor": 0.93, "why": "保暖好，烧掉的热少一些" }]
+    },
+    {
+      "id": "feathers",
+      "slot": "coat",
+      "name": "羽毛",
+      "blurb": "这是一只鸟：按鸟的规律长大、产蛋、变老。",
+      "bodyPlan": "bird"
+    },
+
+    {
+      "id": "gnawing_incisors",
+      "slot": "mouth",
+      "name": "啮齿门齿",
+      "blurb": "一对不停生长的门齿，啃种子、草根、树皮。",
+      "diet": { "plant": 0.75, "vertebrate": 0.05, "invertebrate": 0.2 }
+    },
+    {
+      "id": "grinding_molars",
+      "slot": "mouth",
+      "name": "研磨臼齿",
+      "blurb": "宽平的臼齿，整天磨草。",
+      "diet": { "plant": 1, "vertebrate": 0, "invertebrate": 0 }
+    },
+    {
+      "id": "carnassials",
+      "slot": "mouth",
+      "name": "裂齿",
+      "blurb": "像剪刀一样咬合的食肉牙。",
+      "diet": { "plant": 0.05, "vertebrate": 0.85, "invertebrate": 0.1 }
+    },
+    {
+      "id": "mixed_teeth",
+      "slot": "mouth",
+      "name": "杂食齿",
+      "blurb": "什么都能对付一点的牙。",
+      "diet": { "plant": 0.45, "vertebrate": 0.15, "invertebrate": 0.4 }
+    },
+    {
+      "id": "pointed_snout",
+      "slot": "mouth",
+      "name": "尖吻细齿",
+      "blurb": "长鼻子贴着地面嗅，细牙咬虫子。",
+      "diet": { "plant": 0.1, "vertebrate": 0, "invertebrate": 0.9 }
+    },
+    {
+      "id": "seed_beak",
+      "slot": "mouth",
+      "beak": true,
+      "name": "短锥喙",
+      "blurb": "又短又厚的喙，嗑种子。",
+      "diet": { "plant": 0.8, "vertebrate": 0, "invertebrate": 0.2 }
+    },
+    {
+      "id": "probe_bill",
+      "slot": "mouth",
+      "beak": true,
+      "name": "探针长喙",
+      "blurb": "细长的喙，插进土里找虫。",
+      "diet": { "plant": 0.05, "vertebrate": 0, "invertebrate": 0.95 }
+    },
+    {
+      "id": "hooked_beak",
+      "slot": "mouth",
+      "beak": true,
+      "name": "钩喙",
+      "blurb": "尖端下弯的喙，撕肉用。",
+      "diet": { "plant": 0, "vertebrate": 0.85, "invertebrate": 0.15 }
+    },
+    {
+      "id": "stout_bill",
+      "slot": "mouth",
+      "beak": true,
+      "name": "粗壮杂食喙",
+      "blurb": "什么都啄一点：果子、虫、蛋。",
+      "diet": { "plant": 0.35, "vertebrate": 0.15, "invertebrate": 0.5 }
+    },
+
+    { "id": "walking_legs", "slot": "limbs", "name": "步行腿", "blurb": "普通的四条腿（或两条）。" },
+    {
+      "id": "running_legs",
+      "slot": "limbs",
+      "name": "奔跑长腿",
+      "blurb": "细长的腿，一天能走很远。",
+      "effects": [
+        { "target": "dailyRange", "factor": 1.4, "why": "腿长，一天走得远" },
+        { "target": "energy", "factor": 1.1, "why": "走得远也费力" }
+      ]
+    },
+    {
+      "id": "climbing_claws",
+      "slot": "limbs",
+      "name": "攀爬钩爪",
+      "blurb": "弯钩一样的爪子，上树、翻围栏。",
+      "climbs": true,
+      "effects": [{ "target": "dailyRange", "factor": 0.9, "why": "在树上绕路，平地上走得慢些" }]
+    },
+    {
+      "id": "digging_claws",
+      "slot": "limbs",
+      "name": "掘土爪",
+      "blurb": "前爪宽大，能挖洞躲起来。",
+      "effects": [
+        { "target": "mortality", "factor": 0.85, "why": "有洞可钻，少死一些" },
+        { "target": "dailyRange", "factor": 0.85, "why": "短而粗的腿走不远" }
+      ]
+    },
+    {
+      "id": "short_legs",
+      "slot": "limbs",
+      "name": "短腿",
+      "blurb": "贴地的短腿，省力但走不远。",
+      "effects": [
+        { "target": "dailyRange", "factor": 0.7, "why": "腿短，走不远" },
+        { "target": "energy", "factor": 0.93, "why": "走得少，也省力" }
+      ]
+    },
+    {
+      "id": "wings",
+      "slot": "limbs",
+      "name": "翅膀",
+      "blurb": "能飞起来逃命（太重就飞不起来）。",
+      "flies": true,
+      "effects": [{ "target": "energy", "factor": 1.15, "why": "飞行肌和起飞都要额外的能量" }]
+    },
+
+    { "id": "short_tail", "slot": "tail", "name": "短尾", "blurb": "一截短尾巴，不碍事。" },
+    {
+      "id": "balance_tail",
+      "slot": "tail",
+      "name": "长平衡尾",
+      "blurb": "长尾巴，急转弯、爬高时保持平衡。",
+      "effects": [{ "target": "mortality", "factor": 0.95, "why": "身手灵活，躲得开" }]
+    },
+    {
+      "id": "fat_tail",
+      "slot": "tail",
+      "name": "储脂尾",
+      "blurb": "尾巴里存着脂肪，荒年能多撑一阵。",
+      "effects": [
+        { "target": "mortality", "factor": 0.9, "why": "荒年少死一些" },
+        { "target": "dailyRange", "factor": 0.95, "why": "带着一条胖尾巴，走得慢些" }
+      ]
+    },
+    {
+      "id": "bushy_tail",
+      "slot": "tail",
+      "name": "蓬松大尾",
+      "blurb": "睡觉时盖在身上的大尾巴。",
+      "effects": [{ "target": "energy", "factor": 0.96, "why": "盖着睡，夜里省些热量" }]
+    },
+
+    {
+      "id": "simple_stomach",
+      "slot": "digestion",
+      "name": "单胃",
+      "blurb": "一个胃加不长的肠子：肉、虫、种子消化得好，粗草不太行。",
+      "digest": { "plant": 0.55, "vertebrate": 0.85, "invertebrate": 0.75 }
+    },
+    {
+      "id": "hindgut_fermenter",
+      "slot": "digestion",
+      "name": "后肠发酵",
+      "blurb": "很大的盲肠，靠微生物分解草和纤维。",
+      "digest": { "plant": 0.7, "vertebrate": 0.6, "invertebrate": 0.65 },
+      "effects": [{ "target": "energy", "factor": 1.04, "why": "背着一肚子发酵的草" }]
+    },
+    {
+      "id": "short_gut",
+      "slot": "digestion",
+      "name": "短直肠",
+      "blurb": "又短又直的肠子，肉进去很快就消化完。",
+      "digest": { "plant": 0.25, "vertebrate": 0.9, "invertebrate": 0.8 },
+      "effects": [{ "target": "energy", "factor": 0.97, "why": "肠子轻，带着省力" }]
+    },
+    {
+      "id": "crop_gizzard",
+      "slot": "digestion",
+      "name": "嗉囊与砂囊",
+      "blurb": "先存进嗉囊，再用砂囊里的小石子磨碎：种子、虫壳都能对付。",
+      "digest": { "plant": 0.6, "vertebrate": 0.7, "invertebrate": 0.8 }
+    },
+
+    {
+      "id": "altricial",
+      "slot": "rearing",
+      "name": "晚成",
+      "blurb": "生下来光溜溜、睁不开眼，在窝里养大。",
+      "effects": [{ "target": "gestation", "factor": 0.9, "why": "早早生下来，在窝里慢慢长" }]
+    },
+    {
+      "id": "precocial",
+      "slot": "rearing",
+      "name": "早成",
+      "blurb": "生下来就能跑，很快离窝。",
+      "effects": [
+        { "target": "nestDays", "factor": 0.3, "why": "很快离窝，不必在窝里等" },
+        { "target": "gestation", "factor": 1.3, "why": "在肚子里（蛋里）多长一阵" },
+        { "target": "energy", "factor": 1.06, "why": "每个后代都更大、更贵" }
+      ]
+    }
+  ]
+}

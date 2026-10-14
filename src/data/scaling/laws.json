@@ -55,6 +55,34 @@
       "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
       "note": "数据库的胎间隔；推导时不短于妊娠期"
     },
+    "weaningDays": {
+      "name": "断奶",
+      "unit": "天",
+      "intercept": 1.4747,
+      "terms": {
+        "log10MassG": 0.1719,
+        "log10Litter": -0.4562
+      },
+      "n": 914,
+      "r2": 0.501,
+      "residualSdLog10": 0.316,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "设计编译器用作窝里的天数（晚成）"
+    },
+    "weaningMassG": {
+      "name": "断奶体重",
+      "unit": "克",
+      "intercept": -0.0216,
+      "terms": {
+        "log10MassG": 0.8539,
+        "log10Litter": -0.3076
+      },
+      "n": 394,
+      "r2": 0.961,
+      "residualSdLog10": 0.233,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "设计编译器估算育幼的能量"
+    },
     "homeRangeKm2": {
       "name": "家域面积",
       "unit": "平方公里",
@@ -167,8 +195,17 @@
   "flight": {
     "maxMassKg": 13,
     "heaviestFlyer": "Cygnus buccinator",
-    "source": "AnAge（Tacutu et al. 2018），鸟纲，排除不会飞的目（鸵鸟、美洲鸵、鹤鸵、几维、企鹅、恐鸟）和不会飞的种",
-    "energyFactor": 1.51,
-    "energySource": "Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247：野外代谢率 鸟 10.5·M^0.681，哺乳动物 4.82·M^0.734（千焦/天，M 为克），取 1 千克时的比值"
+    "source": "AnAge（Tacutu et al. 2018），鸟纲，排除不会飞的目（鸵鸟、美洲鸵、鹤鸵、几维、企鹅、恐鸟）和不会飞的种"
+  },
+  "fieldMetabolism": {
+    "mammal": {
+      "coef": 4.82,
+      "exp": 0.734
+    },
+    "bird": {
+      "coef": 10.5,
+      "exp": 0.681
+    },
+    "source": "Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247，全体哺乳动物、全体鸟类的野外代谢率回归"
   }
 }

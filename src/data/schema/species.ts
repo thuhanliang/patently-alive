@@ -70,6 +70,11 @@ export const SpeciesSchema = z
     }),
     /** 开局密度（只 / 公顷）。 */
     initialDensityPerHa: z.number().min(0),
+    /**
+     * 胃口：三类食物的需求都乘这个倍数（不写为 1）。真实物种不写；设计物种由设计编译器从能量收支推导
+     * （部件的开销、育幼、消化率），吃不够照样挨饿（阶段 3）。
+     */
+    energyFactor: z.number().positive().optional(),
     source: z.string(),
   })
   .refine((s) => s.reproduction.litterIntervalDays >= s.reproduction.gestationDays, {

@@ -8,6 +8,10 @@ import necropsyJson from './reports/necropsy.json';
 import { ArchiveEntrySchema, type ArchiveEntry } from './schema/archive';
 import { ScalingLawsSchema, type ScalingLaws } from './schema/scaling';
 import scalingJson from './scaling/laws.json';
+import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema, type Design, type HintTemplates, type Part } from './schema/design';
+import partsJson from './design/parts.json';
+import hintsJson from './design/hints.json';
+import templatesJson from './design/templates.json';
 
 export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, GoalSchema, type Goal, ToolsSchema, type Tools };
 
@@ -15,6 +19,7 @@ export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, ty
 
 /** 体重缩放公式（从 PanTHERIA、AnAge 拟合，见 scripts/data/fit-scaling.mjs）。 */
 export const scalingLaws: ScalingLaws = ScalingLawsSchema.parse(scalingJson);
+
 
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
@@ -87,3 +92,19 @@ export function worldFor(scenario: Scenario): WorldParams {
 /** 阶段 0 的草原。 */
 export const grassland: WorldParams = worldLibrary.get('grassland')!;
 export const grasslandSpecies: SpeciesParams[] = speciesFor(grassland);
+
+export { DesignSchema, type Design, type Part, type HintTemplates };
+
+const partsFile = PartsFileSchema.parse(partsJson);
+/** 设计台的槽位（看得见的身体部件、看不见的性状），按显示顺序。 */
+export const designSlots = partsFile.slots;
+/** 设计台的部件，按 id 索引，按文件里的顺序。 */
+export const partLibrary: ReadonlyMap<string, Part> = new Map(partsFile.parts.map((p) => [p.id, p] as const));
+if (partLibrary.size !== partsFile.parts.length) throw new Error('parts.json 里有重复的部件 id');
+/** 设计台提醒的模板。 */
+export const hintTemplates: HintTemplates = HintTemplatesSchema.parse(hintsJson);
+/** 现有技术写成的设计：设计台的起点，也是设计编译器的回归测试。 */
+export const designTemplates: ReadonlyArray<{ species: string; design: Design }> = TemplatesFileSchema.parse(templatesJson).templates;
+for (const t of designTemplates) {
+  if (!speciesLibrary.has(t.species)) throw new Error(`设计模板引用了不存在的物种：${t.species}`);
+}

@@ -93,6 +93,8 @@ export function fitLaws() {
       maturity: pos(r['23-1_SexualMaturityAge_d']),
       lifespanY: pos(r['17-1_MaxLongevity_m']) && pos(r['17-1_MaxLongevity_m']) / 12,
       interbirth: pos(r['14-1_InterbirthInterval_d']),
+    weaning: pos(r['25-1_WeaningAge_d']),
+    weaningMassG: pos(r['5-4_WeaningBodyMass_g']),
       homeRange: pos(r['22-2_HomeRange_Indiv_km2']),
       trophic: pos(r['6-2_TrophicLevel']),
       bmrW: pos(r['18-1_BasalMetRate_mLO2hr']) && (pos(r['18-1_BasalMetRate_mLO2hr']) * 20.1) / 3600,
@@ -111,6 +113,8 @@ export function fitLaws() {
     ageAtMaturityDays: law('性成熟', '天', ['log10MassG', 'log10Litter'], lifeHistory(mammals, 'maturity'), PAN),
     maxLifespanYears: law('最长寿命', '年', ['log10MassG', 'log10Litter'], lifeHistory(mammals, 'lifespanY'), PAN, '数据库的最长寿命多来自圈养记录，比野外长'),
     litterIntervalDays: law('两窝间隔', '天', ['log10MassG', 'log10Litter'], lifeHistory(mammals, 'interbirth'), PAN, '数据库的胎间隔；推导时不短于妊娠期'),
+    weaningDays: law('断奶', '天', ['log10MassG', 'log10Litter'], lifeHistory(mammals, 'weaning'), PAN, '设计编译器用作窝里的天数（晚成）'),
+    weaningMassG: law('断奶体重', '克', ['log10MassG', 'log10Litter'], lifeHistory(mammals, 'weaningMassG'), PAN, '设计编译器估算育幼的能量'),
     homeRangeKm2: law(
       '家域面积',
       '平方公里',
@@ -217,9 +221,12 @@ export function fitLaws() {
       maxMassKg: round(heaviest.massG / 1000, 2),
       heaviestFlyer: heaviest.binomial,
       source: `${ANAGE}，排除不会飞的目（鸵鸟、美洲鸵、鹤鸵、几维、企鹅、恐鸟）和不会飞的种`,
-      /** 鸟（和会飞的兽）的额外能量：鸟和哺乳动物野外代谢率之比（同体重 1 千克）。 */
-      energyFactor: round((10.5 * 1000 ** 0.681) / (4.82 * 1000 ** 0.734), 2),
-      energySource: 'Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247：野外代谢率 鸟 10.5·M^0.681，哺乳动物 4.82·M^0.734（千焦/天，M 为克），取 1 千克时的比值',
+    },
+    /** 野外代谢率（千焦/天）= coef · 体重克^exp。文献值，不是拟合的：两个数据库都没有野外代谢率。 */
+    fieldMetabolism: {
+      mammal: { coef: 4.82, exp: 0.734 },
+      bird: { coef: 10.5, exp: 0.681 },
+      source: 'Nagy, Girard & Brown (1999) Annu. Rev. Nutr. 19:247，全体哺乳动物、全体鸟类的野外代谢率回归',
     },
   };
 }

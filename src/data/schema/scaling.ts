@@ -22,7 +22,7 @@ const lifeHistory = {
 
 /** 体重缩放公式（src/data/scaling/laws.json）：设计编译器从"原因"推导物种参数用。 */
 export const ScalingLawsSchema = z.object({
-  mammal: z.object({ ...lifeHistory, litterIntervalDays: LawSchema, homeRangeKm2: LawSchema, basalMetabolismW: LawSchema }),
+  mammal: z.object({ ...lifeHistory, litterIntervalDays: LawSchema, weaningDays: LawSchema, weaningMassG: LawSchema, homeRangeKm2: LawSchema, basalMetabolismW: LawSchema }),
   bird: z.object({ ...lifeHistory, clutchesPerYear: LawSchema }),
   survival: z.object({
     kMammal: z.number().positive(),
@@ -30,7 +30,11 @@ export const ScalingLawsSchema = z.object({
     residualSdLog10: z.object({ mammal: z.number(), bird: z.number() }),
   }),
   dailyRange: z.object({ c: z.number().positive(), residualSdLog10: z.number() }),
-  flight: z.object({ maxMassKg: z.number().positive(), heaviestFlyer: z.string(), energyFactor: z.number().positive() }),
+  flight: z.object({ maxMassKg: z.number().positive(), heaviestFlyer: z.string() }),
+  fieldMetabolism: z.object({
+    mammal: z.object({ coef: z.number().positive(), exp: z.number().positive() }),
+    bird: z.object({ coef: z.number().positive(), exp: z.number().positive() }),
+  }),
 });
 
 export type Law = z.infer<typeof LawSchema>;

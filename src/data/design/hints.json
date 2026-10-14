@@ -1,0 +1,14 @@
+{
+  "energyHigh": "这家伙一天得吃掉同体重动物 {factor} 倍的东西。岛上养不养得起，我心里没底。",
+  "energyLow": "胃口才是同体重动物的 {factor} 倍，挺省。不过省下来的往往是别处付了代价。",
+  "dietMismatch": "{food}占了食谱的 {share}，可这副肠胃只能从里面取出 {eff} 的能量。",
+  "tooHeavyToFly": "{mass} 千克还想飞？记录里最重的会飞的鸟（{flyer}）也才 {max} 千克。翅膀照长，就是飞不起来。",
+  "beakOnMammal": "长毛的配一张喙，审查员会多看两眼。",
+  "teethOnBird": "长羽毛的配一口牙，审查员会多看两眼。",
+  "wingsOnMammal": "兽长翅膀？蝙蝠倒是有先例，只是我们的公式没收过蝙蝠的数据。",
+  "oneLitterSeason": "繁殖季只有 {months} 个月，两窝要隔 {interval} 天，一年只够生一窝。",
+  "groundNestLong": "窝在地上一放就是 {days} 天。鼠和猫都会去翻。",
+  "bigLitterShortLife": "一窝 {litter} 个，代价是平均活不长：成体一年只有 {survival} 能活到下一年。",
+  "carnivoreHomeRange": "吃肉的要一大片地方：一只的家域约 {area} 平方公里。",
+  "borrowedLaw": "鸟的家域和活动范围我们只有兽的公式可借，这几个数别太当真。"
+}
