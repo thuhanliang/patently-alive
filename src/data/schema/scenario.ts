@@ -48,6 +48,16 @@ export const ScenarioSchema = z.object({
    */
   sentiment: z.record(z.string(), z.number().min(0)),
   goal: GoalSchema,
+  /**
+   * 引种：委托允不允许往岛上引进新物种，以及业主明令禁止的物种（例如"本岛禁止引入哺乳动物"就把它们列进来）。
+   * 不写时不允许引种。禁令是业主的规定，属于世界内的理由（见 GDD"合理约束"）。
+   */
+  introduction: z
+    .object({
+      allowed: z.boolean(),
+      banned: z.array(z.string()).default([]),
+    })
+    .optional(),
   /** 开局资源：预算（元）、人手（兽医队数量）、客户满意度（0–100）。 */
   resources: z.object({
     budget: z.number().int().min(0),

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { SimConfigSchema } from './config';
 import type { Tools } from '../data/schema/tools';
 import { GoalSchema, type Scenario } from '../data/schema/scenario';
+import { SpeciesSchema } from '../data/schema/species';
 import { fenceLengthCells } from './fence';
 
 /**
@@ -22,6 +23,17 @@ export const OpSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('release'),
     species: z.string(),
+    x: z.number().int(),
+    y: z.number().int(),
+    count: z.number().int().min(1).max(10_000),
+  }),
+  /**
+   * 引种：把一个物种的 count 只成体运到 (x, y) 放归。物种可以是这一局还没有的（真实动物、以后自己设计的），
+   * 完整的性状数据随操作写进日志，所以日志自己就能回放。投放后收不回来（只能靠兽医工具减少）。
+   */
+  z.object({
+    type: z.literal('introduce'),
+    species: SpeciesSchema,
     x: z.number().int(),
     y: z.number().int(),
     count: z.number().int().min(1).max(10_000),
@@ -76,8 +88,10 @@ export const RulesSchema = z.object({
   staff: z.number().int().min(0),
   /** 开局的客户满意度（0–100）。 */
   satisfaction: z.number().min(0).max(100),
-  /** 能不能投放物种：沙盒可以；情景里的管理员身份不行（引种在阶段 2 解锁）。 */
+  /** 能不能直接投放这片世界已有的物种（沙盒的调试手段，不花钱）：沙盒可以，情景里不行。 */
   allowRelease: z.boolean(),
+  /** 引种（introduce）：允不允许，以及业主禁止引进的物种。来自情景数据；沙盒允许。 */
+  introduction: z.object({ allowed: z.boolean(), banned: z.array(z.string()) }).default({ allowed: false, banned: [] }),
   /** 每移除一只某物种，满意度降多少（情景的 sentiment）。没列出的不扣。 */
   sentiment: z.record(z.string(), z.number().min(0)),
   /** 委托目标（情景的 goal）：有了它才按季度结算、评分；沙盒为 null。 */
@@ -91,6 +105,7 @@ export function scenarioRules(scenario: Scenario): Rules {
     scenario: scenario.id,
     ...scenario.resources,
     allowRelease: false,
+    introduction: { allowed: scenario.introduction?.allowed ?? false, banned: scenario.introduction?.banned ?? [] },
     sentiment: scenario.sentiment,
     goal: scenario.goal,
   };
@@ -102,6 +117,7 @@ export const SANDBOX_RULES: Rules = {
   staff: 99,
   satisfaction: 100,
   allowRelease: true,
+  introduction: { allowed: true, banned: [] },
   sentiment: {},
   goal: null,
 };
@@ -116,7 +132,7 @@ export const OpLogSchema = z
   .object({
     format: z.literal(LOG_FORMAT),
     /** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。 */
-    version: z.literal(6),
+    version: z.literal(7),
     config: SimConfigSchema,
     rules: RulesSchema,
     entries: z.array(LogEntrySchema),
@@ -161,6 +177,12 @@ export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number): Cos
       return tools ? { budget: tools.sample.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
     case 'necropsy':
       return tools ? { budget: tools.necropsy.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
+    case 'introduce': {
+      const t = tools?.introduction;
+      if (!t) return FREE;
+      const budget = t.shipmentCost + op.count * (t.perAnimalCost + Math.round(t.perKgCost * op.species.bodyMassKg));
+      return { budget, staff: 1, days: t.days, satisfaction: 0 };
+    }
     case 'fence': {
       const f = tools?.fences.find((x) => x.id === op.fence);
       if (!f) return FREE;

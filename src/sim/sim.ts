@@ -3,7 +3,8 @@ import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
 import { createGrid, growVegetation, type Grid } from './grid';
 import { isLand } from './terrain';
-import { closeLedgerDay, createLedger, decayLedger, type DeathLedger } from './ledger';
+import { closeLedgerDay, createLedger, decayLedger, growLedger, type DeathLedger } from './ledger';
+import type { SpeciesParams } from '../data/schema/species';
 import { deriveAll, type DerivedSpecies, type PreyWeights } from './physiology';
 import {
   createPopulation,
@@ -40,13 +41,18 @@ import { TICKS_PER_DAY, calendar, monthlyCurve } from './time';
 /** 推演的全部状态。必须是纯数据：可以序列化成快照、原样恢复。 */
 export interface SimState {
   readonly config: SimConfig;
+  /**
+   * 开局以后引进的物种（引种、投放自己设计的物种），按引进的先后排在 config.species 后面。
+   * 全部物种 = config.species + introduced（见 speciesOf），各物种数组的顺序都按这个。
+   */
+  introduced: SpeciesParams[];
   /** 已经走过的 tick 数（1 tick = 游戏内 1 小时）。 */
   tick: number;
   rng: RngState;
   /** 当天的天气系数，乘在植被生长上；逐日带惯性变化。 */
   weather: number;
   grid: Grid;
-  /** 各物种按格子的计数，顺序与 config.species 一致。 */
+  /** 各物种按格子的计数，顺序与 speciesOf(state) 一致。 */
   populations: Population[];
   /** 各物种最近一天的账目。 */
   lastDay: DayStats[];
@@ -85,6 +91,11 @@ export interface SimState {
 export const CENSUS_DAYS = 30;
 export const CENSUS_KEEP = 25;
 
+/** 这一局现在的全部物种：开局的 + 引进的。 */
+export function speciesOf(state: Pick<SimState, 'config' | 'introduced'>): SpeciesParams[] {
+  return [...state.config.species, ...state.introduced];
+}
+
 function cellArea(config: SimConfig): number {
   return config.world.cellSizeM * config.world.cellSizeM;
 }
@@ -98,6 +109,7 @@ export function createInitialState(config: SimConfig): SimState {
   const populations = derived.map((d) => createPopulation(d, grid, cellArea(parsed), rng, mainOnly.has(d.params.id)));
   return {
     config: parsed,
+    introduced: [],
     tick: 0,
     rng: rng.state(),
     weather: 1,
@@ -128,8 +140,8 @@ export class Sim {
   private s: SimState;
   private rng: Rng;
   // 由配置推导、不随时间变化的量，不进状态。
-  private readonly derived: DerivedSpecies[];
-  private readonly prey: PreyWeights;
+  private derived: DerivedSpecies[];
+  private prey: PreyWeights;
   private readonly scratch: Int32Array;
   private readonly blocks: { blockOf: Int32Array; cellsIn: Float64Array; blocksWide: number };
   private readonly land: Int32Array;
@@ -140,7 +152,7 @@ export class Sim {
   constructor(state: SimState) {
     this.s = cloneData(state);
     this.rng = Rng.fromState(this.s.rng);
-    ({ derived: this.derived, prey: this.prey } = deriveAll(this.s.config.species, this.s.config.world.cellSizeM));
+    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
     this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height, this.s.grid.terrain);
     this.land = landCells(this.s.grid);
@@ -207,6 +219,30 @@ export class Sim {
         );
       }
     }
+  }
+
+  /**
+   * 引进一个新物种（开局时没有的）：排在已有物种后面，数量从 0 开始，返回它的下标。
+   * 谁吃谁、拥挤、围栏挡不挡得住都按全部物种重新推导（新来的捕食者会改变老物种的处境）。
+   * 只是"登记"这个物种；要放多少只到哪里，接着用 release。只该由统一操作接口调用。
+   */
+  introduce(params: SpeciesParams): number {
+    if (speciesOf(this.s).some((p) => p.id === params.id)) throw new RangeError(`已经有物种「${params.id}」了`);
+    this.s.introduced.push(cloneData(params));
+    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM));
+    const sp = this.derived.at(-1)!;
+    const cells = this.s.grid.width * this.s.grid.height;
+    const pop: Population = { juveniles: Array.from({ length: sp.juvenileStages }, () => new Int32Array(cells)), adults: new Int32Array(cells) };
+    this.s.populations.push(pop);
+    this.s.emigrants.push(emptyPopulation(pop));
+    this.s.lastDay.push(emptyDayStats(0));
+    this.s.dayAccum.push(emptyDayStats());
+    this.s.deaths = growLedger(this.s.deaths, this.derived.length);
+    this.s.fedLast.push(new Float64Array(cells).fill(1));
+    // 以前的普查里它是 0 只。
+    for (const c of this.s.census) c.totals.push(0);
+    this.rebuildBarriers();
+    return this.derived.length - 1;
   }
 
   /**

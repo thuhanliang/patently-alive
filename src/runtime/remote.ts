@@ -1,4 +1,4 @@
-import { TICKS_PER_DAY, type Op, type Quarter, type Resources, type Rules, type SimConfig, type SimState, type SubmitResult, type DerivedSpecies, type Alert } from '../sim';
+import { TICKS_PER_DAY, speciesOf, type Op, type Quarter, type Resources, type Rules, type SimConfig, type SimState, type SubmitResult, type DerivedSpecies, type Alert } from '../sim';
 import { deriveAll } from '../sim/physiology';
 import type { DayRecord, FromHost, Reply, SessionView, ToHost } from './host';
 
@@ -34,7 +34,9 @@ export class RemoteSession implements SessionReadout {
   /** 新视图到了：days 是这次视图带来的每日曲线数据，regenerated 表示换了一局。 */
   onView: (days: DayRecord[], regenerated: boolean) => void = () => {};
   onError: (message: string) => void = () => {};
-  readonly species: readonly DerivedSpecies[];
+  private derived: readonly DerivedSpecies[];
+  /** 物种列表变了（引种）时加一：界面据此重建按物种建的东西。 */
+  speciesVersion = 0;
 
   constructor(
     private readonly worker: Worker,
@@ -43,7 +45,7 @@ export class RemoteSession implements SessionReadout {
     speed: number,
     held: boolean,
   ) {
-    this.species = deriveAll(config.species, config.world.cellSizeM).derived;
+    this.derived = deriveAll(config.species, config.world.cellSizeM).derived;
     this.held = held;
     worker.onmessage = (e: MessageEvent<FromHost>) => this.receive(e.data);
     worker.onerror = (e: ErrorEvent) => this.fail(e.message || 'Worker 出错了');
@@ -74,7 +76,15 @@ export class RemoteSession implements SessionReadout {
       const regenerated = this.latest !== null && v.generation !== this.latest.generation;
       this.latest = v;
       this.held = v.held;
-      if (v.state) this.state = v.state;
+      if (v.state) {
+        this.state = v.state;
+        // 引进了新物种（或换了一局、读档后物种不同）：按状态里的物种列表重新推导。
+        const all = speciesOf(v.state);
+        if (all.length !== this.derived.length || all.some((p, i) => p.id !== this.derived[i]!.params.id)) {
+          this.derived = deriveAll(all, v.state.config.world.cellSizeM).derived;
+          this.speciesVersion += 1;
+        }
+      }
       this.onView(v.days, regenerated);
       const waiters = this.waiters;
       this.waiters = [];
@@ -142,6 +152,11 @@ export class RemoteSession implements SessionReadout {
   private get v(): SessionView {
     if (!this.latest) throw new Error('推演还没准备好');
     return this.latest;
+  }
+
+  /** 这一局现在的全部物种（开局的 + 引进的）。 */
+  get species(): readonly DerivedSpecies[] {
+    return this.derived;
   }
 
   get sim(): SessionReadout['sim'] {

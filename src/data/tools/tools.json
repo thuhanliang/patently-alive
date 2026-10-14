@@ -67,5 +67,14 @@
       "kmPerDay": 0.2,
       "source": "参照新西兰的防捕食者围栏（如 Zealandia、Maungatautari）：约 2 米高的细网，下沿埋入地下，顶上有弧形防爬帽，连小鼠都挡得住；造价很高。价格按本游戏的预算尺度缩放，为假设值（见 docs/MODEL.md）。"
     }
-  ]
+  ],
+  "introduction": {
+    "name": "引种",
+    "shipmentCost": 12000,
+    "perAnimalCost": 300,
+    "perKgCost": 400,
+    "days": 5,
+    "maxAnimals": 200,
+    "source": "一批动物的许可、运输和检疫场地算固定费用，每只另有购买或繁育的费用，体重越大运输和圈养越贵；一支队伍检疫、放归要忙几天。新西兰的离岸岛迁地保护常见一批几十只。价格为假设值（见 docs/MODEL.md）。"
+  }
 }

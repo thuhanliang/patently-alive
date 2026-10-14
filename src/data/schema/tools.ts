@@ -96,12 +96,30 @@ export const FenceTypeSchema = z.object({
   source: z.string(),
 });
 
+/**
+ * 引种：从别处买来（或繁育）一批动物，运到岛上、检疫、放归。花费分三块：
+ * 一批的固定费用（许可、运输、检疫场地），每只的费用，再按体重加价（大动物运输、圈养都更贵）。
+ * 一支队伍要忙几天（检疫和放归）。
+ */
+export const IntroductionSchema = z.object({
+  name: z.string(),
+  shipmentCost: z.number().int().min(0),
+  perAnimalCost: z.number().int().min(0),
+  perKgCost: z.number().int().min(0),
+  days: z.number().int().min(1),
+  /** 一次最多引进几只。 */
+  maxAnimals: z.number().int().min(1),
+  source: z.string(),
+});
+
 export const ToolsSchema = z.object({
   traps: z.array(TrapTypeSchema).min(1),
   cull: CullSchema,
   sample: SampleSchema,
   necropsy: NecropsySchema,
   fences: z.array(FenceTypeSchema).min(1),
+  /** 没有时不能引种。 */
+  introduction: IntroductionSchema.optional(),
 });
 
 export type TrapType = z.infer<typeof TrapTypeSchema>;
@@ -109,4 +127,5 @@ export type CullParams = z.infer<typeof CullSchema>;
 export type SampleParams = z.infer<typeof SampleSchema>;
 export type NecropsyParams = z.infer<typeof NecropsySchema>;
 export type FenceType = z.infer<typeof FenceTypeSchema>;
+export type IntroductionParams = z.infer<typeof IntroductionSchema>;
 export type Tools = z.infer<typeof ToolsSchema>;
