@@ -6,6 +6,9 @@ const FILTERS: Array<[DeathFilter, string]> = [
   ['predation', '被捕食'],
   ['nest', '巢失败'],
   ['starvation', '饿死'],
+  ['malnutrition', '营养不良'],
+  ['fracture', '承重骨折'],
+  ['dystocia', '难产'],
   ['other', '其他'],
 ];
 

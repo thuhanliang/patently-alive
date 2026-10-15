@@ -32,7 +32,7 @@ export interface Bite {
 export interface NecropsyFindings {
   species: number;
   /** nest：巢里的蛋、雏或幼崽被吃。 */
-  kind: 'starvation' | 'other' | 'predation' | 'nest';
+  kind: BodyKind | 'starvation' | 'other' | 'predation' | 'nest';
   decomposition: Decomposition;
   bcs: number;
   /** 被捕食或巢被吃时的咬痕。 */
@@ -40,6 +40,9 @@ export interface NecropsyFindings {
   /** 被谁吃的（引擎知道，报告里不直接写；测试和以后的纪录片用）。 */
   predator: number;
 }
+
+/** 身体撑不住的死因（阶段 3.5）：没有咬痕，所见和结论各有一句。 */
+export type BodyKind = 'malnutrition' | 'fracture' | 'dystocia';
 
 export function teethOf(sp: DerivedSpecies): Teeth {
   return sp.carnivore ? 'canine' : 'incisor';
@@ -54,7 +57,7 @@ export function necropsyFindings(carcass: Carcass, species: readonly DerivedSpec
   const decomposition: Decomposition = carcass.daysDead === 0 ? 'fresh' : carcass.daysDead <= 2 ? 'early' : 'advanced';
   const base = { species: carcass.species, decomposition, bcs: carcass.bcs };
   const d = decodeCause(carcass.cause, species.length);
-  if (d.kind === 'starvation') return { ...base, kind: 'starvation', bite: null, predator: -1 };
+  if (d.kind === 'starvation' || d.kind === 'malnutrition' || d.kind === 'fracture' || d.kind === 'dystocia') return { ...base, kind: d.kind, bite: null, predator: -1 };
   if (d.kind === 'other' || d.kind === 'removed') return { ...base, kind: 'other', bite: null, predator: -1 };
   const pred = species[d.predator]!;
   const teeth = teethOf(pred);
