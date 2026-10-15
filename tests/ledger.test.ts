@@ -21,7 +21,7 @@ describe('死因账本', () => {
         const byCause = lastDayCauses(sim, s);
         const total = byCause.reduce((a, b) => a + b, 0);
         expect(total).toBe(st.deathsPredation + st.deathsStarvation + st.deathsOther);
-        const predation = byCause.slice(3).reduce((a, b) => a + b, 0);
+        const predation = byCause.slice(CAUSE.predation(0)).reduce((a, b) => a + b, 0);
         expect(predation).toBe(st.deathsPredation);
         expect(byCause[CAUSE.starvation]).toBe(st.deathsStarvation);
       });

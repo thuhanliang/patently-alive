@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { designTemplates, hintTemplates, partLibrary, scalingLaws, viabilityRules, type Design } from '../src/data';
+import { designTemplates, hintTemplates, partLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
 import { ViabilityRulesSchema } from '../src/data/schema/viability';
 import { DesignSchema } from '../src/data/schema/design';
-import { allocateBody, compileDesign, makeDesignKit, skeletonSafety } from '../src/sim';
+import { allocateBody, compileDesign, deserialize, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
+import { chaseFactor, deriveSpecies, preyMatrix } from '../src/sim/physiology';
+import { CAUSE, recentByCause } from '../src/sim/ledger';
 import viabilityJson from '../src/data/scaling/viability.json';
 
 const kit = makeDesignKit(partLibrary, scalingLaws, hintTemplates, viabilityRules, designTemplates.map((t) => t.design));
 const template = (species: string): Design => designTemplates.find((t) => t.species === species)!.design;
 const withAlloc = (d: Design, allocation: Design['allocation']): Design => ({ ...d, allocation });
+/** 骨头最少、其余全给满。 */
+const BRITTLE = { skeleton: 0.5, muscle: 2, gut: 2, heart: 2, fat: 2 };
 
 describe('可行性阈值数据', () => {
   it('每个数都要写依据、置信度和出处', () => {
@@ -74,18 +78,95 @@ describe('骨骼检查', () => {
     const at = (m: number) => skeletonSafety({ design: { ...d, bodyMassKg: m }, parts, body, rules: viabilityRules });
     expect(at(100)).toBe(at(1));
     const limit = viabilityRules.skeleton.postureLimitKg.value;
-    expect(at(limit * 8)).toBeCloseTo(at(1) / 2, 2);
+    expect(at(limit * 8)).toBeCloseTo(at(1) * 8 ** -viabilityRules.skeleton.stressExp.value, 6);
   });
 
-  it('只出提醒，不改物种参数（推演里的后果从第 3 步起接入）', () => {
+  it('撑得住的设计参数和以前一样；撑不住的才在参数里写上后果', () => {
     const d = template('cat');
-    const weak = compileDesign(withAlloc(d, { skeleton: 0.5 }), kit);
-    const normal = compileDesign(d, kit);
-    expect(weak.params).toEqual(normal.params);
+    expect('body' in compileDesign(d, kit).params).toBe(false);
+    const weak = compileDesign(withAlloc(d, BRITTLE), kit).params;
+    expect(weak.body).toBeDefined();
+    expect(weak.body!.runFactor).toBeLessThan(1);
   });
 
   it('环境输入只给预览，不影响物种参数', () => {
     const d = template('rabbit');
     expect(compileDesign(d, kit, { forage: [], climate: {} }).params).toEqual(compileDesign(d, kit).params);
   });
+});
+
+/** 骨头最少、其余全给满：小于 100 千克也能做出"走不动""站不住"。 */
+const brittle = (limbs: string): Design => ({
+  ...template('rabbit'),
+  id: `d_brittle_${limbs}`,
+  name: '脆骨兔',
+  parts: { ...template('rabbit').parts, limbs },
+  allocation: BRITTLE,
+});
+
+describe('骨骼接进推演（阶段 3.5 第 3 步）', () => {
+  it('安全系数 → 后果：跑不动只打折奔跑；走不动以下开始骨折，越低越多', () => {
+    const r = viabilityRules.skeleton;
+    const e = (s: number) => skeletonEffects(s, viabilityRules);
+    expect(e(r.cannotRun.value)).toMatchObject({ runFactor: 1, walkFactor: 1, fractureDaily: 0 });
+    expect(e(1.2).fractureDaily).toBe(0);
+    expect(e(1.2).runFactor).toBeLessThan(1);
+    expect(e(r.cannotStand.value).fractureDaily).toBeCloseTo(r.fractureDailyAtStand.value, 6);
+    expect(e(0.5).fractureDaily).toBeGreaterThan(e(0.85).fractureDaily);
+  });
+
+  it('只靠体重分配就能做出走不动、站不住', () => {
+    const grade = (limbs: string) => compileDesign(brittle(limbs), kit).viability.find((x) => x.id === 'skeleton')!.grade;
+    expect(grade('walking_legs')).toBe('failing');
+    expect(grade('running_legs')).toBe('fatal');
+  });
+
+  it('真实物种没有这些后果：奔跑能力 1、骨折 0', () => {
+    for (const p of speciesLibrary.values()) {
+      const d = deriveSpecies(p, 50);
+      expect(d.runFactor).toBe(1);
+      expect(d.fractureDaily).toBe(0);
+    }
+  });
+
+  it('跑不动的捕食者抓到的少，跑不动的猎物被抓的多，走得也慢', () => {
+    const stoatDesign = { ...template('stoat'), id: 'd_slow', name: '慢鼬' };
+    const normal = deriveSpecies(compileDesign(stoatDesign, kit).params, 50);
+    const slow = deriveSpecies(compileDesign(withAlloc(stoatDesign, BRITTLE), kit).params, 50);
+    expect(slow.runFactor).toBeLessThan(1);
+    const vole = deriveSpecies(speciesLibrary.get('vole')!, 50);
+    expect(preyMatrix([slow, vole]).mobile[0]![1]!).toBeLessThan(preyMatrix([normal, vole]).mobile[0]![1]!);
+    const weasel = deriveSpecies(speciesLibrary.get('weasel')!, 50);
+    const preyD = { ...template('vole'), id: 'd_prey', name: '慢鼠' };
+    const fine = deriveSpecies(compileDesign(preyD, kit).params, 50);
+    const weak = deriveSpecies(compileDesign(withAlloc(preyD, BRITTLE), kit).params, 50);
+    expect(preyMatrix([weasel, weak]).mobile[0]![1]!).toBeGreaterThan(preyMatrix([weasel, fine]).mobile[0]![1]!);
+    expect(slow.hourlyStepCells).toBeLessThan(normal.hourlyStepCells);
+  });
+
+  it('会飞的猎物靠飞逃，腿骨不影响', () => {
+    const weasel = deriveSpecies(speciesLibrary.get('weasel')!, 50);
+    const flyer = { ...deriveSpecies(speciesLibrary.get('vole')!, 50), flies: true, runFactor: 0.4 };
+    expect(chaseFactor(weasel, flyer)).toBe(1);
+    expect(chaseFactor(weasel, { ...flyer, flies: false })).toBeCloseTo(1.6, 12);
+  });
+
+  it('站不住的设计投放后死于承重骨折，尸检账本里看得到；存档读回来后果还在', () => {
+    const scenario = scenarioLibrary.get('bird-island-small')!;
+    const world = worldFor(scenario);
+    const config = { seed: 4, world, species: speciesFor(world), tools, design: designDataOf(kit) };
+    const s = new Session(config, scenarioRules(scenario));
+    const design = brittle('running_legs');
+    const species = compileDesign(design, kit).params;
+    const { grid } = s.sim.state;
+    let at = { x: 0, y: 0 };
+    for (let i = 0; i < grid.terrain.length; i++) if (grid.terrain[i] !== 0) { at = { x: i % grid.width, y: Math.floor(i / grid.width) }; break; }
+    expect(s.submit({ type: 'introduce', species, design, ...at, count: 40 })).toEqual({ ok: true });
+    s.advance(TICKS_PER_DAY * 30);
+    const idx = s.sim.species.length - 1;
+    expect(recentByCause(s.sim.state.deaths, idx)[CAUSE.fracture]!).toBeGreaterThan(0);
+    const back = Session.restore(deserialize(serialize(s.save())));
+    expect(back.sim.species[idx]!.params.body).toEqual(species.body);
+    expect(back.sim.species[idx]!.fractureDaily).toBeGreaterThan(0);
+  }, 60_000);
 });

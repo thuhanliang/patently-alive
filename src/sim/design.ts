@@ -6,7 +6,7 @@ import { allocateBody, type BodyAllocation } from './body';
 import { detExp, detLog } from './detmath';
 import { scaleTraits, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
-import { runChecks, type CheckResult, type EnvironmentProfile } from './viability';
+import { runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
 
 /**
  * 设计编译器（阶段 3）：一份设计 → 物种参数、推导属性、能量收支、提醒。确定、纯函数。
@@ -206,10 +206,12 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   if (diet.vertebrate >= 0.5 && scaled.homeRangeKm2 > 1) hint('carnivoreHomeRange', { area: round1(scaled.homeRangeKm2) });
   if (bird) hint('borrowedLaw');
 
-  // 身体可行性（阶段 3.5）：只出等级和提醒，推演里的后果从第 3 步起接入。
+  // 身体可行性（阶段 3.5）：等级和提醒；撑不住的身体，后果写进物种参数（撑得住的不写，参数和以前一样）。
   const body = allocateBody(design, bird, kit.viability);
   const viability = runChecks({ design, parts, bird, body, rules: kit.viability, ...(env ? { env } : {}) });
   for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
+  const bone = viability.find((r) => r.id === 'skeleton');
+  if (bone && bone.grade !== 'ok') params.body = skeletonEffects(bone.evidence.safety!, kit.viability);
 
   return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear, body, viability };
 }

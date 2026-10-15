@@ -11,7 +11,8 @@ import { detPow } from './detmath';
  * 环境输入只给设计台预览用，没有就跳过，从不写进物种参数。以后接气候就是在 EnvironmentProfile 上加字段。
  *
  * 检查的种类、公式、顺序由引擎定义（CHECKS），数据只给阈值（viability.json）。全部是纯函数，结果确定。
- * 提示而不是禁止：检查只给等级、余量和提醒；不合理的身体照样能投放，后果在推演里按等级发生（第 3 步起接入）。
+ * 提示而不是禁止：检查只给等级、余量和提醒；不合理的身体照样能投放，后果在推演里按等级发生：
+ * 设计编译器把后果算进物种参数（例如 skeletonEffects → params.body），推演只读参数。
  */
 
 /** 引擎定义的检查（会逐步加：体温、循环……）。 */
@@ -69,6 +70,34 @@ export function skeletonSafety(ctx: Pick<ViabilityContext, 'design' | 'parts' | 
   const m = ctx.design.bodyMassKg;
   const heavy = m > r.postureLimitKg.value ? detPow(m / r.postureLimitKg.value, -r.stressExp.value) : 1;
   return r.safetyAtRef.value * ctx.body.relative.skeleton * (ctx.parts.limbs.posture ?? 1) * heavy;
+}
+
+/** 骨骼撑不住时推演里的后果，写进物种参数的 body（见 SpeciesSchema）。 */
+export interface SkeletonEffects {
+  boneSafety: number;
+  runFactor: number;
+  walkFactor: number;
+  fractureDaily: number;
+}
+
+const round4 = (x: number): number => Math.round(x * 10000) / 10000;
+
+/**
+ * 安全系数 → 后果（形状由引擎定，系数是数据）：
+ * - 奔跑能力 = 安全系数 ÷ "跑不动"的阈值（封顶 1）：追捕的捕获率、被追时逃脱的机会跟着打折；
+ * - 走路能力 = 安全系数 ÷ "走不动"的阈值（封顶 1）：每天的活动范围跟着缩；
+ * - 每天骨折的概率："走不动"以上为 0，往下按缺口的平方上升，正好"站不住"时为 fractureDailyAtStand，再低继续上升（封顶 1）。
+ */
+export function skeletonEffects(safety: number, rules: ViabilityRules): SkeletonEffects {
+  const r = rules.skeleton;
+  const walk = r.cannotWalk.value;
+  const gap = Math.max(0, (walk - safety) / (walk - r.cannotStand.value));
+  return {
+    boneSafety: Math.max(0.0001, round4(safety)),
+    runFactor: round4(Math.max(0.0001, Math.min(1, safety / r.cannotRun.value))),
+    walkFactor: round4(Math.max(0.0001, Math.min(1, safety / walk))),
+    fractureDaily: round4(Math.min(1, r.fractureDailyAtStand.value * gap * gap)),
+  };
 }
 
 const skeleton: ViabilityCheck = {

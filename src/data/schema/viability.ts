@@ -47,6 +47,8 @@ export const ViabilityRulesSchema = z.strictObject({
     cannotRun: ThresholdSchema,
     cannotWalk: ThresholdSchema,
     cannotStand: ThresholdSchema,
+    /** 安全系数正好在"站不住"时每天承重骨折的概率；"走不动"以上为 0，中间按缺口的平方插值，再低继续上升（封顶 1）。 */
+    fractureDailyAtStand: ThresholdSchema,
   }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;

@@ -51,6 +51,7 @@ export interface DayStats {
   births: number;
   deathsPredation: number;
   deathsStarvation: number;
+  /** 其他死因，含身体撑不住的死（承重骨折等，阶段 3.5；死因账本里分开记）。 */
   deathsOther: number;
   /** 玩家投放进来的数量。 */
   released: number;
@@ -642,14 +643,16 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
     }
   }
 
-  // 死亡：基础死亡（衰老、疾病、意外）+ 饥饿。先抽总数，再按比例分死因。
+  // 死亡：基础死亡（衰老、疾病、意外）+ 饥饿 + 骨折（阶段 3.5）。先抽总数，再按比例分死因。
   const starve = sp.starvationRate * Math.max(0, 1 - fedRatio / FED_SUFFICIENT);
   const block = ctx.blockOf[c]!;
-  adults -= dieOff(ctx, s, block, adults, sp.adultDailyMortality, starve, st);
+  adults -= dieOff(ctx, s, block, adults, sp.adultDailyMortality, starve, sp.fractureDaily, st);
   const stages = pop.juveniles;
-  for (const stage of stages) {
-    stage[c] = stage[c]! - dieOff(ctx, s, block, stage[c]!, sp.juvenileDailyMortality, starve, st);
-  }
+  // 窝里的幼体（蛋、雏、窝里的幼崽）不自己承重，不骨折。
+  const inNest = sp.nest !== null ? sp.nestStages : 0;
+  stages.forEach((stage, k) => {
+    stage[c] = stage[c]! - dieOff(ctx, s, block, stage[c]!, sp.juvenileDailyMortality, starve, k < inNest ? 0 : sp.fractureDaily, st);
+  });
 
   // 长大由传送带负责（见 shiftStages）；新生的进第 0 段。
   stages[0]![c] = stages[0]![c]! + born;
@@ -657,18 +660,22 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
   pop.adults[c] = adults;
 }
 
-function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: number, starve: number, st: DayStats): number {
+/** fracture：每天骨折的概率，只有骨骼撑不住的设计才大于 0；为 0 时不多抽随机数，真实物种的随机数流不变。 */
+function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: number, starve: number, fracture: number, st: DayStats): number {
   if (n === 0) return 0;
   const rng = ctx.rng;
-  const p = Math.min(1, base + starve);
+  const p = Math.min(1, base + starve + fracture);
   const dead = binomial(rng, n, p);
   if (dead > 0) {
-    // 按两种死因各自的比重拆分（p 被截到 1 时也保持比例）。
-    const starved = starve > 0 ? binomial(rng, dead, starve / (base + starve)) : 0;
+    // 按死因各自的比重拆分（p 被截到 1 时也保持比例）：先分出骨折，其余再分饥饿和其他。
+    const broken = fracture > 0 ? binomial(rng, dead, fracture / (base + starve + fracture)) : 0;
+    const rest = dead - broken;
+    const starved = starve > 0 ? binomial(rng, rest, starve / (base + starve)) : 0;
     st.deathsStarvation += starved;
-    st.deathsOther += dead - starved;
+    st.deathsOther += rest - starved + broken;
     recordDeaths(ctx.ledger, s, CAUSE.starvation, block, starved);
-    recordDeaths(ctx.ledger, s, CAUSE.other, block, dead - starved);
+    recordDeaths(ctx.ledger, s, CAUSE.other, block, rest - starved);
+    if (broken > 0) recordDeaths(ctx.ledger, s, CAUSE.fracture, block, broken);
   }
   return dead;
 }

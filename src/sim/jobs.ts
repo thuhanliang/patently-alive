@@ -147,9 +147,10 @@ export interface JobContext {
   removedIndividuals: Uint8Array;
 }
 
-/** 动物会在多大范围内碰上陷阱（格）：每天走的距离的一半，夹在 1 到 MAX_CATCHMENT_CELLS 之间。 */
+/** 动物会在多大范围内碰上陷阱（格）：每天走的距离的一半（走不动的设计按缩短后的算），夹在 1 到 MAX_CATCHMENT_CELLS 之间。 */
 export function catchmentRadius(sp: DerivedSpecies, cellSizeM: number): number {
-  return Math.max(1, Math.min(MAX_CATCHMENT_CELLS, Math.round(sp.params.movement.dailyRangeM / cellSizeM / 2)));
+  const range = sp.params.movement.dailyRangeM * (sp.params.body?.walkFactor ?? 1);
+  return Math.max(1, Math.min(MAX_CATCHMENT_CELLS, Math.round(range / cellSizeM / 2)));
 }
 
 /** 诱饵对一个物种的吸引力：Σ 诱饵对这类食物的吸引力 × 食谱里这一类的比例。 */

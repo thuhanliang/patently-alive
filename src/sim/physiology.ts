@@ -157,6 +157,19 @@ export interface DerivedSpecies {
   readonly maxAgeDays: number;
   /** 守固定领地：拥挤上限按领地算，见 breedingRoom。 */
   readonly territorial: boolean;
+  /** 奔跑能力（阶段 3.5，骨骼撑不住的设计小于 1）：见 chaseFactor。 */
+  readonly runFactor: number;
+  /** 每天承重骨折的概率（阶段 3.5）。 */
+  readonly fractureDaily: number;
+}
+
+/**
+ * 追捕会跑的猎物时，奔跑能力对捕获率的影响（阶段 3.5）：捕食者跑不动就少抓到，猎物跑不动就多被抓（被抓的概率乘 2 − 奔跑能力）。
+ * 会飞的猎物靠飞逃（FLIGHT_ESCAPE），腿骨不影响它逃不逃得掉。
+ * 两边都能跑时正好是 1，真实物种的结果不变。只用于会跑的猎物，窝里的不算。
+ */
+export function chaseFactor(pred: DerivedSpecies, prey: DerivedSpecies): number {
+  return pred.runFactor * (prey.flies ? 1 : 2 - prey.runFactor);
 }
 
 /**
@@ -175,7 +188,8 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
   const metabolicMass = detPow(p.bodyMassKg, 0.75) * (p.energyFactor ?? 1);
   const { juvenileStages, nestStages, stageDays } = conveyor(p);
   const adultDailyMortality = 1 - detPow(p.survival.adultAnnual, 1 / DAYS_PER_YEAR);
-  const cellsPerDay = p.movement.dailyRangeM / cellSizeM;
+  // 骨骼撑不住的设计走得慢（阶段 3.5）：活动范围、扩散、搜窝都跟着缩。
+  const cellsPerDay = (p.movement.dailyRangeM * (p.body?.walkFactor ?? 1)) / cellSizeM;
   // 最长一段连续繁殖期的天数；它比两窝间隔还短时，每段繁殖期只够生一窝。
   const breedingDays = longestSeasonDays(p.reproduction.breedingByMonth);
   const typicalPerKm2 = DAMUTH_COEF * detPow(p.bodyMassKg * 1000, -0.75);
@@ -209,6 +223,8 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     maxReserveDays: RESERVE_COEF * detPow(p.bodyMassKg, 0.25),
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
     territorial: p.movement.territorial === true && p.movement.homeRangeKm2 !== undefined,
+    runFactor: p.body?.runFactor ?? 1,
+    fractureDaily: p.body?.fractureDaily ?? 0,
   };
 }
 
@@ -340,8 +356,9 @@ export function sizeSuitability(preyToPredatorMass: number): number {
 }
 
 /**
- * 捕食权重（捕食者 × 猎物，[0, 1]），分两种：
- * - mobile：会跑的猎物（成体、出了窝的幼体）= 体型适合度 × 活动时段重叠 × 会飞的话 FLIGHT_ESCAPE。
+ * 捕食权重（捕食者 × 猎物，通常在 [0, 1]），分两种：
+ * - mobile：会跑的猎物（成体、出了窝的幼体）= 体型适合度 × 活动时段重叠 × 会飞的话 FLIGHT_ESCAPE × 奔跑能力（chaseFactor）。
+ *   跑不动的猎物可以大于 1（不截断，和个体模型一致；被抓的概率在 hunt 里再截到 1）。
  *   只有以脊椎动物为主的捕食者（carnivore）才追得上；鼠这样的杂食动物为 0。
  * - nest：窝里的幼体（蛋、雏鸟、窝里的幼崽）= 体型适合度（按幼体体重）× NEST_DISCOVERY × 窝的暴露程度。
  *   窝不会跑，也不分白天黑夜，不乘活动时段重叠；地面浅窝还要再乘各格的掩护（见 nestExposure）。
@@ -358,7 +375,7 @@ export function preyMatrix(species: readonly DerivedSpecies[]): PreyWeights {
     species.map((prey, j) => {
       if (!pred.carnivore || i === j) return 0;
       const fly = prey.flies ? FLIGHT_ESCAPE : 1;
-      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity) * fly;
+      return catchSuitability(pred, prey, prey.bodyMassG / pred.bodyMassG) * activityOverlap(pred.params.activity, prey.params.activity) * fly * chaseFactor(pred, prey);
     }),
   );
   const nest = species.map((pred, i) =>
