@@ -1,7 +1,7 @@
 import { SimConfigSchema, type SimConfig } from './config';
 import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
-import { createGrid, growVegetation, type Grid } from './grid';
+import { createGrid, dailyGrowthInput, growPlants, plantFood, type Grid, type PlantFood } from './grid';
 import { isLand } from './terrain';
 import { closeLedgerDay, createLedger, decayLedger, growLedger, type DeathLedger } from './ledger';
 import type { SpeciesParams } from '../data/schema/species';
@@ -169,10 +169,10 @@ export class Sim {
         : undefined;
   }
 
-  /** 灌丛啃不到的下限；世界里没有灌丛参数时为 undefined。 */
-  private get shrubFloor(): number | undefined {
-    const sh = this.s.config.world.shrub;
-    return sh ? sh.maxBiomass * sh.floorFraction : undefined;
+  /** 吃植物、找虫子的参数（见 plantFood）；世界不变，算一次就够。 */
+  private foodCache: PlantFood | undefined;
+  private get food(): PlantFood {
+    return (this.foodCache ??= plantFood(this.s.config.world));
   }
 
   static create(config: SimConfig): Sim {
@@ -394,8 +394,7 @@ export class Sim {
         hour: calendar(this.s.tick).hour,
         day: hourDay,
         cellAreaM2: cellArea(this.s.config),
-        floorBiomass: this.s.config.world.vegetation.floorBiomass,
-        shrubFloor: this.shrubFloor,
+        food: this.food,
         rng: this.rng,
         stats: this.s.dayAccum,
         ledger: this.s.deaths,
@@ -452,9 +451,8 @@ export class Sim {
     this.s.weather = w.persistence * this.s.weather + (1 - w.persistence) * fresh;
 
     const { dayOfYear, month } = calendar(this.s.tick);
-    const growth = monthlyCurve(world.vegetation.growthByMonth, dayOfYear) * this.s.weather;
-    const decay = monthlyCurve(world.vegetation.decayByMonth, dayOfYear);
-    growVegetation(this.s.grid, world, growth, decay);
+    const { growth, decay } = dailyGrowthInput(world, dayOfYear, this.s.weather);
+    growPlants(this.s.grid, world, growth, decay);
 
     // 幼体传送带：到了挪段的日子，格子计数和待合并计数一起挪（个体按同一规则自动成年）。
     const day = this.day;
@@ -477,8 +475,7 @@ export class Sim {
       grid: this.s.grid,
       populations: this.s.populations,
       cellAreaM2: cellArea(this.s.config),
-      floorBiomass: world.vegetation.floorBiomass,
-      shrubFloor: this.shrubFloor,
+      food: this.food,
       breeding,
       rng: this.rng,
       scratch: this.scratch,

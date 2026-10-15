@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { scenarioLibrary, speciesFor, tools, worldFor, type WorldParams } from '../src/data';
-import { scenarioRules, Session, Sim, TICKS_PER_DAY, type Rules, type SimState } from '../src/sim';
+import { scenarioRules, Session, Sim, TICKS_PER_DAY, woodyIndex, type Rules, type SimState } from '../src/sim';
 import { CAUSE } from '../src/sim/ledger';
 import { baselineOf, QUARTER_DAYS, satisfactionChange, score, STABILITY_MIN_COUNT, type ScoreGoal } from '../src/sim/score';
 
@@ -73,7 +73,7 @@ describe('评分公式', () => {
     const start = base.totals;
     const at = (bird: number, shrubFactor: number) => {
       const s = withTotals(s0, [bird, 1, 1, 1], [1, 1, 1, 1]);
-      s.grid = { ...s.grid, shrub: s.grid.shrub.map((v) => v * shrubFactor) };
+      s.grid = { ...s.grid, plants: s.grid.plants.map((b, k) => (k === woodyIndex(s.config.world) ? b.map((v) => v * shrubFactor) : b)) };
       return score(s, goal, base, money, 1);
     };
     expect(at(start[0]!, 1).scores.diversity).toBe(100);

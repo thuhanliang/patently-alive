@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PlantTypeSchema } from './plant';
 
 const monthly = z.array(z.number().min(0)).length(12);
 
@@ -53,34 +54,43 @@ export const WorldParamsSchema = z.object({
     /** 肥力噪声的特征尺度（格）。越大斑块越大。 */
     patchSize: z.number().int().min(2),
   }).refine((f) => f.min <= f.max, { message: 'fertility.min 不能大于 fertility.max' }),
-  vegetation: z.object({
-    /** 肥力为 1 的格子的植被上限。 */
-    maxBiomass: z.number().positive(),
-    /** 植被不会低于这个量（根和种子库），保证能再长回来。 */
-    floorBiomass: z.number().min(0),
-    /** 开局植被占上限的比例。 */
-    initialFraction: z.number().min(0).max(1),
-    /** logistic 生长的内禀增长率（每天）。 */
-    growthRate: z.number().min(0),
-    /** 各月生长系数，乘在增长率上（月份从春季第一个月算起）。 */
+  /** 季节：各月生长系数（乘在每种植物的增长率上）和草本的各月枯落比例（每天）。月份从春季第一个月算起。以后接气候。 */
+  season: z.object({
     growthByMonth: monthly,
-    /** 各月枯落比例（每天）。 */
     decayByMonth: monthly,
   }),
   /**
-   * 灌丛（木本）的生物量：长得慢，是地面筑巢鸟的掩护；草不够吃时食草动物会啃它。只在灌丛格里有。
-   * 有灌丛地形的世界必须写。
+   * 这片世界里长的植物（阶段 3.5）：植物类型（src/data/plants，加载时按 id 换成完整数据，随配置进存档）
+   * 加上它在这片世界里长多快、长多高。顺序就是状态里 grid.plants 的顺序。
    */
-  shrub: z.object({
-    /** 灌丛长满时的生物量（g/m²），不乘肥力。 */
-    maxBiomass: z.number().positive(),
-    /** 开局占上限的比例。 */
-    initialFraction: z.number().min(0).max(1),
-    /** logistic 生长的内禀增长率（每天），乘植被的各月生长系数和天气。 */
-    growthRate: z.number().min(0),
-    /** 啃不到的部分（占上限的比例），保证能长回来。 */
-    floorFraction: z.number().min(0).max(1),
-  }).optional(),
+  plants: z
+    .array(
+      z.strictObject({
+        type: PlantTypeSchema,
+        /** 长满时的生物量（g/m²）。草本乘肥力，木本不乘。 */
+        maxBiomass: z.number().positive(),
+        /** 开局占上限的比例。 */
+        initialFraction: z.number().min(0).max(1),
+        /** logistic 生长的内禀增长率（每天），乘季节和天气。 */
+        growthRate: z.number().min(0),
+        /** 草本：不会低于这个量（根和种子库，g/m²），保证能再长回来。 */
+        floorBiomass: z.number().min(0).optional(),
+        /** 木本：啃不到的部分（占上限的比例）。 */
+        floorFraction: z.number().min(0).max(1).optional(),
+      }),
+    )
+    .min(1)
+    .refine((ps) => ps.every((p) => (p.type.form === 'herb' ? p.floorBiomass !== undefined : p.floorFraction !== undefined)), {
+      message: '草本要写 floorBiomass，木本要写 floorFraction',
+    })
+    .refine((ps) => ps.filter((p) => p.type.form === 'herb').length === 1, { message: '现在每片世界正好一种草本（多种草本等吃坏的规则定了再开）' })
+    .refine((ps) => ps.filter((p) => p.type.form === 'woody').length <= 1, { message: '现在每片世界最多一种木本' })
+    .refine((ps) => ps.every((p) => p.type.form !== 'woody' || p.type.cover.terrain === 'shrub'), {
+      message: '木本长在它给掩护的地形上，现在只能是灌丛',
+    })
+    .refine((ps) => new Set(ps.map((p) => p.type.cover.terrain)).size === ps.length, {
+      message: '每种地形的掩护只能来自一种植物',
+    }),
   weather: z.object({
     /** 天气系数逐日变化的惯性（0–1），越大越"连阴天"。 */
     persistence: z.number().min(0).max(1),
@@ -96,8 +106,8 @@ export const WorldParamsSchema = z.object({
   mainIslandOnly: z.array(z.string()).optional(),
   /** 数值出处说明。 */
   source: z.string(),
-}).refine((w) => !w.terrain || w.terrain.shrubFraction === 0 || w.shrub !== undefined, {
-  message: '有灌丛地形的世界要写 shrub 参数',
+}).refine((w) => !w.terrain || w.terrain.shrubFraction === 0 || w.plants.some((p) => p.type.form === 'woody' && p.type.cover.terrain === 'shrub'), {
+  message: '有灌丛地形的世界要有一种长在灌丛地形上的木本植物',
 }).refine((w) => (w.mainIslandOnly ?? []).every((id) => w.species.includes(id)), {
   message: 'mainIslandOnly 里的物种要在 species 里',
 });

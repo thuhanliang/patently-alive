@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import { countAt, deathsByBlock, type DeathFilter, type SimState } from '../sim';
+import { countAt, deathsByBlock, herbIndex, woodyIndex, type DeathFilter, type SimState } from '../sim';
 import { TERRAIN } from '../sim/terrain';
 import { crowdingBlocks } from '../sim/population';
 import { INK, PAPER, TERRAIN_COLORS as T, lerpColor } from './palette';
@@ -89,10 +89,14 @@ export class GridLayer {
     const water = (i: number): number => lerpColor(T.shallowWater, T.deepWater, depth[i]!);
 
     if (layer.kind === 'vegetation') {
-      const veg = state.grid.vegetation;
-      const max = state.config.world.vegetation.maxBiomass;
-      const shrub = state.grid.shrub;
-      const shrubMax = state.config.world.shrub?.maxBiomass ?? 1;
+      const { plants } = state.config.world;
+      const h = herbIndex(state.config.world);
+      const veg = state.grid.plants[h]!;
+      const max = plants[h]!.maxBiomass;
+      // 灌丛格按木本着色（schema 保证有灌丛地形就有它）。
+      const w = woodyIndex(state.config.world);
+      const shrub = w >= 0 ? state.grid.plants[w]! : veg;
+      const shrubMax = w >= 0 ? plants[w]!.maxBiomass : 1;
       for (let i = 0; i < veg.length; i++) {
         const f = veg[i]! / max;
         switch (terrain[i]) {

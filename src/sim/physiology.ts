@@ -16,11 +16,6 @@ const CARNIVORE_INTAKE_COEF = 230;
  * （小型涉禽每天吃掉体重一半左右的无脊椎动物，鸟的代谢比同体重的哺乳动物高）。
  */
 const INVERTEBRATE_INTAKE_COEF = 300;
-/**
- * 一格每天能找到的无脊椎动物（克鲜重）≈ 系数 × 植被生物量（g/m²）× 面积（m²）。
- * 昆虫等多少跟着植被走：植被被啃光，吃虫的也跟着挨饿。不单独模拟虫子的种群，当天吃不完的不留到明天。
- */
-export const INVERTEBRATE_YIELD = 0.001;
 /** 脊椎动物在食谱里占到这个比例以上，才算会追捕会跑的猎物的"捕食者"；以下的（例如鼠）只吃跑不掉的：蛋、雏鸟、窝里的幼崽。 */
 export const PURSUIT_DIET_SHARE = 0.5;
 /** 会飞的猎物（成体、出了窝的幼体）被捕食者碰上时，只有这个比例来不及飞走。 */
@@ -34,13 +29,9 @@ export const NEST_DISCOVERY = 0.055;
 export const BURROW_EXPOSURE = 0.3;
 /** 地面浅窝：掩护（0–1）最好时，被发现的概率降低这么多。 */
 export const COVER_PROTECTION = 0.6;
-/** 草地的掩护：草长到上限时算多少（灌丛长满算 1，海岸没有掩护）。 */
-export const GRASS_COVER = 0.5;
-/** 一天里一格灌丛最多被啃掉的比例。 */
-export const MAX_BROWSE_FRACTION = 0.01;
 /**
- * 有灌丛的格子里，吃植物的动物有这么多的植物食量来自灌丛（嫩枝、幼苗、草丛底部），其余吃草；
- * 草不够时也拿灌丛补。灌丛长得慢，兔子多了掩护就慢慢被啃薄（见 docs/MODEL.md）。
+ * 有木本的格子里，吃植物的动物有这么多的植物食量来自木本（嫩枝、幼苗、草丛底部），其余吃草本；
+ * 草本不够时也拿木本补。这是引擎规则；各种植物每天最多被吃掉多少写在植物类型的数据里（src/data/plants）。灌丛长得慢，兔子多了掩护就慢慢被啃薄（见 docs/MODEL.md）。
  */
 export const BROWSE_SHARE = 0.25;
 /** 完全吃不到东西时每天的饿死概率 ≈ 0.12 · M^−0.25：越小的动物撑得越短。 */
@@ -86,8 +77,6 @@ const MAX_STAGES = 8;
 export const JUVENILE_SIZE_FACTOR = 0.5;
 /** 幼体的基础日死亡率是成体的几倍。 */
 const JUVENILE_MORTALITY_FACTOR = 2.5;
-/** 一天里一格植被最多被啃掉的比例（剩下的够不着或不爱吃）。 */
-export const MAX_GRAZE_FRACTION = 0.05;
 /** 食肉动物的半饱和系数（天）：格子里的可捕猎物够它们吃这么多天时，捕获率达到一半。 */
 export const PREDATION_HALF_SATURATION_DAYS = 0.5;
 /** 扩散一跳的最大格数，限制计算量。 */
@@ -390,8 +379,7 @@ export function preyMatrix(species: readonly DerivedSpecies[]): PreyWeights {
 }
 
 /**
- * 一格的掩护（0–1）：灌丛按灌丛生物量占上限的比例，草地按植被占上限的比例 × GRASS_COVER，海岸和水没有掩护。
- * 每天植被更新后算一次，存在格子里（见 grid.cover）。
+ * 窝的暴露程度：掩护（0–1，见 grid.updateCover，按植物类型的 cover 数据算）越好越难被发现。
  */
 export function nestExposure(cover: number): number {
   return 1 - COVER_PROTECTION * cover;

@@ -79,7 +79,8 @@ export function decodeData<T>(value: unknown): T {
 
 /**
  * 两份纯数据的"形状"是否一致：对象的键相同；类型化数组种类相同，参照方是按格子的数组（长度 = cells）时长度也要相同；
- * 数组只比是不是数组（长度随局面变）；null 和任何值都算相容（例如没有关注区时 focus 为 null）。
+ * 数组只比是不是数组（长度随局面变）；但参照方是一组类型化数组时（如 grid.plants、各物种一张的表），
+ * 张数也要相同、逐张比。null 和任何值都算相容（例如没有关注区时 focus 为 null）。
  * 用来拒绝旧版本或改坏了的存档快照：返回第一处不一致的路径，一致返回 null。
  */
 export function shapeMismatch(value: unknown, reference: unknown, cells: number, path = 'state'): string | null {
@@ -91,7 +92,16 @@ export function shapeMismatch(value: unknown, reference: unknown, cells: number,
     const rl = (reference as TypedArray).length;
     return rl === cells && (value as TypedArray).length !== cells ? path : null;
   }
-  if (Array.isArray(reference)) return Array.isArray(value) ? null : path;
+  if (Array.isArray(reference)) {
+    if (!Array.isArray(value)) return path;
+    if (reference.length === 0 || !typedTag(reference[0])) return null;
+    if (value.length !== reference.length) return `${path}（张数）`;
+    for (let i = 0; i < reference.length; i++) {
+      const m = shapeMismatch(value[i], reference[i], cells, `${path}[${i}]`);
+      if (m) return m;
+    }
+    return null;
+  }
   if (typeof reference !== 'object') return typeof value === typeof reference ? null : path;
   if (typeof value !== 'object' || Array.isArray(value)) return path;
   const vk = Object.keys(value).sort();

@@ -60,8 +60,11 @@ describe('存档与读档', () => {
     const { fences: _, ...stale } = save.state;
     expect(() => Session.restore({ ...save, state: stale })).toThrow('fences');
     const grid = save.state.grid as Record<string, unknown>;
-    const short = { ...save.state, grid: { ...grid, vegetation: new Float64Array(10) } };
-    expect(() => Session.restore({ ...save, state: short })).toThrow('vegetation');
+    const plants = grid.plants as Float64Array[];
+    const short = { ...save.state, grid: { ...grid, plants: [new Float64Array(10), ...plants.slice(1)] } };
+    expect(() => Session.restore({ ...save, state: short })).toThrow('plants[0]');
+    const missing = { ...save.state, grid: { ...grid, plants: plants.slice(1) } };
+    expect(() => Session.restore({ ...save, state: missing })).toThrow('plants');
   }, 60_000);
 
   it('文件里的 __proto__ 键被拒绝', () => {

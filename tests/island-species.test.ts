@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SpeciesSchema, WorldParamsSchema, scenarioLibrary, speciesFor, speciesLibrary, worldFor, type WorldParams } from '../src/data';
 import { Sim, TICKS_PER_DAY, countAt } from '../src/sim';
-import { createGrid } from '../src/sim/grid';
+import { createGrid, plantFood } from '../src/sim/grid';
 import {
   BROWSE_SHARE,
   FLIGHT_ESCAPE,
@@ -92,10 +92,13 @@ describe('灌丛与掩护', () => {
   const shrubCell = grid.terrain.findIndex((t) => t === TERRAIN.shrub);
   const grassCell = grid.terrain.findIndex((t) => t === TERRAIN.grass);
   const area = cell * cell;
-  const floor = island.shrub!.maxBiomass * island.shrub!.floorFraction;
+  const food = plantFood(island);
+  const floor = food.woodyFloor;
+  const herbFloor = food.herbFloor;
+  const shrubP = island.plants[food.woody]!;
 
   it('灌丛格的掩护按灌丛算，草地按草算，海岸没有掩护', () => {
-    expect(grid.cover[shrubCell]!).toBeCloseTo(island.shrub!.initialFraction);
+    expect(grid.cover[shrubCell]!).toBeCloseTo(shrubP.initialFraction);
     expect(grid.cover[grassCell]!).toBeGreaterThan(0);
     expect(grid.cover[grassCell]!).toBeLessThan(grid.cover[shrubCell]!);
     const coast = grid.terrain.findIndex((t) => t === TERRAIN.coast);
@@ -104,23 +107,24 @@ describe('灌丛与掩护', () => {
 
   it('有灌丛的格子里，吃植物的有一部分来自灌丛；草地格不啃灌丛', () => {
     const g = createGrid(island, Rng.fromSeed(1));
-    const before = g.shrub[shrubCell]!;
+    const shrub = g.plants[food.woody]!;
+    const before = shrub[shrubCell]!;
     const demand = 500;
-    const eaten = eatPlants(g, shrubCell, demand, area, island.vegetation.floorBiomass, floor);
+    const eaten = eatPlants(g, shrubCell, demand, area, food);
     expect(eaten).toBeCloseTo(demand);
-    expect((before - g.shrub[shrubCell]!) * area).toBeCloseTo(demand * BROWSE_SHARE);
-    const grassBefore = g.shrub[grassCell]!;
-    eatPlants(g, grassCell, demand, area, island.vegetation.floorBiomass, floor);
-    expect(g.shrub[grassCell]).toBe(grassBefore);
+    expect((before - shrub[shrubCell]!) * area).toBeCloseTo(demand * BROWSE_SHARE);
+    const grassBefore = shrub[grassCell]!;
+    eatPlants(g, grassCell, demand, area, food);
+    expect(shrub[grassCell]).toBe(grassBefore);
   });
 
   it('草被啃光时拿灌丛补；灌丛也啃不动了就吃不饱', () => {
     const g = createGrid(island, Rng.fromSeed(1));
-    g.vegetation[shrubCell] = island.vegetation.floorBiomass;
-    const eaten = eatPlants(g, shrubCell, 500, area, island.vegetation.floorBiomass, floor);
+    g.plants[food.herb]![shrubCell] = herbFloor;
+    const eaten = eatPlants(g, shrubCell, 500, area, food);
     expect(eaten).toBeCloseTo(500);
-    g.shrub[shrubCell] = floor;
-    expect(eatPlants(g, shrubCell, 500, area, island.vegetation.floorBiomass, floor)).toBe(0);
+    g.plants[food.woody]![shrubCell] = floor;
+    expect(eatPlants(g, shrubCell, 500, area, food)).toBe(0);
   });
 
   it('兔子多的地方，几年下来灌丛（掩护）明显变薄', () => {
@@ -128,14 +132,14 @@ describe('灌丛与掩护', () => {
     const sim = Sim.create({ seed: 2, world: small, species: speciesFor(small) });
     const shrubSum = (): number => {
       let s = 0;
-      sim.state.grid.terrain.forEach((t, i) => (s += t === TERRAIN.shrub ? sim.state.grid.shrub[i]! : 0));
+      sim.state.grid.terrain.forEach((t, i) => (s += t === TERRAIN.shrub ? sim.state.grid.plants[food.woody]![i]! : 0));
       return s;
     };
     const none = Sim.create({ seed: 2, world: { ...small }, species: speciesFor(small).map((s) => ({ ...s, initialDensityPerHa: 0 })) });
     sim.stepN(TICKS_PER_DAY * 360 * 3);
     none.stepN(TICKS_PER_DAY * 360 * 3);
     let noneSum = 0;
-    none.state.grid.terrain.forEach((t, i) => (noneSum += t === TERRAIN.shrub ? none.state.grid.shrub[i]! : 0));
+    none.state.grid.terrain.forEach((t, i) => (noneSum += t === TERRAIN.shrub ? none.state.grid.plants[food.woody]![i]! : 0));
     expect(shrubSum()).toBeLessThan(noneSum * 0.95);
   });
 });
