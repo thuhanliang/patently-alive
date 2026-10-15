@@ -1,0 +1,58 @@
+{
+  "body": {
+    "mammal": {
+      "skeleton": {
+        "coef": { "value": 0.061, "basis": "law", "confidence": "2+", "source": "Prange, Anderson & Rahn 1979 Am. Nat. 113:103：哺乳类骨骼质量 = 0.061·M^1.09（千克），份额 = 0.061·M^0.09" },
+        "exp": { "value": 0.09, "basis": "law", "confidence": "2+", "source": "同上" }
+      },
+      "muscle": {
+        "coef": { "value": 0.45, "basis": "law", "confidence": "1", "source": "Calder 1984《Size, Function and Life History》：骨骼肌约占体重 45%，近似与体重成正比" },
+        "exp": { "value": 0, "basis": "law", "confidence": "1", "source": "同上" }
+      },
+      "gut": {
+        "coef": { "value": 0.08, "basis": "assumption", "confidence": "unverified", "source": "消化道（不含内容物）约占体重 5–10%，取中间；按消化部件调整留到消化检查（第 6 步）" },
+        "exp": { "value": 0, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+      },
+      "heart": {
+        "coef": { "value": 0.0058, "basis": "law", "confidence": "2+", "source": "Prange, Anderson & Rahn 1979：哺乳类心脏质量 = 0.0058·M^0.98" },
+        "exp": { "value": -0.02, "basis": "law", "confidence": "2+", "source": "同上" }
+      },
+      "fat": {
+        "coef": { "value": 0.07, "basis": "assumption", "confidence": "unverified", "source": "野生小中型哺乳类体脂常见 5–10%，季节波动大；取中间" },
+        "exp": { "value": 0, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+      }
+    },
+    "bird": {
+      "skeleton": {
+        "coef": { "value": 0.065, "basis": "law", "confidence": "1", "source": "Prange, Anderson & Rahn 1979：鸟类骨骼质量 = 0.065·M^1.071（鸟的骨骼并不比兽轻，只是更薄更空）" },
+        "exp": { "value": 0.071, "basis": "law", "confidence": "1", "source": "同上" }
+      },
+      "muscle": {
+        "coef": { "value": 0.45, "basis": "assumption", "confidence": "unverified", "source": "沿用兽的数；会飞的鸟胸肌约占 15–25%，翅膀部件以后再调" },
+        "exp": { "value": 0, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+      },
+      "gut": {
+        "coef": { "value": 0.08, "basis": "assumption", "confidence": "unverified", "source": "同兽" },
+        "exp": { "value": 0, "basis": "assumption", "confidence": "unverified", "source": "同兽" }
+      },
+      "heart": {
+        "coef": { "value": 0.0082, "basis": "law", "confidence": "1", "source": "鸟的心脏相对比兽大（约 0.8% 体重，Lasiewski & Calder 1971 一类）" },
+        "exp": { "value": -0.09, "basis": "law", "confidence": "unverified", "source": "指数未核对" }
+      },
+      "fat": {
+        "coef": { "value": 0.07, "basis": "assumption", "confidence": "unverified", "source": "同兽" },
+        "exp": { "value": 0, "basis": "assumption", "confidence": "unverified", "source": "同兽" }
+      }
+    },
+    "minRelative": { "value": 0.5, "basis": "assumption", "confidence": "unverified", "source": "玩家可调范围：默认份额的一半" },
+    "maxRelative": { "value": 2, "basis": "assumption", "confidence": "unverified", "source": "玩家可调范围：默认份额的两倍" }
+  },
+  "skeleton": {
+    "safetyAtRef": { "value": 3, "basis": "law", "confidence": "2+", "source": "Biewener 1989/1990：0.1–300 千克的哺乳类奔跑时骨安全系数约 2–4，取中间" },
+    "postureLimitKg": { "value": 300, "basis": "law", "confidence": "1", "source": "Biewener 1989：站姿变直抵消应力上升只到约 300 千克，更重的（大象）不能腾空奔跑" },
+    "stressExp": { "value": 0.333, "basis": "law", "confidence": "2+", "source": "平方–立方定律：形状不变时骨应力 ∝ M^(1/3)" },
+    "cannotRun": { "value": 1.5, "basis": "assumption", "confidence": "unverified", "source": "安全系数低于 1.5：走路的负荷（约为奔跑的一半）还撑得住，奔跑撑不住" },
+    "cannotWalk": { "value": 1, "basis": "assumption", "confidence": "unverified", "source": "低于 1：奔跑的峰值应力已超过断裂应力，走路也吃力，日常活动容易骨折" },
+    "cannotStand": { "value": 0.7, "basis": "assumption", "confidence": "unverified", "source": "低于 0.7：连静止承重都接近极限" }
+  }
+}

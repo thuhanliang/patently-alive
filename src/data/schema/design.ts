@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BODY_SYSTEMS, type BodySystem } from './viability';
 
 /**
  * 设计台的部件与性状（阶段 3）。设计只写"原因"，效果全由设计编译器（src/sim/design.ts）推导（铁律 5）。
@@ -44,6 +45,11 @@ export const PartSchema = z
     /** 腿、爪、翼：会不会飞、会不会爬（飞不飞得起来还要看体重）。 */
     flies: z.boolean().optional(),
     climbs: z.boolean().optional(),
+    /**
+     * 腿型的站姿（阶段 3.5，骨骼检查）：越接近柱子、越粗壮，同样的骨头撑得越多（1 为普通的腿）。
+     * 只有 limbs 槽的部件写；数是假设，见 viability.json 的骨骼一节。
+     */
+    posture: z.number().min(0.5).max(2).optional(),
   })
   .superRefine((p, ctx) => {
     const need: Partial<Record<Slot, keyof typeof p>> = { coat: 'bodyPlan', mouth: 'diet', digestion: 'digest' };
@@ -90,6 +96,11 @@ export const DesignSchema = z.object({
   color: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
   /** 每个槽位选一个部件（部件 id）。 */
   parts: z.object(Object.fromEntries(SLOTS.map((s) => [s, z.string()])) as Record<Slot, z.ZodString>),
+  /**
+   * 体重分配（阶段 3.5）：每个体内系统相对默认份额的倍数（范围见 viability.json），此消彼长。
+   * 不写或不写某个系统就是 1：老设计不受影响，id 也不变。
+   */
+  allocation: z.strictObject(Object.fromEntries(BODY_SYSTEMS.map((s) => [s, z.number().positive()])) as Record<BodySystem, z.ZodNumber>).partial().optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;
@@ -108,6 +119,9 @@ export const HINT_IDS = [
   'bigLitterShortLife',
   'carnivoreHomeRange',
   'borrowedLaw',
+  'boneCannotRun',
+  'boneCannotWalk',
+  'boneCannotStand',
 ] as const;
 
 /** 设计台提醒的模板：{占位符} 由编译器填。每个提醒都必须有，不能多。 */

@@ -10,5 +10,8 @@
   "groundNestLong": "窝在地上一放就是 {days} 天。鼠和猫都会去翻。",
   "bigLitterShortLife": "一窝 {litter} 个，代价是平均活不长：成体一年只有 {survival} 能活到下一年。",
   "carnivoreHomeRange": "吃肉的要一大片地方：一只的家域约 {area} 平方公里。",
-  "borrowedLaw": "鸟的家域和活动范围我们只有兽的公式可借，这几个数别太当真。"
+  "borrowedLaw": "鸟的家域和活动范围我们只有兽的公式可借，这几个数别太当真。",
+  "boneCannotRun": "{mass} 千克配这副骨头，骨的安全系数只剩 {safety}（一般动物是 2 到 4）。走路没问题，跑起来骨头吃不消：追不上，也逃不掉。",
+  "boneCannotWalk": "安全系数 {safety}。这身骨头连日常走动都勉强，迟早会出现应力骨折。要么加骨头，要么减体重。",
+  "boneCannotStand": "安全系数 {safety}。说实话，它站起来的那一刻骨头就可能断。这样的动物生下来也活不长。"
 }

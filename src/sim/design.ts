@@ -1,9 +1,12 @@
 import { SLOTS, type Design, type EffectTarget, type HintId, type HintTemplates, type Part, type Slot } from '../data/schema/design';
 import type { ScalingLaws } from '../data/schema/scaling';
 import type { SpeciesParams } from '../data/schema/species';
+import type { ViabilityRules } from '../data/schema/viability';
+import { allocateBody, type BodyAllocation } from './body';
 import { detExp, detLog } from './detmath';
 import { scaleTraits, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
+import { runChecks, type CheckResult, type EnvironmentProfile } from './viability';
 
 /**
  * 设计编译器（阶段 3）：一份设计 → 物种参数、推导属性、能量收支、提醒。确定、纯函数。
@@ -17,6 +20,8 @@ export interface DesignKit {
   parts: ReadonlyMap<string, Part>;
   laws: ScalingLaws;
   hints: HintTemplates;
+  /** 身体可行性检查的阈值（阶段 3.5，viability.json）。 */
+  viability: ViabilityRules;
   /** 现有技术写成设计后"能量需求 ÷ 消化率 ÷ 基础开销"的几何平均：这个值算胃口 1 倍。 */
   appetiteBaseline: number;
 }
@@ -49,6 +54,10 @@ export interface CompiledDesign {
   bird: boolean;
   /** 一年几窝（和引擎的 litterRate 一致）。 */
   littersPerYear: number;
+  /** 体重分配（阶段 3.5）。 */
+  body: BodyAllocation;
+  /** 身体可行性检查的结果（阶段 3.5），按 CHECKS 的顺序。 */
+  viability: CheckResult[];
 }
 
 /** 生产 1 克断奶（出飞）的后代要多少千焦：组织本身约 7 千焦/克，加上怀孕、泌乳（喂雏）的损耗。建模假设，见 MODEL.md。 */
@@ -98,7 +107,10 @@ function fill(template: string, vars: Readonly<Record<string, string | number>>)
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
 }
 
-export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
+/**
+ * env 只给设计台预览用（这片地的食物、以后的气候）：只影响可行性检查的结果和提醒，从不影响物种参数。
+ */
+export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentProfile): CompiledDesign {
   const parts = partsOf(design, kit);
   const all = SLOTS.map((s) => parts[s]);
   const bird = parts.coat.bodyPlan === 'bird';
@@ -194,7 +206,12 @@ export function compileDesign(design: Design, kit: DesignKit): CompiledDesign {
   if (diet.vertebrate >= 0.5 && scaled.homeRangeKm2 > 1) hint('carnivoreHomeRange', { area: round1(scaled.homeRangeKm2) });
   if (bird) hint('borrowedLaw');
 
-  return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear };
+  // 身体可行性（阶段 3.5）：只出等级和提醒，推演里的后果从第 3 步起接入。
+  const body = allocateBody(design, bird, kit.viability);
+  const viability = runChecks({ design, parts, bird, body, rules: kit.viability, ...(env ? { env } : {}) });
+  for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
+
+  return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear, body, viability };
 }
 
 /**
@@ -209,16 +226,24 @@ export function calibrate(templates: readonly Design[], kit: Omit<DesignKit, 'ap
 }
 
 /** 组装编译要用的数据，并按现有技术校准胃口基准。 */
-export function makeDesignKit(parts: ReadonlyMap<string, Part>, laws: ScalingLaws, hints: HintTemplates, templates: readonly Design[]): DesignKit {
-  const kit = { parts, laws, hints };
+export function makeDesignKit(
+  parts: ReadonlyMap<string, Part>,
+  laws: ScalingLaws,
+  hints: HintTemplates,
+  viability: ViabilityRules,
+  templates: readonly Design[],
+): DesignKit {
+  const kit = { parts, laws, hints, viability };
   return { ...kit, appetiteBaseline: calibrate(templates, kit) };
 }
 
 /** 配置里的设计数据（DesignData，见 config.ts）和设计台用的 DesignKit 互相转换：两边编译的结果必须一样。 */
-export function designKitFromData(data: { parts: readonly Part[]; laws: ScalingLaws; hints: HintTemplates; appetiteBaseline: number }): DesignKit {
-  return { parts: new Map(data.parts.map((p) => [p.id, p] as const)), laws: data.laws, hints: data.hints, appetiteBaseline: data.appetiteBaseline };
+type DesignData = { parts: readonly Part[]; laws: ScalingLaws; hints: HintTemplates; viability: ViabilityRules; appetiteBaseline: number };
+
+export function designKitFromData(data: DesignData): DesignKit {
+  return { parts: new Map(data.parts.map((p) => [p.id, p] as const)), laws: data.laws, hints: data.hints, viability: data.viability, appetiteBaseline: data.appetiteBaseline };
 }
 
-export function designDataOf(kit: DesignKit): { parts: Part[]; laws: ScalingLaws; hints: HintTemplates; appetiteBaseline: number } {
-  return { parts: [...kit.parts.values()], laws: kit.laws, hints: kit.hints, appetiteBaseline: kit.appetiteBaseline };
+export function designDataOf(kit: DesignKit): DesignData & { parts: Part[] } {
+  return { parts: [...kit.parts.values()], laws: kit.laws, hints: kit.hints, viability: kit.viability, appetiteBaseline: kit.appetiteBaseline };
 }

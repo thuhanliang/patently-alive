@@ -6,6 +6,7 @@ import {
   partLibrary,
   scalingLaws,
   scenarioLibrary,
+  viabilityRules,
   speciesFor,
   speciesLibrary,
   SpeciesSchema,
@@ -21,6 +22,7 @@ const kit = makeDesignKit(
   partLibrary,
   scalingLaws,
   hintTemplates,
+  viabilityRules,
   designTemplates.map((t) => t.design),
 );
 const template = (species: string): Design => designTemplates.find((t) => t.species === species)!.design;

@@ -99,6 +99,7 @@
       "slot": "limbs",
       "name": "奔跑长腿",
       "blurb": "细长的腿，一天能走很远。",
+      "posture": 0.85,
       "effects": [
         { "target": "dailyRange", "factor": 1.4, "why": "腿长，一天走得远" },
         { "target": "energy", "factor": 1.1, "why": "走得远也费力" }
@@ -117,6 +118,7 @@
       "slot": "limbs",
       "name": "掘土爪",
       "blurb": "前爪宽大，能挖洞躲起来。",
+      "posture": 1.15,
       "effects": [
         { "target": "mortality", "factor": 0.85, "why": "有洞可钻，少死一些" },
         { "target": "dailyRange", "factor": 0.85, "why": "短而粗的腿走不远" }
@@ -127,6 +129,7 @@
       "slot": "limbs",
       "name": "短腿",
       "blurb": "贴地的短腿，省力但走不远。",
+      "posture": 1.1,
       "effects": [
         { "target": "dailyRange", "factor": 0.7, "why": "腿短，走不远" },
         { "target": "energy", "factor": 0.93, "why": "走得少，也省力" }
