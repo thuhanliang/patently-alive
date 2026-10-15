@@ -84,7 +84,8 @@ export const DesignSchema = z.object({
   id: z.string().regex(/^d_[a-z0-9_]+$/),
   name: z.string().min(1).max(20),
   /** 体重（千克）。 */
-  bodyMassKg: z.number().min(0.005).max(100),
+  /** 5 克到 100 吨（2026-10-15 从 100 千克放开）。超过数据里最重的物种时公式是外推，设计台会提醒。 */
+  bodyMassKg: z.number().min(0.005).max(100_000),
   /** 每窝仔数（鸟是每窝蛋数）。 */
   litterSize: z.number().int().min(1).max(16),
   activity: z.enum(['diurnal', 'nocturnal', 'crepuscular', 'cathemeral']),
@@ -111,6 +112,7 @@ export const HINT_IDS = [
   'energyLow',
   'dietMismatch',
   'tooHeavyToFly',
+  'beyondData',
   'beakOnMammal',
   'teethOnBird',
   'wingsOnMammal',

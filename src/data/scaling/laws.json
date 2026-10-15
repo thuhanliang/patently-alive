@@ -192,6 +192,16 @@
     "source": "现有技术条目（src/data/species，各条出处见 docs/DATA_CHECK.md）",
     "note": "数据库没有每天的活动距离，按现有技术条目校准；c 取几何平均"
   },
+  "dataRange": {
+    "mammal": {
+      "maxMassKg": 4750,
+      "species": "Loxodonta cyclotis"
+    },
+    "bird": {
+      "maxMassKg": 111,
+      "species": "Struthio camelus"
+    }
+  },
   "flight": {
     "maxMassKg": 13,
     "heaviestFlyer": "Cygnus buccinator",

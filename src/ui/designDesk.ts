@@ -13,7 +13,7 @@ const ACTIVITY: Array<[Design['activity'], string]> = [
 
 /** 体重滑杆的范围（千克，按对数）。 */
 const MASS_MIN = 0.005;
-const MASS_MAX = 100;
+const MASS_MAX = 100_000;
 /** 浏览器里的草稿（只是方便，读不到也照常工作）。 */
 const DRAFT_KEY = 'patently-alive-design-draft';
 
