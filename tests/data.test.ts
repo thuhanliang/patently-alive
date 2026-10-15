@@ -38,6 +38,11 @@ describe('世界 schema 的取值约束', () => {
     expect(WorldParamsSchema.safeParse({ ...island, plants: [herb, herb, woody] }).success).toBe(false);
     expect(WorldParamsSchema.safeParse({ ...island, plants: [herb] }).success).toBe(false);
     expect(WorldParamsSchema.safeParse({ ...island, plants: [{ ...herb, floorBiomass: undefined }, woody] }).success).toBe(false);
+    // 木本只能长在灌丛上；同一种地形的掩护不能来自两种植物。
+    const onGrass = { ...woody, type: { ...woody.type, cover: { terrain: 'grass', atFull: 1 } } };
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [herb, onGrass] }).success).toBe(false);
+    const herbOnShrub = { ...herb, type: { ...herb.type, cover: { terrain: 'shrub', atFull: 0.5 } } };
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [herbOnShrub, woody] }).success).toBe(false);
   });
 });
 
@@ -50,6 +55,9 @@ describe('植物类型数据', () => {
 
   it('世界引用不存在的植物类型时报错', () => {
     expect(() => resolvePlants({ plants: [{ type: 'no-such-plant' }] }, 'x')).toThrow(/no-such-plant/);
+    // 不能在世界数据里另写一份植物类型。
+    expect(() => resolvePlants({ plants: [{ type: { id: 'herb' } }] }, 'x')).toThrow(/植物类型 id/);
+    expect(() => resolvePlants({ plants: [null] }, 'x')).toThrow(/植物类型 id/);
   });
 });
 

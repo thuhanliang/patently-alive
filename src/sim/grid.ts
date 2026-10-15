@@ -2,7 +2,6 @@ import type { WorldParams } from '../data/schema/world';
 import type { Rng } from './rng';
 import { valueNoise } from './noise';
 import { generateTerrain, TERRAIN } from './terrain';
-import type { PlantType } from '../data/schema/plant';
 import { monthlyCurve } from './time';
 
 /** 世界里的一种植物（类型 + 在这片世界里的生长参数）。 */
@@ -37,8 +36,6 @@ export function cellIndex(grid: Pick<Grid, 'width'>, x: number, y: number): numb
   return y * grid.width + x;
 }
 
-/** 植物类型的地形名 → TERRAIN 编号。 */
-const TERRAIN_OF: Record<PlantType['cover']['terrain'], number> = { coast: TERRAIN.coast, grass: TERRAIN.grass, shrub: TERRAIN.shrub };
 
 /** 一种植物在这片世界里啃不到的下限（g/m²）：草本是绝对量，木本是上限的比例。 */
 export function plantFloor(p: WorldPlant): number {
@@ -48,6 +45,11 @@ export function plantFloor(p: WorldPlant): number {
 /** 草本在 world.plants 里的下标（schema 保证正好一种）。 */
 export function herbIndex(world: Pick<WorldParams, 'plants'>): number {
   return world.plants.findIndex((p) => p.type.form === 'herb');
+}
+
+/** 木本（长在灌丛上）在 world.plants 里的下标；没有木本时为 -1（schema 保证最多一种）。 */
+export function woodyIndex(world: Pick<WorldParams, 'plants'>): number {
+  return world.plants.findIndex((p) => p.type.form === 'woody');
 }
 
 export function createGrid(world: WorldParams, rng: Rng): Grid {
@@ -65,7 +67,7 @@ export function createGrid(world: WorldParams, rng: Rng): Grid {
       const floor = p.floorBiomass!;
       for (let i = 0; i < b.length; i++) b[i] = terrain[i] === TERRAIN.water ? 0 : Math.max(floor, p.maxBiomass * fertility[i]! * p.initialFraction);
     } else {
-      const on = TERRAIN_OF[p.type.cover.terrain];
+      const on = TERRAIN[p.type.cover.terrain];
       for (let i = 0; i < b.length; i++) if (terrain[i] === on) b[i] = p.maxBiomass * p.initialFraction;
     }
     return b;
@@ -82,9 +84,9 @@ export function createGrid(world: WorldParams, rng: Rng): Grid {
 export function updateCover(grid: Grid, world: WorldParams): void {
   const { terrain, plants, cover } = grid;
   // 每种地形由哪种植物给掩护（-1：没有）。
-  const by = new Int8Array(4).fill(-1);
+  const by = new Int8Array(Object.keys(TERRAIN).length).fill(-1);
   world.plants.forEach((p, k) => {
-    by[TERRAIN_OF[p.type.cover.terrain]] = k;
+    by[TERRAIN[p.type.cover.terrain]] = k;
   });
   for (let i = 0; i < cover.length; i++) {
     const k = by[terrain[i]!]!;
@@ -133,7 +135,7 @@ export function growPlants(grid: Grid, world: WorldParams, growth: number, decay
         b[i] = next;
       }
     } else {
-      const on = TERRAIN_OF[p.type.cover.terrain];
+      const on = TERRAIN[p.type.cover.terrain];
       const floor = p.maxBiomass * p.floorFraction!;
       for (let i = 0; i < b.length; i++) {
         if (terrain[i] !== on) continue;
@@ -179,7 +181,7 @@ export interface PlantFood {
 
 export function plantFood(world: Pick<WorldParams, 'plants'>): PlantFood {
   const herb = herbIndex(world);
-  const woody = world.plants.findIndex((p) => p.type.form === 'woody');
+  const woody = woodyIndex(world);
   const h = world.plants[herb]!;
   const w = woody >= 0 ? world.plants[woody]! : undefined;
   return {
@@ -196,6 +198,9 @@ export function plantFood(world: Pick<WorldParams, 'plants'>): PlantFood {
 /** 一格每平方米每天能找到的无脊椎动物（克鲜重）：各种植物的生物量 × 各自的虫子产量。 */
 export function invertebratesPerM2(grid: Readonly<Grid>, food: PlantFood, c: number): number {
   let total = 0;
-  for (let k = 0; k < grid.plants.length; k++) total += food.invertebrateYield[k]! * grid.plants[k]![c]!;
+  for (let k = 0; k < grid.plants.length; k++) {
+    const y = food.invertebrateYield[k]!;
+    if (y > 0) total += y * grid.plants[k]![c]!;
+  }
   return total;
 }

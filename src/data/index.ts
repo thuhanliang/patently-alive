@@ -68,7 +68,6 @@ for (const id of speciesLibrary.keys()) {
   if (!archiveLibrary.has(id)) throw new Error(`物种 ${id} 没有档案馆条目（src/data/archive/${id}.json）`);
 }
 
-/** 所有世界数据，按文件名索引。 */
 /** 植物类型，按 id 索引。 */
 export const plantLibrary: ReadonlyMap<string, PlantType> = new Map(PlantsFileSchema.parse(plantsJson).types.map((t) => [t.id, t] as const));
 
@@ -79,7 +78,8 @@ export function resolvePlants(json: unknown, name: string): unknown {
   return {
     ...w,
     plants: w.plants.map((p) => {
-      if (typeof p.type !== 'string') return p;
+      // 植物类型只能引用植物库里的 id，不能在世界数据里另写一份。
+      if (p === null || typeof p !== 'object' || typeof p.type !== 'string') throw new Error(`世界「${name}」的植物要写成 { "type": "植物类型 id", ... }`);
       const t = plantLibrary.get(p.type);
       if (!t) throw new Error(`世界「${name}」引用了不存在的植物类型：${p.type}`);
       return { ...p, type: t };
@@ -87,6 +87,7 @@ export function resolvePlants(json: unknown, name: string): unknown {
   };
 }
 
+/** 所有世界数据，按文件名索引。 */
 export const worldLibrary: ReadonlyMap<string, WorldParams> = new Map(
   Object.entries(worldFiles).map(([path, json]) => [baseName(path), WorldParamsSchema.parse(resolvePlants(json, baseName(path)))] as const),
 );

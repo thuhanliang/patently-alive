@@ -2,6 +2,7 @@ import { detLog } from './detmath';
 import { CAUSE, recentByCause } from './ledger';
 import type { SimState } from './sim';
 import { TERRAIN } from './terrain';
+import { woodyIndex } from './grid';
 import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
 
 /**
@@ -85,7 +86,7 @@ export function recoveryPoints(ratio: number, target: number): number {
 /** 灌丛格上木本的平均生物量（g/m²）；世界里没有木本时为 0。 */
 export function meanShrub(state: Readonly<SimState>): number {
   const { terrain, plants } = state.grid;
-  const k = state.config.world.plants.findIndex((p) => p.type.form === 'woody');
+  const k = woodyIndex(state.config.world);
   if (k < 0) return 0;
   const shrub = plants[k]!;
   let sum = 0;

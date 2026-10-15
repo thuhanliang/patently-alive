@@ -6,12 +6,12 @@ import { z } from 'zod';
  *
  * 生长方式（form）由引擎定义（src/sim/grid.ts），数据只选用哪一种：
  * - herb 草本：长在所有陆地格上，上限乘肥力，有绝对的下限（根和种子库），会按季节枯落；被"啃"（graze）。
- * - woody 木本：只长在自己的地形上，上限不乘肥力，下限是上限的一个比例，不枯落；被"嚼嫩枝"（browse）。
+ * - woody 木本：只长在它给掩护的那种地形上（cover.terrain，现在只能是灌丛），上限不乘肥力，下限是上限的一个比例，不枯落；被"嚼嫩枝"（browse）。
  */
 export const PLANT_FORMS = ['herb', 'woody'] as const;
 export type PlantForm = (typeof PLANT_FORMS)[number];
 
-/** 地形名（和 TERRAIN 对应，水上不长）。 */
+/** 地形名（和 src/sim/terrain.ts 的 TERRAIN 键名一致，水上不长）。 */
 export const PLANT_TERRAINS = ['coast', 'grass', 'shrub'] as const;
 
 export const PlantTypeSchema = z.strictObject({

@@ -84,7 +84,13 @@ export const WorldParamsSchema = z.object({
       message: '草本要写 floorBiomass，木本要写 floorFraction',
     })
     .refine((ps) => ps.filter((p) => p.type.form === 'herb').length === 1, { message: '现在每片世界正好一种草本（多种草本等吃坏的规则定了再开）' })
-    .refine((ps) => ps.filter((p) => p.type.form === 'woody').length <= 1, { message: '现在每片世界最多一种木本' }),
+    .refine((ps) => ps.filter((p) => p.type.form === 'woody').length <= 1, { message: '现在每片世界最多一种木本' })
+    .refine((ps) => ps.every((p) => p.type.form !== 'woody' || p.type.cover.terrain === 'shrub'), {
+      message: '木本长在它给掩护的地形上，现在只能是灌丛',
+    })
+    .refine((ps) => new Set(ps.map((p) => p.type.cover.terrain)).size === ps.length, {
+      message: '每种地形的掩护只能来自一种植物',
+    }),
   weather: z.object({
     /** 天气系数逐日变化的惯性（0–1），越大越"连阴天"。 */
     persistence: z.number().min(0).max(1),
