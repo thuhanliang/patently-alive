@@ -125,7 +125,7 @@ const pow10 = (y: number): number => detExp(y * LN10);
 
 /**
  * 繁殖的取舍（Smith & Fretwell 1974）：母亲每窝能投入的总重由她的体重定，玩家只选"生几个"和早成 / 晚成。
- * - 兽：一窝总重按体重（早成的重一些）拟合，新生体重 = 一窝总重 ÷ 每窝仔数，再和同体重真实新生儿的范围比。
+ * - 兽：一窝总重按体重（早成的重一些）拟合，新生体重 = 一窝总重 ÷ 每窝仔数，再和同体重、同育幼方式的真实新生儿的范围比。
  *   比最小的还小：幼崽保不住；比最大的还大：难产。
  * - 鸟：蛋重只随体重（Rahn），每窝蛋数和同体重真实鸟的上限比，多出来的孵不过来、喂不过来。
  * 返回比值：neonateRatio = 新生体重 ÷ 真实范围的下限（兽）；oversize = 新生体重 ÷ 上限（兽）；clutchRatio = 蛋数 ÷ 上限（鸟）。
@@ -142,7 +142,7 @@ export function reproductionFit(ctx: Pick<ViabilityContext, 'design' | 'parts' |
   const precocial = ctx.parts.rearing.id === 'precocial' ? 1 : 0;
   const litterLg = r.litterMassG.intercept + r.litterMassG.terms.log10MassG! * lgM + r.litterMassG.terms.precocial! * precocial;
   const neonateLg = litterLg - lgL;
-  const typicalLg = r.neonateMassG.intercept + r.neonateMassG.terms.log10MassG! * lgM;
+  const typicalLg = r.neonateMassG.intercept + r.neonateMassG.terms.log10MassG! * lgM + r.neonateMassG.terms.precocial! * precocial;
   return {
     neonateG: pow10(neonateLg),
     neonateRatio: pow10(neonateLg - typicalLg - r.neonateMassG.envelope.low),
@@ -177,6 +177,12 @@ export function reproductionEffects(fit: ReturnType<typeof reproductionFit>, rul
   };
 }
 
+/** 百分比：有后果就不写成 0（不到 1% 写"不到 1"）。 */
+export function percentText(p: number): string {
+  const n = Math.round(p * 100);
+  return p > 0 && n === 0 ? '不到 1' : String(n);
+}
+
 const reproduction: ViabilityCheck = {
   id: 'reproduction',
   needs: [],
@@ -186,7 +192,7 @@ const reproduction: ViabilityCheck = {
     const fx = reproductionEffects(fit, ctx.rules);
     const loss = 1 - fx.neonateSurvival;
     const hints: CheckResult['hints'][number][] = [];
-    const vars = { litter: ctx.design.litterSize, neonate: round2(fit.neonateG), lost: Math.round(loss * 100), dystocia: Math.round(fx.dystociaPerLitter * 100) };
+    const vars = { litter: ctx.design.litterSize, neonate: round2(fit.neonateG), lost: percentText(loss), dystocia: percentText(fx.dystociaPerLitter) };
     if (loss > 0) hints.push({ id: ctx.bird ? 'clutchTooBig' : 'litterTooBig', vars });
     if (fx.dystociaPerLitter > 0) hints.push({ id: 'dystocia', vars });
     let grade: Grade = 'ok';

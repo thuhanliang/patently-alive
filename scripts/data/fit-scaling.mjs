@@ -147,9 +147,11 @@ export function fitLaws() {
   const isPrecocial = (r) => PRECOCIAL_ORDERS.has(r.order) || PRECOCIAL_FAMILIES.has(r.family) || (r.family === 'Leporidae' && r.genus === 'Lepus');
   const breeders = mammals.filter((r) => r.neonateG && r.litter && !MARSUPIAL_ORDERS.has(r.order));
   const litterMassFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG * r.litter) })));
-  const neonateFit = ols(breeders.map((r) => ({ x: [lg(r.massG)], y: lg(r.neonateG) })));
-  // 同体重的新生儿大小的真实范围：残差的 1% 和 99% 分位（比这还小的养不活，比这还大的生不下来）。
-  const neonateResiduals = breeders.map((r) => lg(r.neonateG) - (neonateFit.coef[0] + neonateFit.coef[1] * lg(r.massG))).sort((a, b) => a - b);
+  const neonateFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG) })));
+  // 同体重、同育幼方式的新生儿大小的真实范围：残差的 1% 和 99% 分位（比这还小的养不活，比这还大的生不下来）。
+  const neonateResiduals = breeders
+    .map((r) => lg(r.neonateG) - (neonateFit.coef[0] + neonateFit.coef[1] * lg(r.massG) + neonateFit.coef[2] * (isPrecocial(r) ? 1 : 0)))
+    .sort((a, b) => a - b);
   const quantile = (xs, q) => xs[Math.floor(q * (xs.length - 1))];
   const PAN_BREED = `${PAN}，不含有袋类和单孔类，要有新生体重和每窝仔数`;
   const reproductionMammal = {
@@ -162,7 +164,7 @@ export function fitLaws() {
       '一窝总重 = 新生体重 × 每窝仔数；precocial 是早成（1）或晚成（0），早成的按类群标（偶蹄、奇蹄、长鼻、蹄兔目，豚鼠、刺豚鼠等几科，野兔属）',
     ),
     neonateMassG: {
-      ...law('新生体重', '克', ['log10MassG'], neonateFit, PAN_BREED, '只看体重；envelope 是真实物种残差的 1% 和 99% 分位'),
+      ...law('新生体重', '克', ['log10MassG', 'precocial'], neonateFit, PAN_BREED, '早成的新生儿大一些；envelope 是真实物种残差的 1% 和 99% 分位'),
       envelope: { low: round(quantile(neonateResiduals, 0.01), 3), high: round(quantile(neonateResiduals, 0.99), 3) },
     },
   };

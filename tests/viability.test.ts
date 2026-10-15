@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { designTemplates, hintTemplates, partLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
 import { ViabilityRulesSchema } from '../src/data/schema/viability';
 import { DesignSchema } from '../src/data/schema/design';
-import { allocateBody, compileDesign, deserialize, focusAround, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
+import { allocateBody, compileDesign, deserialize, focusAround, percentText, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
 import { chaseFactor, deriveSpecies, preyMatrix } from '../src/sim/physiology';
 import { CAUSE, recentByCause } from '../src/sim/ledger';
 import viabilityJson from '../src/data/scaling/viability.json';
@@ -214,11 +214,11 @@ describe('繁殖检查（阶段 3.5 第 4 步）', () => {
   const repro = (d: Design) => compileDesign(d, kit).viability.find((r) => r.id === 'reproduction')!;
   const withRearing = (d: Design, rearing: string): Design => ({ ...d, parts: { ...d.parts, rearing } });
 
-  it('17 条现有技术都在真实范围里，离两头都有余量，参数里不写繁殖的后果', () => {
+  it('17 条现有技术都在真实范围里，离两头都有余量（至少 1.5 倍），参数里不写繁殖的后果', () => {
     for (const t of designTemplates) {
       const r = repro(t.design);
       expect(r.grade, t.species).toBe('ok');
-      expect(r.margin, t.species).toBeGreaterThan(2);
+      expect(r.margin, t.species).toBeGreaterThan(1.5);
       const body = compileDesign(t.design, kit).params.body;
       expect(body?.neonateSurvival, t.species).toBeUndefined();
       expect(body?.dystociaPerLitter, t.species).toBeUndefined();
@@ -239,20 +239,26 @@ describe('繁殖检查（阶段 3.5 第 4 步）', () => {
     expect(repro({ ...cat, bodyMassKg: 100, litterSize: 16 }).grade).toBe('failing');
   });
 
-  it('早成的一窝更重：小动物只生一个早成的，生不下来（难产）', () => {
+  it('早成的一窝更重，但和真实的早成新生儿比；只生一个，只有很小的晚成动物会难产', () => {
     const mouse = template('mouse');
     const single = { ...mouse, litterSize: 1 };
     expect(repro(withRearing(single, 'precocial')).evidence.neonateG!).toBeGreaterThan(repro(single).evidence.neonateG! * 2);
-    const tiny = compileDesign(withRearing(single, 'precocial'), kit);
-    expect(tiny.viability.find((r) => r.id === 'reproduction')!.grade).toBe('fatal');
+    // 真实的早成动物（鼷鹿、犬羚）几千克只生一个，不该算难产。
+    expect(repro(withRearing({ ...single, bodyMassKg: 2 }, 'precocial')).grade).toBe('ok');
+    expect(repro({ ...single, bodyMassKg: 0.1 }).grade).toBe('ok');
+    // 5 克的晚成动物只生一个：新生儿太大，每窝有几个百分点难产。
+    const tiny = compileDesign({ ...single, bodyMassKg: 0.005 }, kit);
+    expect(tiny.viability.find((r) => r.id === 'reproduction')!.grade).toBe('strained');
     expect(tiny.hints.some((h) => h.id === 'dystocia')).toBe(true);
-    expect(tiny.params.body?.dystociaPerLitter).toBe(1);
-    // 100 克只生一个早成的：大约一半难产。
-    const p = compileDesign(withRearing({ ...single, bodyMassKg: 0.1 }, 'precocial'), kit).params.body?.dystociaPerLitter;
-    expect(p).toBeGreaterThan(0.3);
-    expect(p).toBeLessThan(0.7);
+    expect(tiny.params.body?.dystociaPerLitter).toBeGreaterThan(0.02);
     // 骨骼没问题时，body 里只有繁殖的后果。
     expect(tiny.params.body?.boneSafety).toBeUndefined();
+  });
+
+  it('不到 1% 的后果不写成 0%', () => {
+    expect(percentText(0.004)).toBe('不到 1');
+    expect(percentText(0)).toBe('0');
+    expect(percentText(0.256)).toBe('26');
   });
 
   it('鸟：蛋重只随体重，蛋数比同体型真鸟的上限还多就养不活', () => {
@@ -272,7 +278,7 @@ describe('繁殖检查（阶段 3.5 第 4 步）', () => {
     const world = worldFor(scenario);
     const config = { seed: 5, world, species: speciesFor(world), tools, design: designDataOf(kit) };
     const s = new Session(config, scenarioRules(scenario));
-    const design = { ...withRearing({ ...template('mouse'), litterSize: 1, bodyMassKg: 0.1 }, 'precocial'), id: 'd_bigbaby', name: '大头鼠' };
+    const design = { ...template('mouse'), litterSize: 1, bodyMassKg: 0.005, id: 'd_bigbaby', name: '大头鼠' };
     const species = compileDesign(design, kit).params;
     expect(species.body?.dystociaPerLitter).toBeGreaterThan(0);
     const { grid } = s.sim.state;

@@ -1,5 +1,5 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
-import { checksum, compileDesign, partsOf, nearest, traitsOf, type CheckId, type CheckResult, type CompiledDesign, type DesignKit, type Grade } from '../sim';
+import { checksum, compileDesign, percentText, partsOf, nearest, traitsOf, type CheckId, type CheckResult, type CompiledDesign, type DesignKit, type Grade } from '../sim';
 import { BLUEPRINT, DESIGN_COLORS, cssAlpha } from '../render/palette';
 import { countPicker } from './countPicker';
 import { drawBlueprint, massText } from './blueprint';
@@ -362,8 +362,8 @@ function reproductionText(r: CheckResult): string {
   const e = r.evidence;
   const head = (e.neonateG ?? 0) > 0 ? `每个新生儿约 ${massText((e.neonateG ?? 0) / 1000)}` : '每窝蛋数';
   const issues: string[] = [];
-  if ((e.neonateSurvival ?? 1) < 1) issues.push(`约 ${Math.round((1 - e.neonateSurvival!) * 100)}% 保不住`);
-  if ((e.dystociaPerLitter ?? 0) > 0) issues.push(`难产 ${Math.round(e.dystociaPerLitter! * 100)}%/窝`);
+  if ((e.neonateSurvival ?? 1) < 1) issues.push(`约 ${percentText(1 - e.neonateSurvival!)}% 保不住`);
+  if ((e.dystociaPerLitter ?? 0) > 0) issues.push(`难产 ${percentText(e.dystociaPerLitter!)}%/窝`);
   return `${head}（${issues.length > 0 ? issues.join('，') : '在真实范围内'}）`;
 }
 

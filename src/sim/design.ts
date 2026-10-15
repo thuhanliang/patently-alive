@@ -6,7 +6,7 @@ import { allocateBody, type BodyAllocation } from './body';
 import { detExp, detLog } from './detmath';
 import { scaleTraits, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
-import { reproductionEffects, reproductionFit, runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
+import { runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
 
 /**
  * 设计编译器（阶段 3）：一份设计 → 物种参数、推导属性、能量收支、提醒。确定、纯函数。
@@ -216,9 +216,9 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
   const bone = viability.find((r) => r.id === 'skeleton');
   if (bone && bone.grade !== 'ok') params.body = skeletonEffects(bone.evidence.safety!, kit.viability);
-  const birth = reproductionEffects(reproductionFit({ design, parts, bird, laws: kit.laws }), kit.viability);
-  if (birth.neonateSurvival < 1) params.body = { ...params.body, neonateSurvival: birth.neonateSurvival };
-  if (birth.dystociaPerLitter > 0) params.body = { ...params.body, dystociaPerLitter: birth.dystociaPerLitter };
+  const birth = viability.find((r) => r.id === 'reproduction')?.evidence;
+  if (birth && birth.neonateSurvival! < 1) params.body = { ...params.body, neonateSurvival: birth.neonateSurvival! };
+  if (birth && birth.dystociaPerLitter! > 0) params.body = { ...params.body, dystociaPerLitter: birth.dystociaPerLitter! };
 
   return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear, body, viability };
 }

@@ -186,18 +186,19 @@
       "neonateMassG": {
         "name": "新生体重",
         "unit": "克",
-        "intercept": -1.058,
+        "intercept": -0.8973,
         "terms": {
-          "log10MassG": 0.9136
+          "log10MassG": 0.8256,
+          "precocial": 0.4551
         },
         "n": 775,
-        "r2": 0.938,
-        "residualSdLog10": 0.304,
+        "r2": 0.954,
+        "residualSdLog10": 0.263,
         "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类），不含有袋类和单孔类，要有新生体重和每窝仔数",
-        "note": "只看体重；envelope 是真实物种残差的 1% 和 99% 分位",
+        "note": "早成的新生儿大一些；envelope 是真实物种残差的 1% 和 99% 分位",
         "envelope": {
-          "low": -0.955,
-          "high": 0.57
+          "low": -0.777,
+          "high": 0.548
         }
       }
     },
