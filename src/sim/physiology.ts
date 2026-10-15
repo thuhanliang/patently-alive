@@ -157,6 +157,17 @@ export interface DerivedSpecies {
 }
 
 /**
+ * 繁殖期内每只雌性每天产一窝的概率：繁殖季里每隔一个间隔一窝，繁殖季比间隔还短也有一窝。
+ * 间隔超过一年（阶段 3.5 起，大型动物几年才生一窝）：一年平均 365 / 间隔 窝，摊在繁殖季里。
+ * 真实物种的间隔都不超过一年，走的是原来的式子。
+ */
+export function litterRate(intervalDays: number, breedingDays: number): number {
+  if (breedingDays <= 0) return 0;
+  if (intervalDays > DAYS_PER_YEAR) return DAYS_PER_YEAR / intervalDays / breedingDays;
+  return 1 / Math.min(intervalDays, breedingDays);
+}
+
+/**
  * 追捕会跑的猎物时，奔跑能力对捕获率的影响（阶段 3.5）：捕食者跑不动就少抓到，猎物跑不动就多被抓（被抓的概率乘 2 − 奔跑能力）。
  * 会飞的猎物靠飞逃（FLIGHT_ESCAPE），腿骨不影响它逃不逃得掉。
  * 两边都能跑时正好是 1，真实物种的结果不变。只用于会跑的猎物，窝里的不算。
@@ -205,7 +216,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     juvenileDailyMortality: Math.min(1, adultDailyMortality * JUVENILE_MORTALITY_FACTOR),
     starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
     stageDays,
-    litterRate: breedingDays > 0 ? 1 / Math.min(p.reproduction.litterIntervalDays, breedingDays) : 0,
+    litterRate: litterRate(p.reproduction.litterIntervalDays, breedingDays),
     crowdingCapacity: crowdingPerKm2(p, typicalPerKm2) * cellKm2,
     crowdingRadiusBlocks: crowdingRadius(p, cellSizeM),
     moveProb: Math.min(0.5, cellsPerDay / 2),

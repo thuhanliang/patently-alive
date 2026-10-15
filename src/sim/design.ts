@@ -4,7 +4,7 @@ import type { SpeciesParams } from '../data/schema/species';
 import type { ViabilityRules } from '../data/schema/viability';
 import { allocateBody, type BodyAllocation } from './body';
 import { detExp, detLog } from './detmath';
-import { scaleTraits, type ScaledTraits } from './scaling';
+import { applyLaw, scaleTraits, trophicLevel, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
 import { runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
 
@@ -108,6 +108,16 @@ function fill(template: string, vars: Readonly<Record<string, string | number>>)
 }
 
 /**
+ * 同体型、同食性的动物一般一窝几个（设计台的"自动"）：兽按 PanTHERIA 拟合（体重、营养级），鸟按 AnAge（体重）。
+ * 四舍五入，夹在 1–16。
+ */
+export function typicalLitterSize(laws: ScalingLaws, bodyMassKg: number, diet: SpeciesParams['diet'], bird: boolean): number {
+  const vars = { log10MassG: detLog(bodyMassKg * 1000) / detLog(10), trophicLevel: trophicLevel(diet) };
+  const n = bird ? applyLaw(laws.reproduction.bird.clutchSize, vars) : applyLaw(laws.pace.typicalLitter, vars);
+  return Math.min(16, Math.max(1, Math.round(n)));
+}
+
+/**
  * env 只给设计台预览用（这片地的食物、以后的气候）：只影响可行性检查的结果和提醒，从不影响物种参数。
  */
 export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentProfile): CompiledDesign {
@@ -115,6 +125,8 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   const all = SLOTS.map((s) => parts[s]);
   const bird = parts.coat.bodyPlan === 'bird';
   const diet = parts.mouth.diet!;
+  // "自动"仔数在最前面换成数：后面的推导、检查、提醒、相似度都只看数。
+  if (design.litterAuto) design = { ...design, litterSize: typicalLitterSize(kit.laws, design.bodyMassKg, diet, bird) };
   const hasWings = all.some((p) => p.flies === true);
   const climbs = all.some((p) => p.climbs === true);
   const scaled = scaleTraits(kit.laws, { bodyMassKg: design.bodyMassKg, litterSize: design.litterSize, diet, bird, flies: hasWings });
@@ -127,13 +139,15 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   // 繁殖季里的间隔。缩放公式里的胎间隔是全年平均（含非繁殖季），不能直接用，见 MODEL.md 五之十一。
   // 兽：哺乳期按窝里天数算（早成的离窝早，下一胎也来得早）。
   const interval = bird ? nestDays * BIRD_RENEST_FACTOR : gestationDays + LACTATION_OVERLAP * nestDays;
-  const litterIntervalDays = Math.max(gestationDays, Math.round(interval));
+  // 大型动物几年才生一窝（狮虎约两年，象四五年）：只看体重的全年胎间隔超过一年时用它（阶段 3.5）。
+  const yearly = bird ? DAYS_PER_YEAR / applyLaw(kit.laws.bird.clutchesPerYear, { log10MassG: detLog(design.bodyMassKg * 1000) / detLog(10), log10Litter: detLog(design.litterSize) / detLog(10) }) : applyLaw(kit.laws.pace.interbirthDays, { log10MassG: detLog(design.bodyMassKg * 1000) / detLog(10) });
+  const litterIntervalDays = yearly > DAYS_PER_YEAR ? Math.max(gestationDays, Math.round(yearly)) : Math.max(gestationDays, Math.round(interval));
   // 性成熟至少比出窝晚一截（幼体传送带要在窝外留几段），也不少于引擎要求的 8 天。
   const ageAtMaturityDays = Math.max(8, Math.round(nestDays * 1.5), Math.round(scaled.ageAtMaturityDays * m.maturity));
   const breedingByMonth = Array.from({ length: 12 }, (_, i) => (i < design.breedingMonths ? 1 : 0));
-  // 和引擎一致（physiology 的 litterRate）：繁殖季里每隔一个间隔一窝，繁殖季比间隔还短也有一窝。
+  // 和引擎一致（physiology 的 litterRate）：繁殖季里每隔一个间隔一窝，繁殖季比间隔还短也有一窝；间隔超过一年就几年一窝。
   const seasonDays = design.breedingMonths * DAYS_PER_MONTH;
-  const littersPerYear = Math.max(1, seasonDays / litterIntervalDays);
+  const littersPerYear = litterIntervalDays > DAYS_PER_YEAR ? DAYS_PER_YEAR / litterIntervalDays : Math.max(1, seasonDays / litterIntervalDays);
 
   // 存活：部件的钩子乘在死亡率上。
   const mortality = Math.min(0.99, Math.max(0.01, (1 - scaled.adultAnnualSurvival) * m.mortality));
@@ -204,7 +218,8 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   if (!bird && parts.mouth.beak) hint('beakOnMammal');
   if (bird && !parts.mouth.beak) hint('teethOnBird');
   if (!bird && hasWings) hint('wingsOnMammal');
-  if (design.breedingMonths < 12 && seasonDays < litterIntervalDays) hint('oneLitterSeason', { months: design.breedingMonths, interval: litterIntervalDays });
+  if (litterIntervalDays > DAYS_PER_YEAR) hint('multiYearLitter', { years: round1(litterIntervalDays / DAYS_PER_YEAR) });
+  else if (design.breedingMonths < 12 && seasonDays < litterIntervalDays) hint('oneLitterSeason', { months: design.breedingMonths, interval: litterIntervalDays });
   if (design.nest === 'ground' && nestDays > 30) hint('groundNestLong', { days: nestDays });
   if (design.litterSize >= 6 && params.survival.adultAnnual < 0.25) hint('bigLitterShortLife', { litter: design.litterSize, survival: pct(params.survival.adultAnnual) });
   if (diet.vertebrate >= 0.5 && scaled.homeRangeKm2 > 1) hint('carnivoreHomeRange', { area: round1(scaled.homeRangeKm2) });

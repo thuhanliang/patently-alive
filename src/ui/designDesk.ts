@@ -34,6 +34,8 @@ export class DesignDesk {
   private open = false;
   private design: Design;
   private compiled: CompiledDesign | null = null;
+  /** 每窝仔数的输入框："自动"时显示推出来的数（不能改）。 */
+  private litterInput: HTMLInputElement | null = null;
   private readonly canvas = document.createElement('canvas');
   private readonly energyBox = div('desk-energy');
   private readonly derivedBox = div('desk-derived');
@@ -195,7 +197,26 @@ export class DesignDesk {
     box.append(row('主色', colors));
 
     const litter = numberInput(1, 16, d.litterSize, (v) => this.set({ litterSize: v }));
-    box.append(row('每窝', litter, textEl('span', '个', 'note')));
+    this.litterInput = litter;
+    // "自动"：按同体型、同食性的典型值推（阶段 3.5）。手填的数留着，取消勾选时还原。
+    const auto = document.createElement('input');
+    auto.type = 'checkbox';
+    auto.checked = d.litterAuto === true;
+    litter.disabled = auto.checked;
+    auto.addEventListener('change', () => {
+      litter.disabled = auto.checked;
+      if (auto.checked) this.set({ litterAuto: true });
+      else {
+        const { litterAuto: _, ...rest } = this.design;
+        this.design = rest;
+        litter.value = String(rest.litterSize);
+        this.set({});
+      }
+    });
+    const autoLabel = document.createElement('label');
+    autoLabel.append(auto, ' 自动');
+    autoLabel.title = '按同体型、同食性的真实动物一般一窝几个来定';
+    box.append(row('每窝', litter, textEl('span', '个', 'note'), autoLabel));
     const months = numberInput(1, 12, d.breedingMonths, (v) => this.set({ breedingMonths: v }));
     box.append(row('繁殖季', months, textEl('span', '个月（从春天算起）', 'note')));
 
@@ -254,6 +275,7 @@ export class DesignDesk {
         if (this.open && this.compiled) drawBlueprint(this.canvas, this.withId(), this.compiled.bird);
       });
     }
+    if (this.litterInput && design.litterAuto) this.litterInput.value = String(c.params.reproduction.litterSize);
     this.renderEnergy(c);
     this.renderDerived(c);
     this.renderHints(c);

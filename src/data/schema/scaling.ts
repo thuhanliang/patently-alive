@@ -27,6 +27,8 @@ const lifeHistory = {
 export const ScalingLawsSchema = z.object({
   mammal: z.object({ ...lifeHistory, litterIntervalDays: LawSchema, weaningDays: LawSchema, weaningMassG: LawSchema, homeRangeKm2: LawSchema, basalMetabolismW: LawSchema }),
   bird: z.object({ ...lifeHistory, clutchesPerYear: LawSchema }),
+  /** 繁殖节奏（阶段 3.5）：同体型的典型仔数（设计台"自动"），只看体重的胎间隔（超过一年时几年一窝）。 */
+  pace: z.object({ typicalLitter: LawSchema, interbirthDays: LawSchema }),
   /** 繁殖检查（阶段 3.5）：一窝总重、新生体重的真实范围；鸟是每窝蛋数的真实范围。 */
   reproduction: z.object({
     mammal: z.object({ litterMassG: LawSchema, neonateMassG: EnvelopeLawSchema }),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { designTemplates, hintTemplates, partLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
 import { ViabilityRulesSchema } from '../src/data/schema/viability';
 import { DesignSchema } from '../src/data/schema/design';
-import { allocateBody, compileDesign, deserialize, focusAround, percentText, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
+import { Sim, allocateBody, compileDesign, deserialize, focusAround, percentText, typicalLitterSize, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
 import { chaseFactor, deriveSpecies, preyMatrix } from '../src/sim/physiology';
 import { CAUSE, recentByCause } from '../src/sim/ledger';
 import viabilityJson from '../src/data/scaling/viability.json';
@@ -299,4 +299,74 @@ describe('繁殖检查（阶段 3.5 第 4 步）', () => {
       expect(d.dystociaPerLitter).toBe(0);
     }
   });
+});
+
+describe('繁殖节奏：大型动物几年一窝、仔数"自动"（阶段 3.5）', () => {
+  const cat = template('cat');
+  const big = (kg: number): Design => ({ ...cat, bodyMassKg: kg });
+
+  it('现有技术的设计不受影响：都在一年以内，模板没写"自动"', () => {
+    for (const t of designTemplates) {
+      const c = compileDesign(t.design, kit);
+      expect(c.params.reproduction.litterIntervalDays, t.species).toBeLessThanOrEqual(365);
+      expect(t.design.litterAuto, t.species).toBeUndefined();
+    }
+  });
+
+  it('200 千克的食肉动物约两年一窝（狮虎 730–820 天），1–5 吨更久，并且提醒', () => {
+    const lion = compileDesign(big(200), kit);
+    expect(lion.params.reproduction.litterIntervalDays).toBeGreaterThan(500);
+    expect(lion.params.reproduction.litterIntervalDays).toBeLessThan(1000);
+    expect(lion.littersPerYear).toBeLessThan(1);
+    expect(lion.hints.some((h) => h.id === 'multiYearLitter')).toBe(true);
+    const ton = compileDesign(big(1000), kit).params.reproduction.litterIntervalDays;
+    const five = compileDesign(big(5000), kit).params.reproduction.litterIntervalDays;
+    expect(ton).toBeGreaterThan(lion.params.reproduction.litterIntervalDays);
+    expect(five).toBeGreaterThan(ton);
+  });
+
+  it('设计台算的每年窝数和引擎的繁殖率一致（间隔在一年两边都对）', () => {
+    for (const kg of [3.3, 50, 200, 2000]) {
+      const c = compileDesign(big(kg), kit);
+      const d = deriveSpecies(c.params, 50);
+      const breedingDays = c.params.reproduction.breedingByMonth.filter((b) => b > 0).length * 30;
+      expect(d.litterRate * breedingDays, `${kg} 千克`).toBeCloseTo(c.littersPerYear, 6);
+    }
+  });
+
+  it('"自动"仔数取同体型、同食性的典型值：越大越少；手填的数留着不用', () => {
+    const auto = (kg: number, d: Design = cat) => compileDesign({ ...d, bodyMassKg: kg, litterAuto: true, litterSize: 9 }, kit).params.reproduction.litterSize;
+    expect(auto(3.3)).toBe(typicalLitterSize(scalingLaws, 3.3, compileDesign(cat, kit).params.diet, false));
+    expect(auto(0.02)).toBeGreaterThan(auto(3.3));
+    expect(auto(1000)).toBe(1);
+    expect(auto(3.3)).not.toBe(9);
+    // 鸟按 AnAge：一般一窝四个左右。
+    expect(auto(0.06, template('dotterel'))).toBeGreaterThanOrEqual(3);
+    // "自动"是设计内容的一部分：和手填同一个数的设计不是同一份。
+    expect(DesignSchema.parse({ ...cat, litterAuto: true }).litterAuto).toBe(true);
+  });
+
+  it.each([
+    ['格子模型', false],
+    ['个体模型（关注区）', true],
+  ])('推演里间隔超过一年就几年一窝：同一种动物间隔从一年改成四年，出生少到约四分之一（%s）', (_, focused) => {
+    const world = { ...worldFor(scenarioLibrary.get('bird-island-small')!), species: ['rabbit'], mainIslandOnly: [] };
+    const births = (intervalDays: number): number => {
+      const rabbit = speciesLibrary.get('rabbit')!;
+      const sp = { ...rabbit, reproduction: { ...rabbit.reproduction, litterIntervalDays: intervalDays, breedingByMonth: rabbit.reproduction.breedingByMonth.map(() => 1) } };
+      const sim = Sim.create({ seed: 9, world, species: [sp] });
+      if (focused) sim.setFocus({ x0: 8, y0: 8, x1: 40, y1: 40 });
+      let n = 0;
+      for (let day = 0; day < 360; day++) {
+        sim.stepN(TICKS_PER_DAY);
+        n += sim.state.lastDay[0]!.births;
+      }
+      return n;
+    };
+    const yearly = births(365);
+    const fourYears = births(1460);
+    expect(yearly).toBeGreaterThan(100);
+    expect(fourYears / yearly).toBeGreaterThan(0.15);
+    expect(fourYears / yearly).toBeLessThan(0.4);
+  }, 180_000);
 });

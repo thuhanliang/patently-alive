@@ -88,6 +88,8 @@ export const DesignSchema = z.object({
   bodyMassKg: z.number().min(0.005).max(100_000),
   /** 每窝仔数（鸟是每窝蛋数）。 */
   litterSize: z.number().int().min(1).max(16),
+  /** 写 true：仔数不用上面那个数，按同体型、同食性的典型值推（设计台的"自动"，阶段 3.5）。 */
+  litterAuto: z.literal(true).optional(),
   activity: z.enum(['diurnal', 'nocturnal', 'crepuscular', 'cathemeral']),
   /** 繁殖季几个月，从春季第一个月算起。 */
   breedingMonths: z.number().int().min(1).max(12),
@@ -117,6 +119,7 @@ export const HINT_IDS = [
   'teethOnBird',
   'wingsOnMammal',
   'oneLitterSeason',
+  'multiYearLitter',
   'groundNestLong',
   'bigLitterShortLife',
   'carnivoreHomeRange',
