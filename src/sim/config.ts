@@ -4,14 +4,16 @@ import { WorldParamsSchema } from '../data/schema/world';
 import { ToolsSchema } from '../data/schema/tools';
 import { HintTemplatesSchema, PartSchema } from '../data/schema/design';
 import { ScalingLawsSchema } from '../data/schema/scaling';
+import { ViabilityRulesSchema } from '../data/schema/viability';
 
 /**
- * 设计编译要用的数据（部件、缩放公式、提醒模板、胃口基准）。放进配置，存档和日志自己就能重新编译、核对设计物种。
+ * 设计编译要用的数据（部件、缩放公式、提醒模板、可行性阈值、胃口基准）。放进配置，存档和日志自己就能重新编译、核对设计物种。
  */
 export const DesignDataSchema = z.object({
   parts: z.array(PartSchema),
   laws: ScalingLawsSchema,
   hints: HintTemplatesSchema,
+  viability: ViabilityRulesSchema,
   appetiteBaseline: z.number().positive(),
 });
 export type DesignData = z.infer<typeof DesignDataSchema>;

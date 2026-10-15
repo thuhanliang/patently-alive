@@ -8,6 +8,8 @@ import necropsyJson from './reports/necropsy.json';
 import { ArchiveEntrySchema, type ArchiveEntry } from './schema/archive';
 import { ScalingLawsSchema, type ScalingLaws } from './schema/scaling';
 import scalingJson from './scaling/laws.json';
+import { ViabilityRulesSchema, type ViabilityRules } from './schema/viability';
+import viabilityJson from './scaling/viability.json';
 import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema, type Design, type HintTemplates, type Part } from './schema/design';
 import partsJson from './design/parts.json';
 import hintsJson from './design/hints.json';
@@ -19,6 +21,9 @@ export { NecropsyTemplatesSchema, type NecropsyTemplates, ArchiveEntrySchema, ty
 
 /** 体重缩放公式（从 PanTHERIA、AnAge 拟合，见 scripts/data/fit-scaling.mjs）。 */
 export const scalingLaws: ScalingLaws = ScalingLawsSchema.parse(scalingJson);
+
+/** 身体可行性检查的阈值（阶段 3.5）：每个数带依据、置信度和出处。 */
+export const viabilityRules: ViabilityRules = ViabilityRulesSchema.parse(viabilityJson);
 
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);

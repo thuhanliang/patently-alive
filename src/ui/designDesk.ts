@@ -1,5 +1,5 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
-import { checksum, compileDesign, partsOf, nearest, traitsOf, type CompiledDesign, type DesignKit } from '../sim';
+import { checksum, compileDesign, partsOf, nearest, traitsOf, type CheckId, type CheckResult, type CompiledDesign, type DesignKit, type Grade } from '../sim';
 import { BLUEPRINT, DESIGN_COLORS, cssAlpha } from '../render/palette';
 import { countPicker } from './countPicker';
 import { drawBlueprint, massText } from './blueprint';
@@ -326,6 +326,7 @@ export class DesignDesk {
       ['每天活动', `${p.movement.dailyRangeM} 米`],
       ['家域', `${p.movement.homeRangeKm2} 平方公里`],
       ['移动', move || '—'],
+      ...c.viability.map((r): [string, string] => [CHECK_NAMES[r.id], viabilityText(r)]),
     ];
     for (const [k, v] of rows) dl.append(textEl('dt', k), textEl('dd', v));
     const near = nearest(traitsOf(p), this.priorArt.values(), 1)[0];
@@ -343,6 +344,16 @@ export class DesignDesk {
       ...(c.hints.length > 0 ? c.hints.map((h) => textEl('p', `· ${h.text}`, 'desk-hint')) : [textEl('p', '看着还行。投出去才知道。', 'note')]),
     );
   }
+}
+
+const CHECK_NAMES: Record<CheckId, string> = { skeleton: '骨骼', digestion: '消化', reproduction: '繁殖' };
+const SKELETON_GRADES: Record<Grade, string> = { ok: '能跑', strained: '跑不动', failing: '走不动', fatal: '站不住' };
+
+/** 推导属性里的一行：骨骼写安全系数和等级（只说情况，提醒在批注里）。 */
+function viabilityText(r: CheckResult): string {
+  if (r.skipped) return '—';
+  if (r.id === 'skeleton') return `安全系数 ${(r.evidence.safety ?? 0).toFixed(1)}（${SKELETON_GRADES[r.grade]}）`;
+  return r.grade === 'ok' ? '正常' : '有问题';
 }
 
 function partText(p: Part): string {
