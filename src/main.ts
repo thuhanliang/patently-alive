@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, viabilityRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, costOf, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -199,7 +199,7 @@ async function main(): Promise<void> {
   const chart = new PopulationChart(
     el<HTMLCanvasElement>('chart'),
     history,
-    world.vegetation.maxBiomass,
+    world.plants[herbIndex(world)]!.maxBiomass,
     session.species.map((s) => colorOf(s.params).chart),
   );
   // 点图切换纵轴：各自比例 ↔ 对数（只是看法，不进操作日志）。

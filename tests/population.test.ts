@@ -169,7 +169,7 @@ describe('按格子的种群推演', () => {
     const barren = {
       ...smallWorld,
       fertility: { ...smallWorld.fertility, min: 0, max: 0 },
-      vegetation: { ...smallWorld.vegetation, floorBiomass: 0 },
+      plants: smallWorld.plants.map((p) => ({ ...p, floorBiomass: 0 })),
     };
     const sim = makeSim(3, barren);
     sim.stepN(TICKS_PER_DAY * 120);

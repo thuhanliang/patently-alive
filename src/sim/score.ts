@@ -82,8 +82,12 @@ export function recoveryPoints(ratio: number, target: number): number {
   return target <= 1 ? 100 : pts(0.5 + ((ratio - 1) / (target - 1)) * 0.5);
 }
 
+/** 灌丛格上木本的平均生物量（g/m²）；世界里没有木本时为 0。 */
 export function meanShrub(state: Readonly<SimState>): number {
-  const { terrain, shrub } = state.grid;
+  const { terrain, plants } = state.grid;
+  const k = state.config.world.plants.findIndex((p) => p.type.form === 'woody');
+  if (k < 0) return 0;
+  const shrub = plants[k]!;
   let sum = 0;
   let n = 0;
   for (let i = 0; i < terrain.length; i++) {

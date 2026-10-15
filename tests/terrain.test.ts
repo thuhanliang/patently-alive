@@ -82,8 +82,8 @@ describe('海岛地形', () => {
   it('水里没有植被、不长植被', () => {
     const sim = Sim.create({ seed: 3, world: smallIsland, species: speciesFor(smallIsland) });
     sim.stepN(TICKS_PER_DAY * 60);
-    const { terrain, vegetation } = sim.state.grid;
-    for (let i = 0; i < terrain.length; i++) if (terrain[i] === TERRAIN.water) expect(vegetation[i]).toBe(0);
+    const { terrain, plants } = sim.state.grid;
+    for (let i = 0; i < terrain.length; i++) if (terrain[i] === TERRAIN.water) for (const b of plants) expect(b[i]).toBe(0);
   });
 
   it('动物开局只在陆地上，扩散、展开成个体之后也不进水', () => {

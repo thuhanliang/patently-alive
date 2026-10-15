@@ -3,7 +3,7 @@ export { SimConfigSchema, type SimConfig } from './config';
 export { Sim, createInitialState, speciesOf, type SimState } from './sim';
 export { FixedStepClock, type FixedStepClockOptions } from './clock';
 export { checksum, cloneData, serialize, deserialize, decodeData } from './data';
-export { cellIndex, meanLandVegetation, type Grid } from './grid';
+export { cellIndex, herbIndex, meanLandVegetation, plantFood, type Grid, type PlantFood } from './grid';
 export { countAt, populationTotal, type Population, type DayStats } from './population';
 export { type DerivedSpecies } from './physiology';
 export * from './time';

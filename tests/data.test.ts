@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ScenarioSchema, SpeciesSchema, WorldParamsSchema, speciesLibrary, worldFor } from '../src/data';
+import { ScenarioSchema, SpeciesSchema, WorldParamsSchema, plantLibrary, resolvePlants, speciesLibrary, worldFor } from '../src/data';
+import { PlantsFileSchema } from '../src/data/schema/plant';
+import plantsJson from '../src/data/plants/plants.json';
 
 /** 内容即数据：src/data 下所有世界数据文件都必须通过 schema 校验。 */
-const worlds = import.meta.glob('../src/data/world/*.json', { eager: true, import: 'default' });
+const worldFiles = import.meta.glob('../src/data/world/*.json', { eager: true, import: 'default' });
+/** 世界数据里的植物写的是类型 id，校验前先换成完整的类型数据（同 src/data 的加载）。 */
+const worlds = Object.fromEntries(Object.entries(worldFiles).map(([f, j]) => [f, resolvePlants(j, f)]));
 const species = import.meta.glob('../src/data/species/*.json', { eager: true, import: 'default' });
 
 describe('数据文件校验', () => {
@@ -23,6 +27,29 @@ describe('世界 schema 的取值约束', () => {
     const base = worlds[Object.keys(worlds)[0]!] as Record<string, Record<string, unknown>>;
     expect(WorldParamsSchema.safeParse({ ...base, fertility: { ...base.fertility, min: 0.9, max: 0.2 } }).success).toBe(false);
     expect(WorldParamsSchema.safeParse({ ...base, weather: { ...base.weather, min: 2, max: 1 } }).success).toBe(false);
+  });
+
+  it('植物：要正好一种草本，木本最多一种；有灌丛地形就要有长在灌丛上的木本', () => {
+    const island = worlds['../src/data/world/island.json'] as { plants: Array<{ type: { form: string } }> };
+    const herb = island.plants.find((p) => p.type.form === 'herb')!;
+    const woody = island.plants.find((p) => p.type.form === 'woody')!;
+    expect(WorldParamsSchema.safeParse(island).success).toBe(true);
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [woody] }).success).toBe(false);
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [herb, herb, woody] }).success).toBe(false);
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [herb] }).success).toBe(false);
+    expect(WorldParamsSchema.safeParse({ ...island, plants: [{ ...herb, floorBiomass: undefined }, woody] }).success).toBe(false);
+  });
+});
+
+describe('植物类型数据', () => {
+  it('通过 schema 校验，id 不重复', () => {
+    const r = PlantsFileSchema.safeParse(plantsJson);
+    expect(r.success, r.success ? '' : JSON.stringify(r.error.issues, null, 2)).toBe(true);
+    expect(plantLibrary.size).toBe(r.data!.types.length);
+  });
+
+  it('世界引用不存在的植物类型时报错', () => {
+    expect(() => resolvePlants({ plants: [{ type: 'no-such-plant' }] }, 'x')).toThrow(/no-such-plant/);
   });
 });
 

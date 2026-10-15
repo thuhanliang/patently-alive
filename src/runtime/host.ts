@@ -179,7 +179,7 @@ export class SimHost {
   /** 每天 0 点（和开局、换局时）记一次：曲线数据、校验和、平均植被都取当天开始时的状态。 */
   private recordDay(): void {
     const state = this.session.sim.state;
-    this.meanVegetation = meanLandVegetation(state.grid);
+    this.meanVegetation = meanLandVegetation(state.grid, state.config.world);
     this.dayChecksum = checksum(state);
     this.days.push({ day: this.session.sim.day, totals: state.lastDay.map((d) => d.total), veg: this.meanVegetation });
   }

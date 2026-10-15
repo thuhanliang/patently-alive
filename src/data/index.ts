@@ -1,4 +1,6 @@
 import { WorldParamsSchema, type WorldParams } from './schema/world';
+import { PlantsFileSchema, type PlantType } from './schema/plant';
+import plantsJson from './plants/plants.json';
 import { SpeciesSchema, type SpeciesParams } from './schema/species';
 import { GoalSchema, ScenarioSchema, type Goal, type Scenario } from './schema/scenario';
 import { ToolsSchema, type Tools } from './schema/tools';
@@ -67,8 +69,26 @@ for (const id of speciesLibrary.keys()) {
 }
 
 /** 所有世界数据，按文件名索引。 */
+/** 植物类型，按 id 索引。 */
+export const plantLibrary: ReadonlyMap<string, PlantType> = new Map(PlantsFileSchema.parse(plantsJson).types.map((t) => [t.id, t] as const));
+
+/** 世界数据里植物写的是类型 id，加载时换成完整的类型数据（配置因此自带植物数据，日志和存档不依赖植物库）。 */
+export function resolvePlants(json: unknown, name: string): unknown {
+  const w = json as { plants?: Array<{ type: unknown }> };
+  if (!Array.isArray(w.plants)) return json;
+  return {
+    ...w,
+    plants: w.plants.map((p) => {
+      if (typeof p.type !== 'string') return p;
+      const t = plantLibrary.get(p.type);
+      if (!t) throw new Error(`世界「${name}」引用了不存在的植物类型：${p.type}`);
+      return { ...p, type: t };
+    }),
+  };
+}
+
 export const worldLibrary: ReadonlyMap<string, WorldParams> = new Map(
-  Object.entries(worldFiles).map(([path, json]) => [baseName(path), WorldParamsSchema.parse(json)] as const),
+  Object.entries(worldFiles).map(([path, json]) => [baseName(path), WorldParamsSchema.parse(resolvePlants(json, baseName(path)))] as const),
 );
 
 /** 所有情景，按 id 索引。 */

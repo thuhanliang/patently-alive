@@ -12,7 +12,7 @@ function mean(a: Float64Array): number {
 describe('格子地图与植被', () => {
   it('地图尺寸来自数据，不写死', () => {
     const sim = makeSim(1, { ...smallWorld, width: 7, height: 3 });
-    expect(sim.state.grid.vegetation.length).toBe(21);
+    expect(sim.state.grid.plants[0]!.length).toBe(21);
     expect(sim.state.grid.fertility.length).toBe(21);
   });
 
@@ -31,14 +31,15 @@ describe('格子地图与植被', () => {
 
   it('跑三年：植被始终在 [下限, 上限] 内，没有 NaN', () => {
     const sim = makeSim(11);
-    const { maxBiomass, floorBiomass } = smallWorld.vegetation;
+    const { maxBiomass, floorBiomass } = smallWorld.plants[0]!;
     const bad: string[] = [];
     for (let day = 0; day < DAYS_PER_YEAR * 3 && bad.length === 0; day++) {
       sim.stepN(TICKS_PER_DAY);
-      const { vegetation, fertility } = sim.state.grid;
+      const { plants, fertility } = sim.state.grid;
+      const vegetation = plants[0]!;
       for (let i = 0; i < vegetation.length; i++) {
         const v = vegetation[i]!;
-        const ok = Number.isFinite(v) && v >= floorBiomass && v <= maxBiomass * fertility[i]! + 1e-9;
+        const ok = Number.isFinite(v) && v >= floorBiomass! && v <= maxBiomass * fertility[i]! + 1e-9;
         if (!ok) bad.push(`第 ${day} 天第 ${i} 格：${v}`);
       }
     }
@@ -54,7 +55,7 @@ describe('格子地图与植被', () => {
     for (let day = 0; day < DAYS_PER_YEAR; day++) {
       sim.stepN(TICKS_PER_DAY);
       const s = calendar(sim.tick).season;
-      bySeason[s]! += mean(sim.state.grid.vegetation);
+      bySeason[s]! += mean(sim.state.grid.plants[0]!);
       counts[s]! += 1;
     }
     const avg = bySeason.map((v, i) => v / counts[i]!);
@@ -66,11 +67,11 @@ describe('格子地图与植被', () => {
   it('植被只在每天开始时更新，一天之内不变', () => {
     const sim = makeSim(9);
     sim.stepN(TICKS_PER_DAY);
-    const at = sim.state.grid.vegetation.slice();
+    const at = sim.state.grid.plants[0]!.slice();
     sim.stepN(TICKS_PER_DAY - 1);
-    expect(Array.from(sim.state.grid.vegetation)).toEqual(Array.from(at));
+    expect(Array.from(sim.state.grid.plants[0]!)).toEqual(Array.from(at));
     sim.step();
-    expect(Array.from(sim.state.grid.vegetation)).not.toEqual(Array.from(at));
+    expect(Array.from(sim.state.grid.plants[0]!)).not.toEqual(Array.from(at));
   });
 });
 
@@ -79,10 +80,10 @@ describe('格子地图的边界情况', () => {
     const world = {
       ...smallWorld,
       fertility: { ...smallWorld.fertility, min: 0, max: 0 },
-      vegetation: { ...smallWorld.vegetation, floorBiomass: 0 },
+      plants: smallWorld.plants.map((p) => ({ ...p, floorBiomass: 0 })),
     };
     const sim = makeSim(1, world);
     sim.stepN(TICKS_PER_DAY * 30);
-    expect(Array.from(sim.state.grid.vegetation).every((v) => v === 0)).toBe(true);
+    expect(Array.from(sim.state.grid.plants[0]!).every((v) => v === 0)).toBe(true);
   });
 });

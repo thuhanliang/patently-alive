@@ -1,14 +1,11 @@
-import type { Grid } from './grid';
+import { invertebratesPerM2, type Grid, type PlantFood } from './grid';
 import { TERRAIN } from './terrain';
 import { pathBlocked, type Barrier } from './fence';
 import {
   CROWDING_BLOCK_CELLS,
   FED_SUFFICIENT,
-  INVERTEBRATE_YIELD,
   JUVENILE_SIZE_FACTOR,
   BROWSE_SHARE,
-  MAX_BROWSE_FRACTION,
-  MAX_GRAZE_FRACTION,
   PREDATION_HALF_SATURATION_DAYS,
   type DerivedSpecies,
   type PreyWeights,
@@ -120,7 +117,8 @@ export interface DailyContext {
   grid: Grid;
   populations: Population[];
   cellAreaM2: number;
-  floorBiomass: number;
+  /** 吃植物、找虫子的参数（见 plantFood）。 */
+  food: PlantFood;
   /** 当月各物种的繁殖期系数。 */
   breeding: readonly number[];
   rng: Rng;
@@ -130,8 +128,6 @@ export interface DailyContext {
   crowding: Float64Array[];
   /** 每格属于哪个拥挤区块（预先算好）。 */
   blockOf: Int32Array;
-  /** 灌丛啃不到的下限（g/m²）；世界里没有灌丛时为 undefined，不啃灌丛。 */
-  shrubFloor?: number | undefined;
   /** 陆地格的下标，从小到大（见 landCells）。 */
   land: Int32Array;
   /** 死因账本：每笔死亡记在这里（见 ledger.ts）。 */
@@ -425,36 +421,31 @@ function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
   }
   let ratio = 1;
   if (demand > 0) {
-    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.floorBiomass, ctx.shrubFloor) / demand;
+    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.food) / demand;
   }
   for (let s = 0; s < species.length; s++) if (species[s]!.grazer) fed[s] = ratio;
 }
 
 /**
- * 一格里吃掉 demand 克植物（干物质），返回实际吃到的量。有灌丛的格子先按 BROWSE_SHARE 啃灌丛，其余吃草，
- * 草不够再拿灌丛补。草和灌丛每天最多被啃掉 MAX_GRAZE_FRACTION、MAX_BROWSE_FRACTION（够得着的部分）。
- * 格子模型一天调用一次（整格一起吃），个体模型每小时每只调用一次；没有灌丛的世界 shrubFloor 为 undefined。
+ * 一格里吃掉 demand 克植物（干物质），返回实际吃到的量。有木本的格子先按 BROWSE_SHARE 啃木本，其余吃草本，
+ * 草本不够再拿木本补。每种植物每天最多被啃掉下限以上部分的 eatenPerDay（植物类型的数据）。
+ * 格子模型一天调用一次（整格一起吃），个体模型每小时每只调用一次。
  */
-export function eatPlants(
-  grid: Grid,
-  c: number,
-  demand: number,
-  cellAreaM2: number,
-  floorBiomass: number,
-  shrubFloor: number | undefined,
-): number {
-  const shrubAvail = shrubFloor === undefined ? 0 : Math.max(0, grid.shrub[c]! - shrubFloor) * cellAreaM2 * MAX_BROWSE_FRACTION;
-  let browsed = Math.min(demand * BROWSE_SHARE, shrubAvail);
-  const veg = grid.vegetation[c]!;
-  const grazed = Math.min(demand - browsed, Math.max(0, veg - floorBiomass) * cellAreaM2 * MAX_GRAZE_FRACTION);
-  grid.vegetation[c] = veg - grazed / cellAreaM2;
-  browsed = Math.min(demand - grazed, shrubAvail);
-  if (browsed > 0) grid.shrub[c] = grid.shrub[c]! - browsed / cellAreaM2;
+export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: number, food: PlantFood): number {
+  const woody = food.woody >= 0 ? grid.plants[food.woody]! : undefined;
+  const woodyAvail = woody === undefined ? 0 : Math.max(0, woody[c]! - food.woodyFloor) * cellAreaM2 * food.woodyEaten;
+  let browsed = Math.min(demand * BROWSE_SHARE, woodyAvail);
+  const herb = grid.plants[food.herb]!;
+  const veg = herb[c]!;
+  const grazed = Math.min(demand - browsed, Math.max(0, veg - food.herbFloor) * cellAreaM2 * food.herbEaten);
+  herb[c] = veg - grazed / cellAreaM2;
+  browsed = Math.min(demand - grazed, woodyAvail);
+  if (browsed > 0) woody![c] = woody![c]! - browsed / cellAreaM2;
   return grazed + browsed;
 }
 
 /**
- * 吃无脊椎动物的分享这一格当天能找到的虫子（INVERTEBRATE_YIELD × 植被）；fed[s] 记下这一类吃到的份额。
+ * 吃无脊椎动物的分享这一格当天能找到的虫子（见 invertebratesPerM2）；fed[s] 记下这一类吃到的份额。
  * 在吃草之后算：被啃光的地方虫子也少。
  */
 function forage(ctx: DailyContext, c: number, fed: Float64Array): void {
@@ -464,7 +455,7 @@ function forage(ctx: DailyContext, c: number, fed: Float64Array): void {
     const sp = species[s]!;
     if (sp.insectivore) demand += sizeWeighted(populations[s]!, c) * sp.invertebrateIntakeG;
   }
-  const ratio = demand > 0 ? Math.min(1, (INVERTEBRATE_YIELD * grid.vegetation[c]! * cellAreaM2) / demand) : 1;
+  const ratio = demand > 0 ? Math.min(1, (invertebratesPerM2(grid, ctx.food, c) * cellAreaM2) / demand) : 1;
   for (let s = 0; s < species.length; s++) if (species[s]!.insectivore) fed[s] = ratio;
 }
 

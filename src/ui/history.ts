@@ -42,7 +42,7 @@ export class PopulationHistory {
 
   /** 每天最多记一次；同一天重复调用会被忽略。 */
   record(day: number, state: Readonly<SimState>): void {
-    this.recordValues(day, state.lastDay.map((d) => d.total), meanLandVegetation(state.grid));
+    this.recordValues(day, state.lastDay.map((d) => d.total), meanLandVegetation(state.grid, state.config.world));
   }
 
   /** 同 record，直接给数值（推演在 Worker 里，每天的数值随视图送来）。 */

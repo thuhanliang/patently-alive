@@ -1,4 +1,4 @@
-import type { Grid } from './grid';
+import { invertebratesPerM2, type Grid, type PlantFood } from './grid';
 import { pathBlocked, type Barrier } from './fence';
 import { CAUSE, recordDeaths, type DeathLedger } from './ledger';
 import { inFocus, type FocusRect } from './focus';
@@ -9,7 +9,6 @@ import {
   chaseFactor,
   FED_SUFFICIENT,
   FLIGHT_ESCAPE,
-  INVERTEBRATE_YIELD,
   JUVENILE_SIZE_FACTOR,
   NEST_DISCOVERY,
   SATIATION,
@@ -286,9 +285,8 @@ export interface HourlyContext {
   /** 传送带的当前日（见 Sim.day），判断成年用。 */
   day: number;
   cellAreaM2: number;
-  floorBiomass: number;
-  /** 灌丛啃不到的下限（g/m²）；没有灌丛的世界为 undefined。 */
-  shrubFloor?: number | undefined;
+  /** 吃植物、找虫子的参数（见 plantFood）。 */
+  food: PlantFood;
   rng: Rng;
   /** 当天累计的账目（被捕食的计入这里）。 */
   stats: DayStats[];
@@ -372,7 +370,7 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
 
 /**
  * 吃这一小时的植物和无脊椎动物份额。吃饱程度按食谱比例累加（和格子模型的 combineFed 一致）。
- * 植物：先吃草，不够再啃灌丛。无脊椎动物：这一格当天能找到的量按活动小时平分，不和别的个体分摊
+ * 植物：见 eatPlants（先按比例啃木本，其余吃草本）。无脊椎动物：这一格当天能找到的量按活动小时平分，不和别的个体分摊
  * （虫子多半吃不完；格子模型里是同一格的动物一起分，是已知的小差别）。
  */
 function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: HourlyContext): void {
@@ -382,12 +380,12 @@ function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: 
   const diet = sp.params.diet;
   if (sp.grazer) {
     const need = sp.plantIntakeG * size;
-    const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.floorBiomass, ctx.shrubFloor);
+    const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food);
     ind.fed[i] = ind.fed[i]! + (diet.plant * eaten) / need;
   }
   if (sp.insectivore) {
     const need = sp.invertebrateIntakeG * size;
-    const found = (INVERTEBRATE_YIELD * grid.vegetation[c]! * ctx.cellAreaM2) / sp.activeHours;
+    const found = (invertebratesPerM2(grid, ctx.food, c) * ctx.cellAreaM2) / sp.activeHours;
     const eaten = Math.min(need / sp.activeHours, found);
     ind.fed[i] = ind.fed[i]! + (diet.invertebrate * eaten) / need;
   }

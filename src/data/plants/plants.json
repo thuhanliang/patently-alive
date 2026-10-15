@@ -1,0 +1,23 @@
+{
+  "说明": "植物类型：植物自己的性质。长多快、长多高随世界变，写在 src/data/world/*.json 的 plants 里。数值的依据见 docs/MODEL.md。",
+  "types": [
+    {
+      "id": "herb",
+      "name": "草本",
+      "form": "herb",
+      "eatenPerDay": 0.05,
+      "invertebrateYield": 0.001,
+      "cover": { "terrain": "grass", "atFull": 0.5 },
+      "source": "阶段 0–1 的草本植被（MODEL.md：MAX_GRAZE_FRACTION 0.05、INVERTEBRATE_YIELD 0.001、GRASS_COVER 0.5）"
+    },
+    {
+      "id": "shrub",
+      "name": "灌丛",
+      "form": "woody",
+      "eatenPerDay": 0.01,
+      "invertebrateYield": 0,
+      "cover": { "terrain": "shrub", "atFull": 1 },
+      "source": "阶段 1 的灌丛（MODEL.md：MAX_BROWSE_FRACTION 0.01，长满算全掩护）"
+    }
+  ]
+}

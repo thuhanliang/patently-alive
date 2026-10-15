@@ -143,9 +143,9 @@ export const LOG_FORMAT = 'patently-alive/oplog';
 /**
  * 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。8：设计物种（配置带设计数据、操作附设计）。
  * 9：设计数据带身体可行性阈值（阶段 3.5）。10：骨骼撑不住的设计，后果写进物种参数（body），阈值数据也改了（阶段 3.5）。
- * 11：体重上限放到 100 吨，缩放数据多了 dataRange。
+ * 11：体重上限放到 100 吨，缩放数据多了 dataRange。12：世界的植被改成植物类型列表（world.plants，阶段 3.5）。
  */
-export const LOG_VERSION = 11;
+export const LOG_VERSION = 12;
 
 export const OpLogSchema = z
   .object({
