@@ -170,3 +170,42 @@ describe('骨骼接进推演（阶段 3.5 第 3 步）', () => {
     expect(back.sim.species[idx]!.fractureDaily).toBeGreaterThan(0);
   }, 60_000);
 });
+
+describe('体重放到 100 吨', () => {
+  it('默认分配下，越重越撑不住：几吨跑不动，十几吨走不动，几十吨站不住', () => {
+    const grade = (kg: number) => compileDesign({ ...template('cat'), bodyMassKg: kg }, kit).viability.find((x) => x.id === 'skeleton')!.grade;
+    expect(grade(1000)).toBe('ok');
+    expect(grade(5000)).toBe('strained');
+    expect(grade(20_000)).toBe('failing');
+    expect(grade(80_000)).toBe('fatal');
+    // 加骨头能撑住：70 吨的蜥脚类要很重的骨架。
+    expect(compileDesign({ ...template('cat'), bodyMassKg: 70_000, allocation: { skeleton: 2 } }, kit).viability[0]!.grade).not.toBe('fatal');
+  });
+
+  it('比数据里最重的还重就提醒是外推；推导值都是有限的数', () => {
+    const c = compileDesign({ ...template('cat'), bodyMassKg: 100_000 }, kit);
+    expect(c.hints.some((h) => h.id === 'beyondData')).toBe(true);
+    expect(compileDesign(template('cat'), kit).hints.some((h) => h.id === 'beyondData')).toBe(false);
+    const finite = (v: unknown): void => {
+      if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+      else if (v && typeof v === 'object') Object.values(v).forEach(finite);
+    };
+    finite(c.params);
+  });
+
+  it('100 吨的设计投放进小鸟岛跑一年：不出 NaN（运费按体重算，3 只要一亿多，这里给足预算）', () => {
+    const scenario = scenarioLibrary.get('bird-island-small')!;
+    const world = worldFor(scenario);
+    const s = new Session({ seed: 6, world, species: speciesFor(world), tools, design: designDataOf(kit) }, { ...scenarioRules(scenario), budget: 1e9 });
+    const design = { ...template('cat'), id: 'd_titan', name: '巨猫', bodyMassKg: 100_000, allocation: { skeleton: 2 } };
+    const species = compileDesign(design, kit).params;
+    const { grid } = s.sim.state;
+    let at = { x: 0, y: 0 };
+    for (let i = 0; i < grid.terrain.length; i++) if (grid.terrain[i] !== 0) { at = { x: i % grid.width, y: Math.floor(i / grid.width) }; break; }
+    const r = s.submit({ type: 'introduce', species, design, ...at, count: 3 });
+    expect(r).toEqual({ ok: true });
+    s.advance(TICKS_PER_DAY * 360);
+    for (const t of s.sim.totals()) expect(Number.isFinite(t)).toBe(true);
+    for (const d of s.sim.state.lastDay) for (const v of Object.values(d)) expect(Number.isFinite(v)).toBe(true);
+  }, 120_000);
+});

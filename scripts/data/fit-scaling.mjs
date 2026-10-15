@@ -87,6 +87,7 @@ export function fitLaws() {
   const mammals = pan
     .filter((r) => !SKIP_ORDERS.has(r.MSW05_Order) && !SKIP_FAMILIES.has(r.MSW05_Family))
     .map((r) => ({
+      binomial: r.MSW05_Binomial,
       massG: pos(r['5-1_AdultBodyMass_g']),
       litter: pos(r['15-1_LitterSize']),
       gestation: pos(r['9-1_GestationLen_d']),
@@ -161,6 +162,9 @@ export function fitLaws() {
   const FLIGHTLESS_SPECIES = new Set(['Strigops habroptila', 'Gallirallus australis', 'Porphyrio hochstetteri', 'Raphus cucullatus', 'Phalacrocorax harrisi', 'Nannopterum harrisi']);
   const flyers = birds.filter((r) => !FLIGHTLESS_ORDERS.has(r.order) && !FLIGHTLESS_SPECIES.has(r.binomial)).sort((a, b) => b.massG - a.massG);
   const heaviest = flyers[0];
+  const heaviestOf = (rows) => rows.reduce((a, b) => (b.massG > a.massG ? b : a));
+  const heaviestMammal = heaviestOf(mammals);
+  const heaviestBird = heaviestOf(birds);
 
   // ---------- 用现有技术条目校准的两项（数据库里没有）
   const speciesDir = join(root, 'src', 'data', 'species');
@@ -216,6 +220,11 @@ export function fitLaws() {
       residualSdLog10: round(geoSd(cRange), 3),
       source: ARCHIVE,
       note: '数据库没有每天的活动距离，按现有技术条目校准；c 取几何平均',
+    },
+    // 拟合用到的数据里最重的物种：设计比它还重，公式就是外推（设计台提醒）。
+    dataRange: {
+      mammal: { maxMassKg: round(heaviestMammal.massG / 1000, 1), species: heaviestMammal.binomial },
+      bird: { maxMassKg: round(heaviestBird.massG / 1000, 1), species: heaviestBird.binomial },
     },
     flight: {
       maxMassKg: round(heaviest.massG / 1000, 2),

@@ -33,8 +33,8 @@ export function drawBlueprint(canvas: HTMLCanvasElement, design: Design, bird: b
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // 体型：按体重的对数在 5 克 – 100 千克之间缩放。
-  const t = Math.min(1, Math.max(0, (Math.log10(design.bodyMassKg) + 2.3) / 4.3));
+  // 体型：按体重的对数在 5 克 – 100 吨之间缩放。
+  const t = Math.min(1, Math.max(0, (Math.log10(design.bodyMassKg) + 2.3) / 7.3));
   const aspect = bird ? 0.72 : 0.5;
   // 身体上方要留出头和翅膀，下方留出腿和尺寸标注；放不下就整体缩小。
   const above = design.parts.limbs === 'wings' ? 1.9 : 1.25;
@@ -275,5 +275,7 @@ function drawMouth(ctx: CanvasRenderingContext2D, mouth: string, x: number, y: n
 
 /** 体重的写法（设计台的滑杆标签也用它）。 */
 export function massText(kg: number): string {
-  return kg < 1 ? `${Math.round(kg * 1000)} 克` : `${Number.isInteger(kg) ? kg : kg.toFixed(1)} 千克`;
+  if (kg < 1) return `${Math.round(kg * 1000)} 克`;
+  if (kg >= 1000) return `${Number((kg / 1000).toPrecision(3))} 吨`;
+  return `${Number.isInteger(kg) ? kg : kg.toFixed(1)} 千克`;
 }

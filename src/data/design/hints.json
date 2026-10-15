@@ -2,6 +2,7 @@
   "energyHigh": "这家伙一天得吃掉同体重动物 {factor} 倍的东西。岛上养不养得起，我心里没底。",
   "energyLow": "胃口才是同体重动物的 {factor} 倍，挺省。不过省下来的往往是别处付了代价。",
   "dietMismatch": "{food}占了食谱的 {share}，可这副肠胃只能从里面取出 {eff} 的能量。",
+  "beyondData": "{mass} 吨？数据里最重的{kind}是 {species}，约 {max} 吨。再往上，推导出来的寿命、食量、家域都是把公式往外推，没有真动物可以对照。",
   "tooHeavyToFly": "{mass} 千克还想飞？记录里最重的会飞的鸟（{flyer}）也才 {max} 千克。翅膀照长，就是飞不起来。",
   "beakOnMammal": "长毛的配一张喙，审查员会多看两眼。",
   "teethOnBird": "长羽毛的配一口牙，审查员会多看两眼。",

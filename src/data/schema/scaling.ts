@@ -30,6 +30,11 @@ export const ScalingLawsSchema = z.object({
     residualSdLog10: z.object({ mammal: z.number(), bird: z.number() }),
   }),
   dailyRange: z.object({ c: z.number().positive(), residualSdLog10: z.number() }),
+  /** 拟合用到的数据里最重的物种：比它重就是外推。 */
+  dataRange: z.object({
+    mammal: z.object({ maxMassKg: z.number().positive(), species: z.string() }),
+    bird: z.object({ maxMassKg: z.number().positive(), species: z.string() }),
+  }),
   flight: z.object({ maxMassKg: z.number().positive(), heaviestFlyer: z.string() }),
   fieldMetabolism: z.object({
     mammal: z.object({ coef: z.number().positive(), exp: z.number().positive() }),

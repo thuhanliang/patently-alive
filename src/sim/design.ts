@@ -196,6 +196,10 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   for (const food of ['plant', 'vertebrate', 'invertebrate'] as const) {
     if (diet[food] >= 0.3 && d[food] < 0.5) hint('dietMismatch', { food: FOOD_NAMES[food], share: pct(diet[food]), eff: pct(d[food]) });
   }
+  const range = bird ? kit.laws.dataRange.bird : kit.laws.dataRange.mammal;
+  if (design.bodyMassKg > range.maxMassKg) {
+    hint('beyondData', { mass: round1(design.bodyMassKg / 1000), kind: bird ? '鸟' : '陆生哺乳动物', species: range.species, max: round1(range.maxMassKg / 1000) });
+  }
   if (tooHeavyToFly) hint('tooHeavyToFly', { mass: design.bodyMassKg, flyer: kit.laws.flight.heaviestFlyer, max: kit.laws.flight.maxMassKg });
   if (!bird && parts.mouth.beak) hint('beakOnMammal');
   if (bird && !parts.mouth.beak) hint('teethOnBird');
