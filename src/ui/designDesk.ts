@@ -353,7 +353,18 @@ const SKELETON_GRADES: Record<Grade, string> = { ok: '能跑', strained: '跑不
 function viabilityText(r: CheckResult): string {
   if (r.skipped) return '—';
   if (r.id === 'skeleton') return `安全系数 ${(r.evidence.safety ?? 0).toFixed(1)}（${SKELETON_GRADES[r.grade]}）`;
+  if (r.id === 'reproduction') return reproductionText(r);
   return r.grade === 'ok' ? '正常' : '有问题';
+}
+
+/** 繁殖一行：兽写每个新生儿多重，鸟写蛋数是否超出；有后果的写出来（提醒在批注里）。 */
+function reproductionText(r: CheckResult): string {
+  const e = r.evidence;
+  const head = (e.neonateG ?? 0) > 0 ? `每个新生儿约 ${massText((e.neonateG ?? 0) / 1000)}` : '每窝蛋数';
+  const issues: string[] = [];
+  if ((e.neonateSurvival ?? 1) < 1) issues.push(`约 ${Math.round((1 - e.neonateSurvival!) * 100)}% 保不住`);
+  if ((e.dystociaPerLitter ?? 0) > 0) issues.push(`难产 ${Math.round(e.dystociaPerLitter! * 100)}%/窝`);
+  return `${head}（${issues.length > 0 ? issues.join('，') : '在真实范围内'}）`;
 }
 
 function partText(p: Part): string {

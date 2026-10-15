@@ -77,18 +77,27 @@ export const SpeciesSchema = z
     energyFactor: z.number().positive().optional(),
     /**
      * 身体撑不住的地方（阶段 3.5）：设计编译器按可行性检查算出（src/sim/viability.ts），真实物种不写，
-     * 撑得住的设计也不写。骨安全系数低：追不上、逃不掉、走得慢、会骨折。
+     * 撑得住的设计也不写；只写出问题的那几项（骨骼的四个数一起写）。
+     * 骨安全系数低：追不上、逃不掉、走得慢、会骨折。繁殖：幼崽保不住、难产。
      */
     body: z
       .strictObject({
         /** 骨的安全系数（尸检、设计台引用）。 */
-        boneSafety: z.number().positive(),
+        boneSafety: z.number().positive().optional(),
         /** 奔跑能力（0–1]：追捕时捕获率乘它；被追时被抓的概率乘 2 − 它。 */
-        runFactor: z.number().gt(0).max(1),
+        runFactor: z.number().gt(0).max(1).optional(),
         /** 走路能力（0–1]：每天的活动范围乘它。 */
-        walkFactor: z.number().gt(0).max(1),
+        walkFactor: z.number().gt(0).max(1).optional(),
         /** 每天承重骨折的概率。 */
-        fractureDaily: z.number().min(0).max(1),
+        fractureDaily: z.number().min(0).max(1).optional(),
+        /** 生下来（孵出来）的幼体活下来的比例（0–1）。 */
+        neonateSurvival: z.number().gt(0).lt(1).optional(),
+        /** 每生一窝母亲难产死亡的概率。 */
+        dystociaPerLitter: z.number().gt(0).max(1).optional(),
+      })
+      .refine((b) => Object.keys(b).length > 0, { message: 'body 不写就整个省掉' })
+      .refine((b) => [b.boneSafety, b.runFactor, b.walkFactor, b.fractureDaily].every((v) => v === undefined) || [b.boneSafety, b.runFactor, b.walkFactor, b.fractureDaily].every((v) => v !== undefined), {
+        message: '骨骼的四个数要么都写，要么都不写',
       })
       .optional(),
     /** 画法：主色（设计物种在设计台上选；真实物种的主色在 render/palette.ts）。推演不读它。 */

@@ -167,6 +167,60 @@
       "note": "AnAge 没有鸟的窝间隔；推导时两窝间隔取 365 / 每年窝数，不短于孵化期"
     }
   },
+  "reproduction": {
+    "mammal": {
+      "litterMassG": {
+        "name": "一窝总重",
+        "unit": "克",
+        "intercept": -0.1571,
+        "terms": {
+          "log10MassG": 0.7037,
+          "precocial": 0.3831
+        },
+        "n": 775,
+        "r2": 0.962,
+        "residualSdLog10": 0.203,
+        "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类），不含有袋类和单孔类，要有新生体重和每窝仔数",
+        "note": "一窝总重 = 新生体重 × 每窝仔数；precocial 是早成（1）或晚成（0），早成的按类群标（偶蹄、奇蹄、长鼻、蹄兔目，豚鼠、刺豚鼠等几科，野兔属）"
+      },
+      "neonateMassG": {
+        "name": "新生体重",
+        "unit": "克",
+        "intercept": -1.058,
+        "terms": {
+          "log10MassG": 0.9136
+        },
+        "n": 775,
+        "r2": 0.938,
+        "residualSdLog10": 0.304,
+        "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类），不含有袋类和单孔类，要有新生体重和每窝仔数",
+        "note": "只看体重；envelope 是真实物种残差的 1% 和 99% 分位",
+        "envelope": {
+          "low": -0.955,
+          "high": 0.57
+        }
+      }
+    },
+    "bird": {
+      "clutchSize": {
+        "name": "每窝蛋数",
+        "unit": "个",
+        "intercept": 0.6101,
+        "terms": {
+          "log10MassG": -0.0311
+        },
+        "n": 590,
+        "r2": 0.011,
+        "residualSdLog10": 0.251,
+        "source": "AnAge（Tacutu et al. 2018），鸟纲",
+        "note": "envelope 是真实物种残差的 1% 和 99% 分位",
+        "envelope": {
+          "low": -0.559,
+          "high": 0.596
+        }
+      }
+    }
+  },
   "survival": {
     "name": "成体年存活率",
     "formula": "s = exp(−k / 最长寿命（年）)",

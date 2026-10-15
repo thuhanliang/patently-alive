@@ -55,5 +55,14 @@
     "cannotWalk": { "value": 1, "basis": "assumption", "confidence": "unverified", "source": "低于 1：奔跑的峰值应力已超过断裂应力，走路也吃力，日常活动容易骨折" },
     "cannotStand": { "value": 0.7, "basis": "assumption", "confidence": "unverified", "source": "低于 0.7：连静止承重都接近极限" },
     "fractureDailyAtStand": { "value": 0.05, "basis": "assumption", "confidence": "unverified", "source": "安全系数正好在\"站不住\"时每天承重骨折的概率：平均约 20 天，多数活不到成年。\"走不动\"以上为 0，往下按缺口的平方上升" }
+  },
+  "reproduction": {
+    "neonateSurvivalExp": { "value": 2, "basis": "assumption", "confidence": "unverified", "source": "新生儿比同体重最小的真实新生儿（PanTHERIA 残差 1% 分位）还小：小一半时只有四分之一活得下来（体温、吮吸都撑不住）" },
+    "clutchSurvivalExp": { "value": 1, "basis": "assumption", "confidence": "unverified", "source": "蛋数超过同体重真实鸟的上限（AnAge 残差 99% 分位）：亲鸟只孵得过来、喂得过来上限那么多，多出来的养不活（窝里减员）" },
+    "dystociaAtDouble": { "value": 0.5, "basis": "assumption", "confidence": "unverified", "source": "新生儿是同体重最大的真实新生儿的两倍时，一半的生产会难产致死；参照比利时蓝牛这类双肌牛九成以上要剖腹产（docs/research/VIABILITY.md），野外没有剖腹产" },
+    "failingSurvival": { "value": 0.5, "basis": "assumption", "confidence": "unverified", "source": "一半以上的幼崽保不住算\"不行\"" },
+    "fatalSurvival": { "value": 0.1, "basis": "assumption", "confidence": "unverified", "source": "九成以上的幼崽保不住算\"致命\"：多半补不上死亡" },
+    "failingDystocia": { "value": 0.1, "basis": "assumption", "confidence": "unverified", "source": "每生一窝有一成以上的母亲难产死亡算\"不行\"" },
+    "fatalDystocia": { "value": 0.5, "basis": "assumption", "confidence": "unverified", "source": "一半以上算\"致命\"" }
   }
 }

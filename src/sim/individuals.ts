@@ -545,8 +545,20 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
       const room = breedingRoom(sp, ctx.crowding[s]![block]!);
       const condition = reserve >= 0 ? 1 : 0.5;
       if (room > 0 && rng.nextFloat() < breeding * sp.litterRate * room * condition) {
+        // 和格子模型一致（阶段 3.5）：先看母亲会不会难产死去（那一窝也没了），再看生下来的保不保得住。
+        if (sp.dystociaPerLitter > 0 && rng.nextFloat() < sp.dystociaPerLitter) {
+          removed[i] = 1;
+          stats[s]!.deathsOther += 1;
+          recordDeaths(ctx.ledger, s, CAUSE.dystocia, block, 1);
+          continue;
+        }
         const size = sp.params.reproduction.litterSize;
-        const n = Math.floor(size) + (rng.nextFloat() < size - Math.floor(size) ? 1 : 0);
+        let n = Math.floor(size) + (rng.nextFloat() < size - Math.floor(size) ? 1 : 0);
+        if (sp.neonateSurvival < 1) {
+          let kept = 0;
+          for (let k = 0; k < n; k++) if (rng.nextFloat() < sp.neonateSurvival) kept += 1;
+          n = kept;
+        }
         for (let k = 0; k < n; k++) born.push([s, ind.x[i]!, ind.y[i]!]);
         stats[s]!.births += n;
       }

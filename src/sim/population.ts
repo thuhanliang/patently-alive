@@ -625,11 +625,23 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
   let born = 0;
   if (breeding > 0 && adults > 0 && room > 0) {
     const pLitter = 0.5 * breeding * sp.litterRate * Math.min(1, fedRatio / FED_SUFFICIENT) * room;
-    const litters = binomial(rng, adults, Math.min(1, pLitter));
+    let litters = binomial(rng, adults, Math.min(1, pLitter));
+    // 繁殖撑不住的设计（阶段 3.5）：一部分母亲难产死去，那一窝也没了；生下来的有一部分保不住（不算出生）。
+    // 真实物种两者都是默认值，不多抽随机数。
+    if (litters > 0 && sp.dystociaPerLitter > 0) {
+      const died = binomial(rng, litters, sp.dystociaPerLitter);
+      if (died > 0) {
+        litters -= died;
+        adults -= died;
+        st.deathsOther += died;
+        recordDeaths(ctx.ledger, s, CAUSE.dystocia, ctx.blockOf[c]!, died);
+      }
+    }
     if (litters > 0) {
       const size = sp.params.reproduction.litterSize;
       const whole = Math.floor(size);
       born = litters * whole + binomial(rng, litters, size - whole);
+      if (born > 0 && sp.neonateSurvival < 1) born = binomial(rng, born, sp.neonateSurvival);
       st.births += born;
     }
   }

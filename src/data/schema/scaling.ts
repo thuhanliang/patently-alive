@@ -14,6 +14,9 @@ export const LawSchema = z.object({
   note: z.string().optional(),
 });
 
+/** 带真实范围的公式：envelope 是真实物种残差（log10）的 1% 和 99% 分位。 */
+export const EnvelopeLawSchema = LawSchema.extend({ envelope: z.object({ low: z.number(), high: z.number() }) });
+
 const lifeHistory = {
   gestationDays: LawSchema,
   ageAtMaturityDays: LawSchema,
@@ -24,6 +27,11 @@ const lifeHistory = {
 export const ScalingLawsSchema = z.object({
   mammal: z.object({ ...lifeHistory, litterIntervalDays: LawSchema, weaningDays: LawSchema, weaningMassG: LawSchema, homeRangeKm2: LawSchema, basalMetabolismW: LawSchema }),
   bird: z.object({ ...lifeHistory, clutchesPerYear: LawSchema }),
+  /** 繁殖检查（阶段 3.5）：一窝总重、新生体重的真实范围；鸟是每窝蛋数的真实范围。 */
+  reproduction: z.object({
+    mammal: z.object({ litterMassG: LawSchema, neonateMassG: EnvelopeLawSchema }),
+    bird: z.object({ clutchSize: EnvelopeLawSchema }),
+  }),
   survival: z.object({
     kMammal: z.number().positive(),
     kBird: z.number().positive(),
@@ -43,4 +51,5 @@ export const ScalingLawsSchema = z.object({
 });
 
 export type Law = z.infer<typeof LawSchema>;
+export type EnvelopeLaw = z.infer<typeof EnvelopeLawSchema>;
 export type ScalingLaws = z.infer<typeof ScalingLawsSchema>;
