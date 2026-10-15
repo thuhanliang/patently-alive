@@ -48,7 +48,7 @@ export function necropsyReport(
     f.kind === 'nest' ? '' : f.bcs <= THIN_BCS ? t.condition.thin : f.bcs <= GOOD_BCS ? t.condition.normal : t.condition.good;
   const decomposition = (f.kind === 'nest' ? t.decompositionNest : t.decomposition)[f.decomposition];
   const findings =
-    f.kind === 'starvation' || f.kind === 'other' ? t.findings[f.kind] : t.findings[`${f.kind}_${f.bite!.teeth}` as const];
+    f.kind === 'predation' || f.kind === 'nest' ? t.findings[`${f.kind}_${f.bite!.teeth}` as const] : t.findings[f.kind];
   const h = t.headings;
   return [
     { heading: h.intro, text: fill(t.intro, vars) },

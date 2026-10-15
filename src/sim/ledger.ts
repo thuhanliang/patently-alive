@@ -6,8 +6,9 @@ import { detPow } from './detmath';
  *
  * 死因（每个物种各一套，S 是物种数）：
  *   0 饿死；1 其他（衰老、疾病、意外）；2 人为移除（兽医工具，第 5 步起）；
- *   3 + 2p 被物种 p 捕食（会跑的：成体、出了窝的幼体）；
- *   4 + 2p 巢失败：窝里的蛋、雏鸟、幼崽被物种 p 吃掉。
+ *   3 营养不良（吃得饱，但这副消化道消化不了这里的食物，阶段 3.5）；4 承重骨折（骨骼撑不住体重）；5 难产；
+ *   6 + 2p 被物种 p 捕食（会跑的：成体、出了窝的幼体）；
+ *   7 + 2p 巢失败：窝里的蛋、雏鸟、幼崽被物种 p 吃掉。
  *
  * 地点按区块而不是逐格：逐格按物种、死因存要几百万个数，快照太大；区块的分辨率（400 米）已经够看"哪一片死得多"。
  * 时间：按天的全岛合计（today / lastDay），加上按区块、随时间衰减的近期死亡（recent，半衰期 RECENT_HALF_LIFE_DAYS 天），
@@ -16,16 +17,23 @@ import { detPow } from './detmath';
  * 新鲜尸体（fresh）：最近 FRESH_DAYS 天里死在各区块的尸体，按天分槽存，过了这几天就腐烂、找不到了。
  * 尸检只能找新鲜尸体；被兽医队移除的不留在野外，不算。尸检找到一具就从这里拿走一具。
  */
+
+/** 和物种无关的死因有几种（捕食、巢失败从这之后按物种排）。 */
+const FIXED_CAUSES = 6;
+
 export const CAUSE = {
   starvation: 0,
   other: 1,
   removed: 2,
-  predation: (predator: number): number => 3 + 2 * predator,
-  nest: (predator: number): number => 4 + 2 * predator,
+  malnutrition: 3,
+  fracture: 4,
+  dystocia: 5,
+  predation: (predator: number): number => FIXED_CAUSES + 2 * predator,
+  nest: (predator: number): number => FIXED_CAUSES + 1 + 2 * predator,
 } as const;
 
 export function causeCount(species: number): number {
-  return 3 + 2 * species;
+  return FIXED_CAUSES + 2 * species;
 }
 
 /** 近期死亡的半衰期（天）。 */
@@ -149,6 +157,9 @@ export type DecodedCause =
   | { kind: 'starvation' }
   | { kind: 'other' }
   | { kind: 'removed' }
+  | { kind: 'malnutrition' }
+  | { kind: 'fracture' }
+  | { kind: 'dystocia' }
   | { kind: 'predation'; predator: number }
   | { kind: 'nest'; predator: number };
 
@@ -157,9 +168,12 @@ export function decodeCause(cause: number, species: number): DecodedCause {
   if (cause === CAUSE.starvation) return { kind: 'starvation' };
   if (cause === CAUSE.other) return { kind: 'other' };
   if (cause === CAUSE.removed) return { kind: 'removed' };
-  const predator = Math.floor((cause - 3) / 2);
+  if (cause === CAUSE.malnutrition) return { kind: 'malnutrition' };
+  if (cause === CAUSE.fracture) return { kind: 'fracture' };
+  if (cause === CAUSE.dystocia) return { kind: 'dystocia' };
+  const predator = Math.floor((cause - FIXED_CAUSES) / 2);
   if (!Number.isInteger(cause) || predator < 0 || predator >= species) throw new RangeError(`没有这种死因：${cause}`);
-  return (cause - 3) % 2 === 0 ? { kind: 'predation', predator } : { kind: 'nest', predator };
+  return (cause - FIXED_CAUSES) % 2 === 0 ? { kind: 'predation', predator } : { kind: 'nest', predator };
 }
 
 /** 死因的名字（界面用）。names 是各物种的名字。 */
@@ -172,6 +186,12 @@ export function causeName(cause: number, names: readonly string[]): string {
       return '其他（衰老、疾病、意外）';
     case 'removed':
       return '人为移除';
+    case 'malnutrition':
+      return '营养不良';
+    case 'fracture':
+      return '承重骨折';
+    case 'dystocia':
+      return '难产';
     case 'predation':
       return `被${names[d.predator]}捕食`;
     case 'nest':
@@ -180,7 +200,7 @@ export function causeName(cause: number, names: readonly string[]): string {
 }
 
 /** 死亡热力图和警报地点按什么死因筛选（人为移除一律不算）。 */
-export type DeathFilter = 'all' | 'predation' | 'nest' | 'starvation' | 'other';
+export type DeathFilter = 'all' | 'predation' | 'nest' | 'starvation' | 'other' | 'malnutrition' | 'fracture' | 'dystocia';
 
 /** 物种 s 每个区块近期死了多少（按死因筛选；人为移除不算）。热力图和警报地点共用这一个定义（铁律 4）。 */
 export function deathsByBlock(l: DeathLedger, s: number, filter: DeathFilter): Float64Array {

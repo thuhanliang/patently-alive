@@ -100,7 +100,7 @@ describe('死亡热力', () => {
     const state = islandSim(120).state;
     for (let s = 0; s < state.populations.length; s++) {
       const all = deathsByBlock(state.deaths, s, 'all');
-      const parts = (['predation', 'nest', 'starvation', 'other'] as DeathFilter[]).map((f) => deathsByBlock(state.deaths, s, f));
+      const parts = (['predation', 'nest', 'starvation', 'other', 'malnutrition', 'fracture', 'dystocia'] as DeathFilter[]).map((f) => deathsByBlock(state.deaths, s, f));
       for (let b = 0; b < all.length; b++) {
         expect(parts.reduce((a, p) => a + p[b]!, 0)).toBeCloseTo(all[b]!, 9);
       }

@@ -151,7 +151,8 @@ export function score(
     const byCause = recentByCause(state.deaths, s);
     const all = byCause.reduce((a, b) => a + b, 0);
     if (all < WELFARE_MIN_DEATHS) continue;
-    suffering += (byCause[CAUSE.starvation]! + byCause[CAUSE.removed]!) / all;
+    // 饿死、人为移除，以及身体撑不住的死（营养不良、骨折、难产，阶段 3.5）都算受苦。
+    suffering += (byCause[CAUSE.starvation]! + byCause[CAUSE.removed]! + byCause[CAUSE.malnutrition]! + byCause[CAUSE.fracture]! + byCause[CAUSE.dystocia]!) / all;
     counted += 1;
   }
   const sufferingShare = counted > 0 ? suffering / counted : 0;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { scenarioLibrary, speciesFor, worldFor, type WorldParams } from '../src/data';
 import { CAUSE, Sim, TICKS_PER_DAY, recentByCause } from '../src/sim';
-import { RECENT_HALF_LIFE_DAYS, causeName, createLedger, decayLedger, recordDeaths } from '../src/sim/ledger';
+import { RECENT_HALF_LIFE_DAYS, causeCount, causeName, createLedger, decayLedger, recordDeaths } from '../src/sim/ledger';
 
 const island = worldFor(scenarioLibrary.get('bird-island')!);
 const small: WorldParams = { ...island, width: 48, height: 48 };
@@ -51,8 +51,17 @@ describe('死因账本', () => {
     expect(l.recent[i]!).toBeCloseTo(4, 6);
   });
 
+  it('身体撑不住的三种死因（阶段 3.5）：编号拆得回来，名字对', () => {
+    expect(causeName(CAUSE.malnutrition, ['甲'])).toBe('营养不良');
+    expect(causeName(CAUSE.fracture, ['甲'])).toBe('承重骨折');
+    expect(causeName(CAUSE.dystocia, ['甲'])).toBe('难产');
+    const seen = new Set<number>();
+    for (const c of [CAUSE.starvation, CAUSE.other, CAUSE.removed, CAUSE.malnutrition, CAUSE.fracture, CAUSE.dystocia, CAUSE.predation(0), CAUSE.nest(0), CAUSE.predation(1), CAUSE.nest(1)]) seen.add(c);
+    expect([...seen].sort((a, b) => a - b)).toEqual([...Array(causeCount(2)).keys()]);
+  });
+
   it('不存在的死因直接报错，不会显示成"被 undefined 捕食"', () => {
-    expect(() => causeName(3 + 2 * 5, ['甲', '乙'])).toThrow(RangeError);
+    expect(() => causeName(CAUSE.predation(2), ['甲', '乙'])).toThrow(RangeError);
   });
 
   it('账本在快照里，存档恢复后继续记，结果一样', () => {

@@ -77,7 +77,7 @@ describe('尸检报告的模板', () => {
 
   it('每种死因、每个物种都拼得出完整的报告，没有剩下的占位符', () => {
     for (const species of [islandSpecies, grassSpecies]) {
-      const causes: number[] = [CAUSE.starvation, CAUSE.other];
+      const causes: number[] = [CAUSE.starvation, CAUSE.other, CAUSE.malnutrition, CAUSE.fracture, CAUSE.dystocia];
       species.forEach((sp, p) => {
         if (sp.params.diet.vertebrate > 0) causes.push(CAUSE.predation(p), CAUSE.nest(p));
       });
