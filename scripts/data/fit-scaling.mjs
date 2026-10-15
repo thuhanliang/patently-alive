@@ -88,7 +88,11 @@ export function fitLaws() {
     .filter((r) => !SKIP_ORDERS.has(r.MSW05_Order) && !SKIP_FAMILIES.has(r.MSW05_Family))
     .map((r) => ({
       binomial: r.MSW05_Binomial,
+      order: r.MSW05_Order,
+      family: r.MSW05_Family,
+      genus: r.MSW05_Genus,
       massG: pos(r['5-1_AdultBodyMass_g']),
+      neonateG: pos(r['5-3_NeonateBodyMass_g']),
       litter: pos(r['15-1_LitterSize']),
       gestation: pos(r['9-1_GestationLen_d']),
       maturity: pos(r['23-1_SexualMaturityAge_d']),
@@ -134,6 +138,37 @@ export function fitLaws() {
     ),
   };
 
+  // ---------- 繁殖（阶段 3.5 第 4 步）：一窝的总重由母亲的体重定，玩家只选"生几个"（Smith & Fretwell 1974 的取舍）。
+  // 有袋类和单孔类不算：它们的投入主要在出生以后（育儿袋里的泌乳），新生儿小得不可比。
+  const MARSUPIAL_ORDERS = new Set(['Didelphimorphia', 'Paucituberculata', 'Microbiotheria', 'Dasyuromorphia', 'Peramelemorphia', 'Notoryctemorphia', 'Diprotodontia', 'Monotremata']);
+  // 早成：数据库没有这一栏，按类群标（偶蹄、奇蹄、长鼻、蹄兔目，豪猪亚目里生下来就能跑的几科，野兔属）。
+  const PRECOCIAL_ORDERS = new Set(['Artiodactyla', 'Cetartiodactyla', 'Perissodactyla', 'Proboscidea', 'Hyracoidea']);
+  const PRECOCIAL_FAMILIES = new Set(['Caviidae', 'Hydrochaeridae', 'Dasyproctidae', 'Cuniculidae', 'Erethizontidae', 'Chinchillidae', 'Octodontidae', 'Echimyidae', 'Myocastoridae', 'Capromyidae', 'Dinomyidae']);
+  const isPrecocial = (r) => PRECOCIAL_ORDERS.has(r.order) || PRECOCIAL_FAMILIES.has(r.family) || (r.family === 'Leporidae' && r.genus === 'Lepus');
+  const breeders = mammals.filter((r) => r.neonateG && r.litter && !MARSUPIAL_ORDERS.has(r.order));
+  const litterMassFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG * r.litter) })));
+  const neonateFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG) })));
+  // 同体重、同育幼方式的新生儿大小的真实范围：残差的 1% 和 99% 分位（比这还小的养不活，比这还大的生不下来）。
+  const neonateResiduals = breeders
+    .map((r) => lg(r.neonateG) - (neonateFit.coef[0] + neonateFit.coef[1] * lg(r.massG) + neonateFit.coef[2] * (isPrecocial(r) ? 1 : 0)))
+    .sort((a, b) => a - b);
+  const quantile = (xs, q) => xs[Math.floor(q * (xs.length - 1))];
+  const PAN_BREED = `${PAN}，不含有袋类和单孔类，要有新生体重和每窝仔数`;
+  const reproductionMammal = {
+    litterMassG: law(
+      '一窝总重',
+      '克',
+      ['log10MassG', 'precocial'],
+      litterMassFit,
+      PAN_BREED,
+      '一窝总重 = 新生体重 × 每窝仔数；precocial 是早成（1）或晚成（0），早成的按类群标（偶蹄、奇蹄、长鼻、蹄兔目，豚鼠、刺豚鼠等几科，野兔属）',
+    ),
+    neonateMassG: {
+      ...law('新生体重', '克', ['log10MassG', 'precocial'], neonateFit, PAN_BREED, '早成的新生儿大一些；envelope 是真实物种残差的 1% 和 99% 分位'),
+      envelope: { low: round(quantile(neonateResiduals, 0.01), 3), high: round(quantile(neonateResiduals, 0.99), 3) },
+    },
+  };
+
   // ---------- 鸟：AnAge
   const anage = readTsv(readFileSync(anagePath, 'utf8'));
   const birdRows = anage.filter((r) => r.Class === 'Aves');
@@ -155,6 +190,17 @@ export function fitLaws() {
     ageAtMaturityDays: law('性成熟', '天', ['log10MassG', 'log10Litter'], lifeHistory(birds, 'maturity'), ANAGE),
     maxLifespanYears: law('最长寿命', '年', ['log10MassG', 'log10Litter'], lifeHistory(birds, 'lifespanY'), ANAGE, '数据库的最长寿命多来自环志和圈养记录'),
     clutchesPerYear: law('每年窝数', '窝/年', ['log10MassG', 'log10Litter'], lifeHistory(birds, 'clutchesPerYear'), ANAGE, 'AnAge 没有鸟的窝间隔；推导时两窝间隔取 365 / 每年窝数，不短于孵化期'),
+  };
+  // 鸟的蛋重只随体重（Rahn 等 1975：蛋 ∝ M^0.77），玩家选的是每窝蛋数；比同体重的真实鸟多太多，孵不过来、喂不过来。
+  // 一只角百灵（Eremophila alpestris）记着 43 个，明显是录入错误，分位数不受它影响。
+  const clutchRows = birds.filter((r) => r.litter);
+  const clutchFit = ols(clutchRows.map((r) => ({ x: [lg(r.massG)], y: lg(r.litter) })));
+  const clutchResiduals = clutchRows.map((r) => lg(r.litter) - (clutchFit.coef[0] + clutchFit.coef[1] * lg(r.massG))).sort((a, b) => a - b);
+  const reproductionBird = {
+    clutchSize: {
+      ...law('每窝蛋数', '个', ['log10MassG'], clutchFit, ANAGE, 'envelope 是真实物种残差的 1% 和 99% 分位'),
+      envelope: { low: round(quantile(clutchResiduals, 0.01), 3), high: round(quantile(clutchResiduals, 0.99), 3) },
+    },
   };
 
   // ---------- 飞行的体重上限：AnAge 里会飞的鸟最重的那种（不会飞的目和种排除）。
@@ -202,6 +248,7 @@ export function fitLaws() {
       'residualSdLog10 是拟合误差：真实物种通常落在预测值的 10^±sd 倍以内。',
     mammal: mammalLaws,
     bird: birdLaws,
+    reproduction: { mammal: reproductionMammal, bird: reproductionBird },
     survival: {
       name: '成体年存活率',
       formula: 's = exp(−k / 最长寿命（年）)',

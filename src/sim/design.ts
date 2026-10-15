@@ -212,10 +212,13 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
 
   // 身体可行性（阶段 3.5）：等级和提醒；撑不住的身体，后果写进物种参数（撑得住的不写，参数和以前一样）。
   const body = allocateBody(design, bird, kit.viability);
-  const viability = runChecks({ design, parts, bird, body, rules: kit.viability, ...(env ? { env } : {}) });
+  const viability = runChecks({ design, parts, bird, body, rules: kit.viability, laws: kit.laws, ...(env ? { env } : {}) });
   for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
   const bone = viability.find((r) => r.id === 'skeleton');
   if (bone && bone.grade !== 'ok') params.body = skeletonEffects(bone.evidence.safety!, kit.viability);
+  const birth = viability.find((r) => r.id === 'reproduction')?.evidence;
+  if (birth && birth.neonateSurvival! < 1) params.body = { ...params.body, neonateSurvival: birth.neonateSurvival! };
+  if (birth && birth.dystociaPerLitter! > 0) params.body = { ...params.body, dystociaPerLitter: birth.dystociaPerLitter! };
 
   return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear, body, viability };
 }

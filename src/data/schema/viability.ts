@@ -50,5 +50,19 @@ export const ViabilityRulesSchema = z.strictObject({
     /** 安全系数正好在"站不住"时每天承重骨折的概率；"走不动"以上为 0，中间按缺口的平方插值，再低继续上升（封顶 1）。 */
     fractureDailyAtStand: ThresholdSchema,
   }),
+  /** 繁殖（阶段 3.5）：一窝总重和新生体重的真实范围在 laws.json（拟合），这里只给后果的形状和分级。 */
+  reproduction: z.strictObject({
+    /** 新生儿比真实范围还小时，活下来的比例 =（新生体重 ÷ 范围下限）^这个指数。 */
+    neonateSurvivalExp: ThresholdSchema,
+    /** 鸟每窝蛋数超过真实范围时，养得活的比例 =（范围上限 ÷ 蛋数）^这个指数。 */
+    clutchSurvivalExp: ThresholdSchema,
+    /** 新生儿正好是范围上限的两倍大时，每生一窝母亲难产死亡的概率；按超出倍数的对数的平方上升，封顶 1。 */
+    dystociaAtDouble: ThresholdSchema,
+    /** 分级：幼崽活下来的比例低于这两个数是"不行""致命"；难产概率高于这两个数同理。 */
+    failingSurvival: ThresholdSchema,
+    fatalSurvival: ThresholdSchema,
+    failingDystocia: ThresholdSchema,
+    fatalDystocia: ThresholdSchema,
+  }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;

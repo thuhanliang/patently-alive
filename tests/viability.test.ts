@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { designTemplates, hintTemplates, partLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
 import { ViabilityRulesSchema } from '../src/data/schema/viability';
 import { DesignSchema } from '../src/data/schema/design';
-import { allocateBody, compileDesign, deserialize, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
+import { allocateBody, compileDesign, deserialize, focusAround, percentText, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
 import { chaseFactor, deriveSpecies, preyMatrix } from '../src/sim/physiology';
 import { CAUSE, recentByCause } from '../src/sim/ledger';
 import viabilityJson from '../src/data/scaling/viability.json';
@@ -208,4 +208,95 @@ describe('体重放到 100 吨', () => {
     for (const t of s.sim.totals()) expect(Number.isFinite(t)).toBe(true);
     for (const d of s.sim.state.lastDay) for (const v of Object.values(d)) expect(Number.isFinite(v)).toBe(true);
   }, 120_000);
+});
+
+describe('繁殖检查（阶段 3.5 第 4 步）', () => {
+  const repro = (d: Design) => compileDesign(d, kit).viability.find((r) => r.id === 'reproduction')!;
+  const withRearing = (d: Design, rearing: string): Design => ({ ...d, parts: { ...d.parts, rearing } });
+
+  it('17 条现有技术都在真实范围里，离两头都有余量（至少 1.5 倍），参数里不写繁殖的后果', () => {
+    for (const t of designTemplates) {
+      const r = repro(t.design);
+      expect(r.grade, t.species).toBe('ok');
+      expect(r.margin, t.species).toBeGreaterThan(1.5);
+      const body = compileDesign(t.design, kit).params.body;
+      expect(body?.neonateSurvival, t.species).toBeUndefined();
+      expect(body?.dystociaPerLitter, t.species).toBeUndefined();
+    }
+  });
+
+  it('一窝总重由母亲定：生得越多每个越小，太多就保不住；越大的动物越早到这条线', () => {
+    const cat = template('cat');
+    const neonate = (litterSize: number) => repro({ ...cat, litterSize }).evidence.neonateG!;
+    expect(neonate(2)).toBeCloseTo(neonate(4) * 2, 6);
+    expect(repro({ ...cat, litterSize: 8 }).grade).toBe('ok');
+    const big = compileDesign({ ...cat, litterSize: 16 }, kit);
+    expect(big.viability.find((r) => r.id === 'reproduction')!.grade).toBe('strained');
+    expect(big.hints.some((h) => h.id === 'litterTooBig')).toBe(true);
+    expect(big.params.body?.neonateSurvival).toBeGreaterThan(0.5);
+    expect(big.params.body?.neonateSurvival).toBeLessThan(1);
+    // 100 千克一窝 16 个：一大半保不住。
+    expect(repro({ ...cat, bodyMassKg: 100, litterSize: 16 }).grade).toBe('failing');
+  });
+
+  it('早成的一窝更重，但和真实的早成新生儿比；只生一个，只有很小的晚成动物会难产', () => {
+    const mouse = template('mouse');
+    const single = { ...mouse, litterSize: 1 };
+    expect(repro(withRearing(single, 'precocial')).evidence.neonateG!).toBeGreaterThan(repro(single).evidence.neonateG! * 2);
+    // 真实的早成动物（鼷鹿、犬羚）几千克只生一个，不该算难产。
+    expect(repro(withRearing({ ...single, bodyMassKg: 2 }, 'precocial')).grade).toBe('ok');
+    expect(repro({ ...single, bodyMassKg: 0.1 }).grade).toBe('ok');
+    // 5 克的晚成动物只生一个：新生儿太大，每窝有几个百分点难产。
+    const tiny = compileDesign({ ...single, bodyMassKg: 0.005 }, kit);
+    expect(tiny.viability.find((r) => r.id === 'reproduction')!.grade).toBe('strained');
+    expect(tiny.hints.some((h) => h.id === 'dystocia')).toBe(true);
+    expect(tiny.params.body?.dystociaPerLitter).toBeGreaterThan(0.02);
+    // 骨骼没问题时，body 里只有繁殖的后果。
+    expect(tiny.params.body?.boneSafety).toBeUndefined();
+  });
+
+  it('不到 1% 的后果不写成 0%', () => {
+    expect(percentText(0.004)).toBe('不到 1');
+    expect(percentText(0)).toBe('0');
+    expect(percentText(0.256)).toBe('26');
+  });
+
+  it('鸟：蛋重只随体重，蛋数比同体型真鸟的上限还多就养不活', () => {
+    const dot = template('dotterel');
+    expect(repro({ ...dot, litterSize: 6 }).grade).toBe('ok');
+    const c = compileDesign({ ...dot, bodyMassKg: 0.01, litterSize: 16 }, kit);
+    expect(c.hints.some((h) => h.id === 'clutchTooBig')).toBe(true);
+    expect(c.params.body?.neonateSurvival).toBeLessThan(1);
+    expect(c.params.body?.dystociaPerLitter).toBeUndefined();
+  });
+
+  it.each([
+    ['格子模型', false],
+    ['个体模型（关注区）', true],
+  ])('难产的设计投放后有母亲死于难产，账本里看得到：%s', (_, focused) => {
+    const scenario = scenarioLibrary.get('bird-island-small')!;
+    const world = worldFor(scenario);
+    const config = { seed: 5, world, species: speciesFor(world), tools, design: designDataOf(kit) };
+    const s = new Session(config, scenarioRules(scenario));
+    const design = { ...template('mouse'), litterSize: 1, bodyMassKg: 0.005, id: 'd_bigbaby', name: '大头鼠' };
+    const species = compileDesign(design, kit).params;
+    expect(species.body?.dystociaPerLitter).toBeGreaterThan(0);
+    const { grid } = s.sim.state;
+    let at = { x: 0, y: 0 };
+    for (let i = 0; i < grid.terrain.length; i++) if (grid.terrain[i] !== 0) { at = { x: i % grid.width, y: Math.floor(i / grid.width) }; break; }
+    expect(s.submit({ type: 'introduce', species, design, ...at, count: 60 })).toEqual({ ok: true });
+    if (focused) expect(s.submit({ type: 'setFocus', focus: focusAround(at.x, at.y, 16, 16, grid.width, grid.height) })).toEqual({ ok: true });
+    s.advance(TICKS_PER_DAY * 360);
+    const idx = s.sim.species.length - 1;
+    expect(recentByCause(s.sim.state.deaths, idx)[CAUSE.dystocia]!).toBeGreaterThan(0);
+    expect(s.sim.species[idx]!.dystociaPerLitter).toBe(species.body!.dystociaPerLitter);
+  }, 120_000);
+
+  it('推演里的后果读物种参数：真实物种是 1 和 0（不多抽随机数）', () => {
+    for (const sp of speciesLibrary.values()) {
+      const d = deriveSpecies(sp, 50);
+      expect(d.neonateSurvival).toBe(1);
+      expect(d.dystociaPerLitter).toBe(0);
+    }
+  });
 });

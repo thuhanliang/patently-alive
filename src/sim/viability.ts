@@ -1,7 +1,8 @@
 import type { Design, HintId, Part, Slot } from '../data/schema/design';
+import type { ScalingLaws } from '../data/schema/scaling';
 import type { ViabilityRules } from '../data/schema/viability';
 import type { BodyAllocation } from './body';
-import { detPow } from './detmath';
+import { detExp, detLog, detPow } from './detmath';
 
 /**
  * 身体可行性检查（阶段 3.5）。
@@ -36,6 +37,8 @@ export interface ViabilityContext {
   readonly bird: boolean;
   readonly body: BodyAllocation;
   readonly rules: ViabilityRules;
+  /** 拟合的缩放公式（繁殖检查要用一窝总重和新生体重的真实范围）。 */
+  readonly laws: ScalingLaws;
   readonly env?: EnvironmentProfile;
 }
 
@@ -116,8 +119,94 @@ const skeleton: ViabilityCheck = {
   },
 };
 
-/** 按固定顺序跑的检查。消化与食性（第 6 步）、繁殖（第 4 步）做好后加进来。 */
-export const CHECKS: readonly ViabilityCheck[] = [skeleton];
+const LN10 = detLog(10);
+const log10 = (x: number): number => detLog(x) / LN10;
+const pow10 = (y: number): number => detExp(y * LN10);
+
+/**
+ * 繁殖的取舍（Smith & Fretwell 1974）：母亲每窝能投入的总重由她的体重定，玩家只选"生几个"和早成 / 晚成。
+ * - 兽：一窝总重按体重（早成的重一些）拟合，新生体重 = 一窝总重 ÷ 每窝仔数，再和同体重、同育幼方式的真实新生儿的范围比。
+ *   比最小的还小：幼崽保不住；比最大的还大：难产。
+ * - 鸟：蛋重只随体重（Rahn），每窝蛋数和同体重真实鸟的上限比，多出来的孵不过来、喂不过来。
+ * 返回比值：neonateRatio = 新生体重 ÷ 真实范围的下限（兽）；oversize = 新生体重 ÷ 上限（兽）；clutchRatio = 蛋数 ÷ 上限（鸟）。
+ */
+export function reproductionFit(ctx: Pick<ViabilityContext, 'design' | 'parts' | 'bird' | 'laws'>): { neonateG: number; neonateRatio: number; oversize: number; clutchRatio: number } {
+  const lgM = log10(ctx.design.bodyMassKg * 1000);
+  const lgL = log10(ctx.design.litterSize);
+  if (ctx.bird) {
+    const c = ctx.laws.reproduction.bird.clutchSize;
+    const maxLg = c.intercept + c.terms.log10MassG! * lgM + c.envelope.high;
+    return { neonateG: 0, neonateRatio: 1, oversize: 0, clutchRatio: pow10(lgL - maxLg) };
+  }
+  const r = ctx.laws.reproduction.mammal;
+  const precocial = ctx.parts.rearing.id === 'precocial' ? 1 : 0;
+  const litterLg = r.litterMassG.intercept + r.litterMassG.terms.log10MassG! * lgM + r.litterMassG.terms.precocial! * precocial;
+  const neonateLg = litterLg - lgL;
+  const typicalLg = r.neonateMassG.intercept + r.neonateMassG.terms.log10MassG! * lgM + r.neonateMassG.terms.precocial! * precocial;
+  return {
+    neonateG: pow10(neonateLg),
+    neonateRatio: pow10(neonateLg - typicalLg - r.neonateMassG.envelope.low),
+    oversize: pow10(neonateLg - typicalLg - r.neonateMassG.envelope.high),
+    clutchRatio: 0,
+  };
+}
+
+/** 繁殖撑不住时推演里的后果，写进物种参数的 body。 */
+export interface ReproductionEffects {
+  /** 生下来的幼崽（孵出来的雏）活下来的比例。 */
+  neonateSurvival: number;
+  /** 每生一窝母亲难产死亡的概率。 */
+  dystociaPerLitter: number;
+}
+
+/**
+ * 比值 → 后果（形状由引擎定，系数是数据）：
+ * - 新生儿太小：活下来的比例 = neonateRatio^neonateSurvivalExp；
+ * - 蛋太多：活下来的比例 = (1 / clutchRatio)^clutchSurvivalExp；
+ * - 新生儿太大：每窝难产 = dystociaAtDouble ·（log2 超出倍数）²，封顶 1。
+ */
+export function reproductionEffects(fit: ReturnType<typeof reproductionFit>, rules: ViabilityRules): ReproductionEffects {
+  const r = rules.reproduction;
+  let survival = 1;
+  if (fit.neonateRatio < 1) survival = detPow(fit.neonateRatio, r.neonateSurvivalExp.value);
+  if (fit.clutchRatio > 1) survival = detPow(1 / fit.clutchRatio, r.clutchSurvivalExp.value);
+  const over = fit.oversize > 1 ? log10(fit.oversize) / log10(2) : 0;
+  return {
+    neonateSurvival: survival < 1 ? Math.max(0.0001, round4(survival)) : 1,
+    dystociaPerLitter: round4(Math.min(1, r.dystociaAtDouble.value * over * over)),
+  };
+}
+
+/** 百分比：有后果就不写成 0（不到 1% 写"不到 1"）。 */
+export function percentText(p: number): string {
+  const n = Math.round(p * 100);
+  return p > 0 && n === 0 ? '不到 1' : String(n);
+}
+
+const reproduction: ViabilityCheck = {
+  id: 'reproduction',
+  needs: [],
+  evaluate(ctx) {
+    const r = ctx.rules.reproduction;
+    const fit = reproductionFit(ctx);
+    const fx = reproductionEffects(fit, ctx.rules);
+    const loss = 1 - fx.neonateSurvival;
+    const hints: CheckResult['hints'][number][] = [];
+    const vars = { litter: ctx.design.litterSize, neonate: round2(fit.neonateG), lost: percentText(loss), dystocia: percentText(fx.dystociaPerLitter) };
+    if (loss > 0) hints.push({ id: ctx.bird ? 'clutchTooBig' : 'litterTooBig', vars });
+    if (fx.dystociaPerLitter > 0) hints.push({ id: 'dystocia', vars });
+    let grade: Grade = 'ok';
+    if (loss > 0 || fx.dystociaPerLitter > 0) grade = 'strained';
+    if (fx.neonateSurvival < r.failingSurvival.value || fx.dystociaPerLitter >= r.failingDystocia.value) grade = 'failing';
+    if (fx.neonateSurvival < r.fatalSurvival.value || fx.dystociaPerLitter >= r.fatalDystocia.value) grade = 'fatal';
+    // 余量：离真实范围的两头还有多远（取近的一头）。
+    const margin = ctx.bird ? 1 / fit.clutchRatio : Math.min(fit.neonateRatio, 1 / fit.oversize);
+    return { id: 'reproduction', grade, margin, evidence: { ...fit, ...fx }, hints };
+  },
+};
+
+/** 按固定顺序跑的检查。消化与食性（第 6 步）做好后加进来。 */
+export const CHECKS: readonly ViabilityCheck[] = [skeleton, reproduction];
 
 export function runChecks(ctx: ViabilityContext): CheckResult[] {
   return CHECKS.map((c) => {

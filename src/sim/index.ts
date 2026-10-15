@@ -22,5 +22,5 @@ export { type Alert, type AlertKind } from './alerts';
 export { SUBSTANTIALLY_SAME, TRAIT_WEIGHTS, compare, nearest, traitsOf, type Match, type TraitKey, type TraitQuery } from './similarity';
 export { applyLaw, errorFactor, scaleTraits, trophicLevel, type ScaledTraits, type ScalingCauses } from './scaling';
 export { allocateBody, type BodyAllocation } from './body';
-export { CHECKS, CHECK_IDS, GRADES, runChecks, skeletonEffects, skeletonSafety, worstGrade, type SkeletonEffects, type CheckId, type CheckResult, type EnvironmentProfile, type Grade, type ViabilityCheck } from './viability';
+export { CHECKS, CHECK_IDS, GRADES, percentText, reproductionEffects, reproductionFit, runChecks, skeletonEffects, skeletonSafety, worstGrade, type SkeletonEffects, type CheckId, type CheckResult, type EnvironmentProfile, type Grade, type ViabilityCheck } from './viability';
 export { REPRO_KJ_PER_G, calibrate, compileDesign, designDataOf, designKitFromData, makeDesignKit, partsOf, type CompiledDesign, type DesignKit, type EnergyLine } from './design';

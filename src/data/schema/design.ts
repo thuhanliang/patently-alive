@@ -124,6 +124,9 @@ export const HINT_IDS = [
   'boneCannotRun',
   'boneCannotWalk',
   'boneCannotStand',
+  'litterTooBig',
+  'clutchTooBig',
+  'dystocia',
 ] as const;
 
 /** 设计台提醒的模板：{占位符} 由编译器填。每个提醒都必须有，不能多。 */
