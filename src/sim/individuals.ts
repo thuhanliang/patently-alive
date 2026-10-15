@@ -6,6 +6,7 @@ import {
   BURROW_EXPOSURE,
   CATCH_RADIUS_CELLS,
   CATCH_SUCCESS,
+  chaseFactor,
   FED_SUFFICIENT,
   FLIGHT_ESCAPE,
   INVERTEBRATE_YIELD,
@@ -462,6 +463,7 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           } else {
             if (!pred.carnivore) continue;
             if (prey.flies) chance *= FLIGHT_ESCAPE;
+            chance = Math.min(1, chance * chaseFactor(pred, prey));
           }
           if (chance <= 0 || rng.nextFloat() >= chance) continue;
           removed[q] = 1;
@@ -520,10 +522,16 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
 
     const base = juvenile ? sp.juvenileDailyMortality : sp.adultDailyMortality;
     const starve = reserve < 0 ? sp.starvationRate * Math.min(1, -reserve) : 0;
-    if (rng.nextFloat() < base + starve) {
+    // 骨骼撑不住的设计每天有骨折的风险（阶段 3.5）；真实物种为 0，不多抽随机数。窝里的幼体不承重，不骨折（和格子模型一致）。
+    const inNest = juvenile && sp.nest !== null && juvenileStageAt(sp, ind.born[i]!, ctx.day) < sp.nestStages;
+    const fracture = inNest ? 0 : sp.fractureDaily;
+    if (rng.nextFloat() < base + starve + fracture) {
       removed[i] = 1;
-      // 和格子模型一样按两种死因的比重拆分。
-      if (starve > 0 && rng.nextFloat() < starve / (base + starve)) {
+      // 和格子模型一样按死因的比重拆分：先分出骨折，其余再分饥饿和其他。
+      if (fracture > 0 && rng.nextFloat() < fracture / (base + starve + fracture)) {
+        stats[s]!.deathsOther += 1;
+        recordDeaths(ctx.ledger, s, CAUSE.fracture, block, 1);
+      } else if (starve > 0 && rng.nextFloat() < starve / (base + starve)) {
         stats[s]!.deathsStarvation += 1;
         recordDeaths(ctx.ledger, s, CAUSE.starvation, block, 1);
       } else {

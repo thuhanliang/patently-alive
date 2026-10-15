@@ -45,6 +45,8 @@ function baseName(path: string): string {
 export const speciesLibrary: ReadonlyMap<string, SpeciesParams> = new Map(
   Object.values(speciesFiles).map((json) => {
     const s = SpeciesSchema.parse(json);
+    // 身体的后果（body）只能由设计编译器从性状算出（铁律 5），真实物种的数据不能直接写。
+    if (s.body !== undefined) throw new Error(`真实物种 ${s.id} 不能写 body`);
     return [s.id, s] as const;
   }),
 );

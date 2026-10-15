@@ -49,10 +49,11 @@
   },
   "skeleton": {
     "safetyAtRef": { "value": 3, "basis": "law", "confidence": "2+", "source": "Biewener 1989/1990：0.1–300 千克的哺乳类奔跑时骨安全系数约 2–4，取中间" },
-    "postureLimitKg": { "value": 300, "basis": "law", "confidence": "1", "source": "Biewener 1989：站姿变直抵消应力上升只到约 300 千克，更重的（大象）不能腾空奔跑" },
-    "stressExp": { "value": 0.333, "basis": "law", "confidence": "2+", "source": "平方–立方定律：形状不变时骨应力 ∝ M^(1/3)" },
+    "postureLimitKg": { "value": 300, "basis": "law", "confidence": "checked", "source": "Biewener 1989/1990（Science）：站姿变直能抵消应力上升的范围上端约 300 千克；是软界限，不是硬上限" },
+    "stressExp": { "value": 0.28, "basis": "law", "confidence": "checked", "source": "Biewener 2005（J Appl Physiol 98:2288）：按实测骨形状，骨应力 ∝ M^0.28（纯平方–立方定律是 1/3）" },
     "cannotRun": { "value": 1.5, "basis": "assumption", "confidence": "unverified", "source": "安全系数低于 1.5：走路的负荷（约为奔跑的一半）还撑得住，奔跑撑不住" },
     "cannotWalk": { "value": 1, "basis": "assumption", "confidence": "unverified", "source": "低于 1：奔跑的峰值应力已超过断裂应力，走路也吃力，日常活动容易骨折" },
-    "cannotStand": { "value": 0.7, "basis": "assumption", "confidence": "unverified", "source": "低于 0.7：连静止承重都接近极限" }
+    "cannotStand": { "value": 0.7, "basis": "assumption", "confidence": "unverified", "source": "低于 0.7：连静止承重都接近极限" },
+    "fractureDailyAtStand": { "value": 0.05, "basis": "assumption", "confidence": "unverified", "source": "安全系数正好在\"站不住\"时每天承重骨折的概率：平均约 20 天，多数活不到成年。\"走不动\"以上为 0，往下按缺口的平方上升" }
   }
 }

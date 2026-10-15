@@ -75,6 +75,22 @@ export const SpeciesSchema = z
      * （部件的开销、育幼、消化率），吃不够照样挨饿（阶段 3）。
      */
     energyFactor: z.number().positive().optional(),
+    /**
+     * 身体撑不住的地方（阶段 3.5）：设计编译器按可行性检查算出（src/sim/viability.ts），真实物种不写，
+     * 撑得住的设计也不写。骨安全系数低：追不上、逃不掉、走得慢、会骨折。
+     */
+    body: z
+      .strictObject({
+        /** 骨的安全系数（尸检、设计台引用）。 */
+        boneSafety: z.number().positive(),
+        /** 奔跑能力（0–1]：追捕时捕获率乘它；被追时被抓的概率乘 2 − 它。 */
+        runFactor: z.number().gt(0).max(1),
+        /** 走路能力（0–1]：每天的活动范围乘它。 */
+        walkFactor: z.number().gt(0).max(1),
+        /** 每天承重骨折的概率。 */
+        fractureDaily: z.number().min(0).max(1),
+      })
+      .optional(),
     /** 画法：主色（设计物种在设计台上选；真实物种的主色在 render/palette.ts）。推演不读它。 */
     appearance: z.object({ color: z.string().regex(/^#[0-9a-f]{6}$/) }).optional(),
     source: z.string(),

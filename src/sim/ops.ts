@@ -140,8 +140,11 @@ export const SANDBOX_RULES: Rules = {
  * 同一份日志回放出同一个结果。
  */
 export const LOG_FORMAT = 'patently-alive/oplog';
-/** 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。8：设计物种（配置带设计数据、操作附设计）。9：设计数据带身体可行性阈值（阶段 3.5）。 */
-export const LOG_VERSION = 9;
+/**
+ * 推演规则变了、旧日志回放结果会不同时加一；旧版本日志直接拒绝。8：设计物种（配置带设计数据、操作附设计）。
+ * 9：设计数据带身体可行性阈值（阶段 3.5）。10：骨骼撑不住的设计，后果写进物种参数（body），阈值数据也改了（阶段 3.5）。
+ */
+export const LOG_VERSION = 10;
 
 export const OpLogSchema = z
   .object({
