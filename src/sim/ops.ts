@@ -147,8 +147,9 @@ export const LOG_FORMAT = 'patently-alive/oplog';
  * 13：繁殖检查（阶段 3.5）：缩放数据和阈值数据都多了 reproduction，物种参数 body 多了两项。
  * 14：繁殖节奏（阶段 3.5）：大型动物几年一窝（间隔可超过一年），设计可以写"自动"仔数，缩放数据多了 pace。
  * 15：消化检查（阶段 3.5）：设计数据多了植物类型和消化阈值，部件多了消化道、挑食和反刍，植物类型多了食物质量，物种参数 body 多了 gut。
+ * 16：仔数可以写成"比同体型的一般多多少"（litterBias），体型变了仔数跟着变。
  */
-export const LOG_VERSION = 15;
+export const LOG_VERSION = 16;
 
 export const OpLogSchema = z
   .object({
