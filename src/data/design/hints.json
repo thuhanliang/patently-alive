@@ -7,6 +7,7 @@
   "beakOnMammal": "长毛的配一张喙，审查员会多看两眼。",
   "teethOnBird": "长羽毛的配一口牙，审查员会多看两眼。",
   "wingsOnMammal": "兽长翅膀？蝙蝠倒是有先例，只是我们的公式没收过蝙蝠的数据。",
+  "multiYearLitter": "这么大的个子，一窝要带大约 {years} 年才轮到下一窝（狮虎约两年，象四五年）。种群涨得慢，损失也补得慢。",
   "oneLitterSeason": "繁殖季只有 {months} 个月，两窝要隔 {interval} 天，一年只够生一窝。",
   "groundNestLong": "窝在地上一放就是 {days} 天。鼠和猫都会去翻。",
   "bigLitterShortLife": "一窝 {litter} 个，代价是平均活不长：成体一年只有 {survival} 能活到下一年。",

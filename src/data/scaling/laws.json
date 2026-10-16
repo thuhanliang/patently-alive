@@ -222,6 +222,35 @@
       }
     }
   },
+  "pace": {
+    "typicalLitter": {
+      "name": "同体型一般一窝几个",
+      "unit": "个",
+      "intercept": 0.5707,
+      "terms": {
+        "log10MassG": -0.116,
+        "trophicLevel": 0.0668
+      },
+      "n": 1087,
+      "r2": 0.352,
+      "residualSdLog10": 0.221,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类），不含有袋类和单孔类",
+      "note": "设计台\"自动\"仔数取它（四舍五入，至少 1）；只是同体型的典型值，玩家可以改"
+    },
+    "interbirthDays": {
+      "name": "胎间隔（只看体重）",
+      "unit": "天",
+      "intercept": 1.5115,
+      "terms": {
+        "log10MassG": 0.2481
+      },
+      "n": 616,
+      "r2": 0.462,
+      "residualSdLog10": 0.341,
+      "source": "PanTHERIA 1.0（Jones et al. 2009），陆生哺乳动物（不含翼手目、鲸目、海牛目、鳍足类）",
+      "note": "全年平均的胎间隔；超过一年时设计编译器用它作\"几年一窝\"（狮虎约两年，象四五年），一年以内仍按繁殖季里的间隔算"
+    }
+  },
   "survival": {
     "name": "成体年存活率",
     "formula": "s = exp(−k / 最长寿命（年）)",

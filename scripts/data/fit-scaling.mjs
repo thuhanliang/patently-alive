@@ -145,7 +145,8 @@ export function fitLaws() {
   const PRECOCIAL_ORDERS = new Set(['Artiodactyla', 'Cetartiodactyla', 'Perissodactyla', 'Proboscidea', 'Hyracoidea']);
   const PRECOCIAL_FAMILIES = new Set(['Caviidae', 'Hydrochaeridae', 'Dasyproctidae', 'Cuniculidae', 'Erethizontidae', 'Chinchillidae', 'Octodontidae', 'Echimyidae', 'Myocastoridae', 'Capromyidae', 'Dinomyidae']);
   const isPrecocial = (r) => PRECOCIAL_ORDERS.has(r.order) || PRECOCIAL_FAMILIES.has(r.family) || (r.family === 'Leporidae' && r.genus === 'Lepus');
-  const breeders = mammals.filter((r) => r.neonateG && r.litter && !MARSUPIAL_ORDERS.has(r.order));
+  const breedersAll = mammals.filter((r) => r.litter && !MARSUPIAL_ORDERS.has(r.order));
+  const breeders = breedersAll.filter((r) => r.neonateG);
   const litterMassFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG * r.litter) })));
   const neonateFit = ols(breeders.map((r) => ({ x: [lg(r.massG), isPrecocial(r) ? 1 : 0], y: lg(r.neonateG) })));
   // 同体重、同育幼方式的新生儿大小的真实范围：残差的 1% 和 99% 分位（比这还小的养不活，比这还大的生不下来）。
@@ -167,6 +168,26 @@ export function fitLaws() {
       ...law('新生体重', '克', ['log10MassG', 'precocial'], neonateFit, PAN_BREED, '早成的新生儿大一些；envelope 是真实物种残差的 1% 和 99% 分位'),
       envelope: { low: round(quantile(neonateResiduals, 0.01), 3), high: round(quantile(neonateResiduals, 0.99), 3) },
     },
+  };
+
+  // ---------- 繁殖节奏（阶段 3.5）：同体型一般一窝几个（设计台的"自动"），大型动物几年才生一窝。
+  const pace = {
+    typicalLitter: law(
+      '同体型一般一窝几个',
+      '个',
+      ['log10MassG', 'trophicLevel'],
+      ols(breedersAll.filter((r) => r.trophic).map((r) => ({ x: [lg(r.massG), r.trophic], y: lg(r.litter) }))),
+      `${PAN}，不含有袋类和单孔类`,
+      '设计台"自动"仔数取它（四舍五入，至少 1）；只是同体型的典型值，玩家可以改',
+    ),
+    interbirthDays: law(
+      '胎间隔（只看体重）',
+      '天',
+      ['log10MassG'],
+      ols(mammals.filter((r) => r.interbirth && r.litter).map((r) => ({ x: [lg(r.massG)], y: lg(r.interbirth) }))),
+      PAN,
+      '全年平均的胎间隔；超过一年时设计编译器用它作"几年一窝"（狮虎约两年，象四五年），一年以内仍按繁殖季里的间隔算',
+    ),
   };
 
   // ---------- 鸟：AnAge
@@ -249,6 +270,7 @@ export function fitLaws() {
     mammal: mammalLaws,
     bird: birdLaws,
     reproduction: { mammal: reproductionMammal, bird: reproductionBird },
+    pace: pace,
     survival: {
       name: '成体年存活率',
       formula: 's = exp(−k / 最长寿命（年）)',
