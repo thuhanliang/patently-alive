@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { designTemplates, hintTemplates, partLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
+import { designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, scenarioLibrary, speciesFor, speciesLibrary, tools, viabilityRules, worldFor, type Design } from '../src/data';
 import { ViabilityRulesSchema } from '../src/data/schema/viability';
 import { DesignSchema } from '../src/data/schema/design';
-import { Sim, allocateBody, compileDesign, deserialize, focusAround, percentText, typicalLitterSize, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
-import { chaseFactor, deriveSpecies, preyMatrix } from '../src/sim/physiology';
+import { Sim, allocateBody, checksum, compileDesign, deserialize, focusAround, percentText, typicalLitterSize, designDataOf, makeDesignKit, scenarioRules, serialize, Session, skeletonEffects, skeletonSafety, TICKS_PER_DAY } from '../src/sim';
+import { chaseFactor, deriveSpecies, plantValues, preyMatrix } from '../src/sim/physiology';
 import { CAUSE, recentByCause } from '../src/sim/ledger';
 import viabilityJson from '../src/data/scaling/viability.json';
 
-const kit = makeDesignKit(partLibrary, scalingLaws, hintTemplates, viabilityRules, designTemplates.map((t) => t.design));
+const kit = makeDesignKit(partLibrary, scalingLaws, hintTemplates, viabilityRules, [...plantLibrary.values()], designTemplates.map((t) => t.design));
 const template = (species: string): Design => designTemplates.find((t) => t.species === species)!.design;
 const withAlloc = (d: Design, allocation: Design['allocation']): Design => ({ ...d, allocation });
 /** 骨头最少、其余全给满。 */
@@ -83,7 +83,10 @@ describe('骨骼检查', () => {
 
   it('撑得住的设计参数和以前一样；撑不住的才在参数里写上后果', () => {
     const d = template('cat');
-    expect('body' in compileDesign(d, kit).params).toBe(false);
+    // 吃植物的设计都带消化道的性质（body.gut，和世界无关）；骨骼撑得住就没有骨骼的后果。
+    expect(compileDesign(d, kit).params.body).toEqual({ gut: expect.any(Object) });
+    const meatOnly: Design = { ...d, parts: { ...d.parts, mouth: 'hooked_beak' } };
+    expect('body' in compileDesign(meatOnly, kit).params).toBe(false);
     const weak = compileDesign(withAlloc(d, BRITTLE), kit).params;
     expect(weak.body).toBeDefined();
     expect(weak.body!.runFactor).toBeLessThan(1);
@@ -369,4 +372,100 @@ describe('繁殖节奏：大型动物几年一窝、仔数"自动"（阶段 3.5�
     expect(fourYears / yearly).toBeGreaterThan(0.15);
     expect(fourYears / yearly).toBeLessThan(0.4);
   }, 180_000);
+});
+
+describe('消化与食性（阶段 3.5）', () => {
+  const plants = [...plantLibrary.values()];
+  const digestionOf = (d: Design) => compileDesign(d, kit).viability.find((r) => r.id === 'digestion')!;
+  const rabbit = template('rabbit');
+  const withGut = (d: Design, digestion: string, kg = d.bodyMassKg): Design => ({ ...d, bodyMassKg: kg, parts: { ...d.parts, digestion } });
+
+  it('17 条现有技术都消化得了自己吃的东西：每种植物上要么吃得够，要么植物只占食谱一小点', () => {
+    for (const t of designTemplates) {
+      const c = compileDesign(t.design, kit);
+      expect(digestionOf(t.design).grade, t.species).toBe('ok');
+      if (c.params.diet.plant < 0.3) continue;
+      // 主要吃植物的：鸟岛的每种植物都消化得够，推演里走原来的算法（plantValue 为 null）。
+      expect(plantValues(c.params, plants.map((type) => ({ type }))), t.species).toBeNull();
+    }
+  });
+
+  it('兔子换成短直肠吃不了草；30 克的田鼠离不开盲肠便', () => {
+    const short = digestionOf(withGut(rabbit, 'short_gut'));
+    expect(['failing', 'fatal']).toContain(short.grade);
+    expect(compileDesign(withGut(rabbit, 'short_gut'), kit).hints.map((h) => h.id)).toContain('gutFailing');
+    const vole = template('vole');
+    expect(digestionOf(vole).evidence.herbFed).toBe(1);
+    expect(digestionOf(withGut(vole, 'simple_stomach')).evidence.herbFed).toBeLessThan(1);
+    // 同一副后肠：吃盲肠便的小个子比照着体型打折的纤维消化得多。
+    const fiber = (d: Design) => digestionOf(d).evidence.fiber!;
+    expect(fiber(vole)).toBeGreaterThan(fiber(withGut(vole, 'simple_stomach')));
+  });
+
+  it('反刍要个子够大：30 克吃不了草，500 千克比后肠发酵还能对付粗草；2 千克时后肠发酵更好', () => {
+    const margin = (gut: string, kg: number) => digestionOf(withGut(rabbit, gut, kg)).margin;
+    expect(['failing', 'fatal']).toContain(digestionOf(withGut(rabbit, 'ruminant', 0.03)).grade);
+    expect(margin('ruminant', 500)).toBeGreaterThan(margin('hindgut_fermenter', 500));
+    expect(margin('hindgut_fermenter', 2)).toBeGreaterThan(margin('ruminant', 2));
+  });
+
+  it('多给消化道，一天能过的食物多；挑食的嘴吃到更好的部分', () => {
+    const d = withGut(rabbit, 'short_gut');
+    const scale = (x: Design) => compileDesign(x, kit).params.body!.gut!.scale;
+    expect(scale(withAlloc(d, { gut: 2 }))).toBeGreaterThan(scale(d) * 1.5);
+    const picky: Design = { ...d, parts: { ...d.parts, mouth: 'gnawing_incisors' } };
+    expect(compileDesign(picky, kit).params.body!.gut!.selective).toBe(true);
+    expect(digestionOf(picky).margin).toBeGreaterThan(digestionOf(d).margin);
+  });
+
+  it('巨型食肉动物、大型食虫动物只出提醒：不改等级，也不改推演参数', () => {
+    const cat = template('cat');
+    const huge = compileDesign({ ...cat, bodyMassKg: 2000 }, kit);
+    expect(huge.hints.map((h) => h.id)).toContain('carnivoreTooBig');
+    expect(huge.viability.find((r) => r.id === 'digestion')!.grade).toBe('ok');
+    const anteater = compileDesign({ ...template('kiwi'), bodyMassKg: 40 }, kit);
+    expect(anteater.hints.map((h) => h.id)).toContain('insectivoreTooBig');
+    expect(compileDesign({ ...cat, bodyMassKg: 3 }, kit).hints.map((h) => h.id)).not.toContain('carnivoreTooBig');
+  });
+
+  it.each([
+    ['格子模型', false],
+    ['个体模型（关注区）', true],
+  ])('推演里吃饱了也会营养不良：真兔子装上短直肠，死于营养不良、生得少；装自己的后肠发酵逐位不变（%s）', (_, focused) => {
+    const world = { ...worldFor(scenarioLibrary.get('bird-island-small')!), species: ['rabbit'], mainIslandOnly: [] };
+    const real = speciesLibrary.get('rabbit')!;
+    const run = (gut: Design['parts']['digestion'] | null) => {
+      const body = gut ? { gut: compileDesign(withGut(rabbit, gut), kit).params.body!.gut! } : undefined;
+      const sim = Sim.create({ seed: 4, world, species: [body ? { ...real, body } : real] });
+      if (focused) sim.setFocus({ x0: 8, y0: 8, x1: 40, y1: 40 });
+      let births = 0;
+      for (let day = 0; day < 240; day++) {
+        sim.stepN(TICKS_PER_DAY);
+        births += sim.state.lastDay[0]!.births;
+      }
+      return { births, total: sim.totals()[0]!, mal: recentByCause(sim.state.deaths, 0)[CAUSE.malnutrition]!, checksum: checksum(sim.state.grid) };
+    };
+    const base = run(null);
+    const own = run('hindgut_fermenter');
+    expect(own).toEqual(base);
+    const bad = run('short_gut');
+    expect(bad.mal).toBeGreaterThan(0);
+    expect(bad.births).toBeLessThan(base.births * 0.7);
+    expect(base.mal).toBe(0);
+  }, 180_000);
+});
+
+describe('消化道塞满为止（阶段 3.5）', () => {
+  it('消化不了的设计吃到消化道的容量为止，不按放大的胃口吃；消化得了的照旧', () => {
+    const rabbit = template('rabbit');
+    const world = worldFor(scenarioLibrary.get('bird-island-small')!);
+    const short = compileDesign({ ...rabbit, parts: { ...rabbit.parts, digestion: 'short_gut' } }, kit).params;
+    const d = deriveSpecies(short, 50, world.plants);
+    expect(d.plantValue).not.toBeNull();
+    const byAppetite = deriveSpecies(short, 50).plantIntakeG;
+    expect(d.plantIntakeG).toBeCloseTo((byAppetite * short.body!.gut!.capacity) / short.energyFactor!, 6);
+    expect(d.plantIntakeG).toBeLessThan(byAppetite / 2);
+    const own = compileDesign(rabbit, kit).params;
+    expect(deriveSpecies(own, 50, world.plants).plantIntakeG).toBe(deriveSpecies(own, 50).plantIntakeG);
+  });
 });

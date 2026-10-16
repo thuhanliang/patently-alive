@@ -30,7 +30,8 @@
       "slot": "mouth",
       "name": "啮齿门齿",
       "blurb": "一对不停生长的门齿，啃种子、草根、树皮。",
-      "diet": { "plant": 0.75, "vertebrate": 0.05, "invertebrate": 0.2 }
+      "diet": { "plant": 0.75, "vertebrate": 0.05, "invertebrate": 0.2 },
+      "selective": true
     },
     {
       "id": "grinding_molars",
@@ -51,7 +52,8 @@
       "slot": "mouth",
       "name": "杂食齿",
       "blurb": "什么都能对付一点的牙。",
-      "diet": { "plant": 0.45, "vertebrate": 0.15, "invertebrate": 0.4 }
+      "diet": { "plant": 0.45, "vertebrate": 0.15, "invertebrate": 0.4 },
+      "selective": true
     },
     {
       "id": "pointed_snout",
@@ -66,7 +68,8 @@
       "beak": true,
       "name": "短锥喙",
       "blurb": "又短又厚的喙，嗑种子。",
-      "diet": { "plant": 0.8, "vertebrate": 0, "invertebrate": 0.2 }
+      "diet": { "plant": 0.8, "vertebrate": 0, "invertebrate": 0.2 },
+      "selective": true
     },
     {
       "id": "probe_bill",
@@ -90,7 +93,8 @@
       "beak": true,
       "name": "粗壮杂食喙",
       "blurb": "什么都啄一点：果子、虫、蛋。",
-      "diet": { "plant": 0.35, "vertebrate": 0.15, "invertebrate": 0.5 }
+      "diet": { "plant": 0.35, "vertebrate": 0.15, "invertebrate": 0.5 },
+      "selective": true
     },
 
     { "id": "walking_legs", "slot": "limbs", "name": "步行腿", "blurb": "普通的四条腿（或两条）。" },
@@ -175,14 +179,16 @@
       "slot": "digestion",
       "name": "单胃",
       "blurb": "一个胃加不长的肠子：肉、虫、种子消化得好，粗草不太行。",
-      "digest": { "plant": 0.55, "vertebrate": 0.85, "invertebrate": 0.75 }
+      "digest": { "plant": 0.55, "vertebrate": 0.85, "invertebrate": 0.75 },
+      "gut": { "capacity": 1 }
     },
     {
       "id": "hindgut_fermenter",
       "slot": "digestion",
       "name": "后肠发酵",
-      "blurb": "很大的盲肠，靠微生物分解草和纤维。",
+      "blurb": "很大的盲肠，靠微生物分解草和纤维；个子小的还会把盲肠便吃回去再消化一遍。",
       "digest": { "plant": 0.7, "vertebrate": 0.6, "invertebrate": 0.65 },
+      "gut": { "capacity": 1.1, "caecotrophy": true },
       "effects": [{ "target": "energy", "factor": 1.04, "why": "背着一肚子发酵的草" }]
     },
     {
@@ -191,6 +197,7 @@
       "name": "短直肠",
       "blurb": "又短又直的肠子，肉进去很快就消化完。",
       "digest": { "plant": 0.25, "vertebrate": 0.9, "invertebrate": 0.8 },
+      "gut": { "capacity": 0.6 },
       "effects": [{ "target": "energy", "factor": 0.97, "why": "肠子轻，带着省力" }]
     },
     {
@@ -198,7 +205,17 @@
       "slot": "digestion",
       "name": "嗉囊与砂囊",
       "blurb": "先存进嗉囊，再用砂囊里的小石子磨碎：种子、虫壳都能对付。",
-      "digest": { "plant": 0.6, "vertebrate": 0.7, "invertebrate": 0.8 }
+      "digest": { "plant": 0.6, "vertebrate": 0.7, "invertebrate": 0.8 },
+      "gut": { "capacity": 1 }
+    },
+    {
+      "id": "ruminant",
+      "slot": "digestion",
+      "name": "反刍",
+      "blurb": "好几个胃室，草先在瘤胃里发酵，再反上来嚼第二遍：最能对付粗草，但要个子够大。",
+      "digest": { "plant": 0.8, "vertebrate": 0.5, "invertebrate": 0.6 },
+      "gut": { "capacity": 1.1, "fermentMinKg": 10 },
+      "effects": [{ "target": "energy", "factor": 1.04, "why": "背着一肚子发酵的草" }]
     },
 
     {

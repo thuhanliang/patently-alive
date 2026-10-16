@@ -1,5 +1,6 @@
 import type { Design, HintId, Part, Slot } from '../data/schema/design';
 import type { ScalingLaws } from '../data/schema/scaling';
+import type { PlantType } from '../data/schema/plant';
 import type { ViabilityRules } from '../data/schema/viability';
 import type { BodyAllocation } from './body';
 import { detExp, detLog, detPow } from './detmath';
@@ -39,6 +40,10 @@ export interface ViabilityContext {
   readonly rules: ViabilityRules;
   /** 拟合的缩放公式（繁殖检查要用一窝总重和新生体重的真实范围）。 */
   readonly laws: ScalingLaws;
+  /** 植物类型（消化检查拿身体和每种植物的食物质量比；植物类型是全局数据，不是某个世界的）。 */
+  readonly plants: readonly PlantType[];
+  /** 这具身体要的能量（开销 ÷ 日常代谢 ÷ 胃口基准，即不算消化率的胃口），消化检查用。 */
+  readonly energyDemand: number;
   readonly env?: EnvironmentProfile;
 }
 
@@ -205,8 +210,85 @@ const reproduction: ViabilityCheck = {
   },
 };
 
-/** 按固定顺序跑的检查。消化与食性（第 6 步）做好后加进来。 */
-export const CHECKS: readonly ViabilityCheck[] = [skeleton, reproduction];
+/** 消化道的性质，写进物种参数的 body.gut（见 SpeciesSchema）。和世界无关。 */
+export interface GutEffects {
+  fiber: number;
+  capacity: number;
+  scale: number;
+  selective?: true;
+}
+
+/**
+ * 消化道（Jarman–Bell 的思路，按 Clauss 等 2007 修正）：
+ * - 纤维能发酵掉的比例：从部件的植物消化率反推（它是大体型吃整株草本的消化率，可溶部分 referenceSoluble）；
+ *   比 smallKg 小，食物在肠里留不够久，按 (M / smallKg)^sizeExp 打折；吃盲肠便补回 caecotrophyRecovery；
+ *   要发酵够久的消化道（反刍）比 fermentMinKg 小也按同一个指数打折。
+ * - 一天能过的食物（capacity，相对同体重真实食草动物的食量）= headroom × 部件容量 × 消化道份额；scale = capacity ÷ energyDemand。
+ */
+export function gutEffects(ctx: Pick<ViabilityContext, 'design' | 'parts' | 'body' | 'rules' | 'energyDemand'>): GutEffects {
+  const r = ctx.rules.digestion;
+  const g = ctx.parts.digestion.gut!;
+  const m = ctx.design.bodyMassKg;
+  const ref = r.referenceSoluble.value;
+  const base = Math.min(1, Math.max(0, (ctx.parts.digestion.digest!.plant - ref) / (1 - ref)));
+  const exp = r.sizeExp.value;
+  let size = m < r.smallKg.value ? detPow(m / r.smallKg.value, exp) : 1;
+  if (g.caecotrophy && size < 1) size = detPow(size, 1 - r.caecotrophyRecovery.value);
+  const ferment = g.fermentMinKg !== undefined && m < g.fermentMinKg ? detPow(m / g.fermentMinKg, exp) : 1;
+  const capacity = round4(r.headroom.value * g.capacity * ctx.body.relative.gut);
+  return {
+    fiber: round4(base * size * ferment),
+    capacity,
+    scale: round4(capacity / ctx.energyDemand),
+    ...(ctx.parts.mouth.selective ? { selective: true as const } : {}),
+  };
+}
+
+/** 吃这种植物时，消化得到的能量占需求的比例（不封顶；推演里封顶 1）：一天能过的量 × 每克能消化的部分。 */
+export function plantYield(gut: { readonly fiber: number; readonly scale: number; readonly selective?: boolean | undefined }, plant: Pick<PlantType, 'soluble'>): number {
+  const s = gut.selective ? plant.soluble.select : plant.soluble.whole;
+  return gut.scale * (s + (1 - s) * gut.fiber);
+}
+
+const digestion: ViabilityCheck = {
+  id: 'digestion',
+  needs: [],
+  evaluate(ctx) {
+    const r = ctx.rules.digestion;
+    const diet = ctx.parts.mouth.diet!;
+    const m = ctx.design.bodyMassKg;
+    const hints: CheckResult['hints'][number][] = [];
+    // 只出提醒、不影响等级和推演：吃不饱是推演里自然发生的事（2026-10-15 定）。
+    if (diet.invertebrate >= 0.5 && m > r.insectivoreMaxKg.value) hints.push({ id: 'insectivoreTooBig', vars: { mass: m, max: r.insectivoreMaxKg.value } });
+    if (diet.vertebrate >= 0.5 && m > r.carnivoreMaxKg.value) hints.push({ id: 'carnivoreTooBig', vars: { mass: round2(m / 1000), max: round2(r.carnivoreMaxKg.value / 1000) } });
+    if (diet.plant === 0) return { id: 'digestion', grade: 'ok', margin: Infinity, evidence: {}, hints };
+    const gut = gutEffects(ctx);
+    // 分级按草本（每个世界都有的主食）；每种植物的结果都放进 evidence，设计台和尸检引用。
+    const evidence: Record<string, number> = { fiber: gut.fiber, scale: gut.scale };
+    // 余量：最差的那种植物上，消化得到的能量（不封顶）比"吃力"的线高多少。
+    let margin = Infinity;
+    let herb: number | undefined;
+    for (const p of ctx.plants) {
+      const y = plantYield(gut, p);
+      const fed = 1 - diet.plant * (1 - Math.min(1, y));
+      evidence[`fed_${p.id}`] = fed;
+      margin = Math.min(margin, (1 - diet.plant * (1 - y)) / r.strainedFed.value);
+      if (p.form === 'herb' && herb === undefined) herb = fed;
+    }
+    const herbFed = herb ?? 1;
+    let grade: Grade = 'ok';
+    if (herbFed < r.fatalFed.value) grade = 'fatal';
+    else if (herbFed < r.failingFed.value) grade = 'failing';
+    else if (herbFed < r.strainedFed.value) grade = 'strained';
+    const vars = { fed: percentText(herbFed), plant: percentText(diet.plant) };
+    if (grade === 'strained') hints.push({ id: 'gutStrained', vars });
+    if (grade === 'failing' || grade === 'fatal') hints.push({ id: 'gutFailing', vars });
+    return { id: 'digestion', grade, margin, evidence: { ...evidence, herbFed }, hints };
+  },
+};
+
+/** 按固定顺序跑的检查。 */
+export const CHECKS: readonly ViabilityCheck[] = [skeleton, digestion, reproduction];
 
 export function runChecks(ctx: ViabilityContext): CheckResult[] {
   return CHECKS.map((c) => {

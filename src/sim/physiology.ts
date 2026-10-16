@@ -1,5 +1,7 @@
+import type { PlantType } from '../data/schema/plant';
 import type { SpeciesParams } from '../data/schema/species';
 import { detPow } from './detmath';
+import { plantYield } from './viability';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
 
 /**
@@ -154,6 +156,19 @@ export interface DerivedSpecies {
   readonly neonateSurvival: number;
   /** 每生一窝母亲难产死亡的概率（阶段 3.5）。 */
   readonly dystociaPerLitter: number;
+  /**
+   * 吃各种植物（顺序同 world.plants）时，消化得到的能量占需求的比例（0–1，阶段 3.5 消化检查）。
+   * 真实物种、或者每种植物都消化得够的，是 null：推演走原来的算法，不多算、不多抽随机数。
+   */
+  readonly plantValue: readonly number[] | null;
+}
+
+/** 消化道吃这个世界的各种植物能取出的能量比例；全都够（或者没写消化道）时为 null。 */
+export function plantValues(p: SpeciesParams, plants: readonly { type: Pick<PlantType, 'soluble'> }[] | undefined): readonly number[] | null {
+  const gut = p.body?.gut;
+  if (!gut || !plants || p.diet.plant === 0) return null;
+  const v = plants.map((w) => Math.min(1, plantYield(gut, w.type)));
+  return v.every((x) => x >= 1) ? null : v;
 }
 
 /**
@@ -187,7 +202,8 @@ function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
   return home !== undefined ? Math.min(byMass, TERRITORY_OVERLAP / home) : byMass;
 }
 
-export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpecies {
+/** plants：这个世界的植物（world.plants），消化检查和它比；不给就当作什么植物都消化得够（只看推演规律的测试）。 */
+export function deriveSpecies(p: SpeciesParams, cellSizeM: number, plants?: readonly { type: Pick<PlantType, 'soluble'> }[]): DerivedSpecies {
   // 胃口（设计物种的能量收支）乘在代谢体重上：三类食物的需求一起放大或缩小。
   const metabolicMass = detPow(p.bodyMassKg, 0.75) * (p.energyFactor ?? 1);
   const { juvenileStages, nestStages, stageDays } = conveyor(p);
@@ -197,6 +213,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
   // 最长一段连续繁殖期的天数；它比两窝间隔还短时，每段繁殖期只够生一窝。
   const breedingDays = longestSeasonDays(p.reproduction.breedingByMonth);
   const typicalPerKm2 = DAMUTH_COEF * detPow(p.bodyMassKg * 1000, -0.75);
+  const plantValue = plantValues(p, plants);
   const cellKm2 = (cellSizeM * cellSizeM) / 1_000_000;
   return {
     params: p,
@@ -205,7 +222,8 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     carnivore: p.diet.vertebrate >= PURSUIT_DIET_SHARE,
     insectivore: p.diet.invertebrate > 0,
     bodyMassG: p.bodyMassKg * 1000,
-    plantIntakeG: p.diet.plant * HERBIVORE_INTAKE_COEF * metabolicMass,
+    // 消化道对付不了这里植物的设计（阶段 3.5）：塞满肠子为止，一天吃 capacity 倍同体重真实食草动物的量（再多也过不去）。
+    plantIntakeG: p.diet.plant * HERBIVORE_INTAKE_COEF * (plantValue && p.body?.gut ? detPow(p.bodyMassKg, 0.75) * p.body.gut.capacity : metabolicMass),
     vertebrateIntakeG: p.diet.vertebrate * CARNIVORE_INTAKE_COEF * metabolicMass,
     invertebrateIntakeG: p.diet.invertebrate * INVERTEBRATE_INTAKE_COEF * metabolicMass,
     juvenileStages,
@@ -231,6 +249,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number): DerivedSpeci
     fractureDaily: p.body?.fractureDaily ?? 0,
     neonateSurvival: p.body?.neonateSurvival ?? 1,
     dystociaPerLitter: p.body?.dystociaPerLitter ?? 0,
+    plantValue,
   };
 }
 
@@ -275,11 +294,11 @@ function longestSeasonDays(byMonth: readonly number[]): number {
 }
 
 /** 由配置推导全部物种参数和捕食矩阵；状态初始化和推演都用这一处，保证一致。 */
-export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number): {
+export function deriveAll(species: readonly SpeciesParams[], cellSizeM: number, plants?: readonly { type: Pick<PlantType, 'soluble'> }[]): {
   derived: DerivedSpecies[];
   prey: PreyWeights;
 } {
-  const derived = species.map((s) => deriveSpecies(s, cellSizeM));
+  const derived = species.map((s) => deriveSpecies(s, cellSizeM, plants));
   return { derived, prey: preyMatrix(derived) };
 }
 

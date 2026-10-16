@@ -40,8 +40,16 @@ export const PartSchema = z
     diet: Fractions.optional(),
     /** 口器是喙（鸟的）而不是牙（兽的）：只用于提醒，不影响推导。 */
     beak: z.boolean().optional(),
-    /** 消化方式：三类食物各能吸收多少能量（0–1）。 */
+    /** 消化方式：三类食物各能吸收多少能量（0–1）。植物这一项是大体型动物吃整株草本时的消化率。 */
     digest: Efficiencies.optional(),
+    /**
+     * 消化道（阶段 3.5，消化检查）：capacity 是一天能过多少食物（相对单胃，1 为单胃）；
+     * caecotrophy 吃自己的盲肠便（兔、田鼠），小体型时纤维也能消化得比较完全；
+     * fermentMinKg 发酵要在肠里留够时间，比这个体重小时纤维消化不完全（反刍）。数是假设，见 viability.json 的消化一节。
+     */
+    gut: z.strictObject({ capacity: z.number().min(0.2).max(3), caecotrophy: z.literal(true).optional(), fermentMinKg: z.number().positive().optional() }).optional(),
+    /** 口器能挑着吃植物最好的部分（种子、嫩叶、芽），见植物类型的 soluble.select。 */
+    selective: z.literal(true).optional(),
     /** 腿、爪、翼：会不会飞、会不会爬（飞不飞得起来还要看体重）。 */
     flies: z.boolean().optional(),
     climbs: z.boolean().optional(),
@@ -52,9 +60,10 @@ export const PartSchema = z
     posture: z.number().min(0.5).max(2).optional(),
   })
   .superRefine((p, ctx) => {
-    const need: Partial<Record<Slot, keyof typeof p>> = { coat: 'bodyPlan', mouth: 'diet', digestion: 'digest' };
-    const key = need[p.slot];
-    if (key && p[key] === undefined) ctx.addIssue({ code: 'custom', message: `${p.slot} 槽的部件 ${p.id} 要写 ${key}` });
+    const need: Partial<Record<Slot, readonly (keyof typeof p)[]>> = { coat: ['bodyPlan'], mouth: ['diet'], digestion: ['digest', 'gut'] };
+    for (const key of need[p.slot] ?? []) {
+      if (p[key] === undefined) ctx.addIssue({ code: 'custom', message: `${p.slot} 槽的部件 ${p.id} 要写 ${key}` });
+    }
     if (p.diet) {
       const sum = p.diet.plant + p.diet.vertebrate + p.diet.invertebrate;
       if (Math.abs(sum - 1) > 1e-6) ctx.addIssue({ code: 'custom', message: `${p.id} 的食性加起来是 ${sum}，应为 1` });
@@ -130,6 +139,10 @@ export const HINT_IDS = [
   'litterTooBig',
   'clutchTooBig',
   'dystocia',
+  'gutStrained',
+  'gutFailing',
+  'insectivoreTooBig',
+  'carnivoreTooBig',
 ] as const;
 
 /** 设计台提醒的模板：{占位符} 由编译器填。每个提醒都必须有，不能多。 */

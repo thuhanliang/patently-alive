@@ -16,8 +16,9 @@ export const SAVE_FORMAT = 'patently-alive/save';
 /**
  * 4：死因账本多了三种身体撑不住的死因（阶段 3.5），旧快照的账本形状不同。
  * 5：格子的植被改成按植物类型存（grid.plants），世界配置也跟着变了（阶段 3.5）。
+ * 6：个体多了"今天消化不了的植物"（individuals.lost），植物类型多了食物质量（阶段 3.5）。
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 const ScoresSchema = z.object({
   recovery: z.number().nullable(),

@@ -64,5 +64,17 @@
     "fatalSurvival": { "value": 0.1, "basis": "assumption", "confidence": "unverified", "source": "九成以上的幼崽保不住算\"致命\"：多半补不上死亡" },
     "failingDystocia": { "value": 0.1, "basis": "assumption", "confidence": "unverified", "source": "每生一窝有一成以上的母亲难产死亡算\"不行\"" },
     "fatalDystocia": { "value": 0.5, "basis": "assumption", "confidence": "unverified", "source": "一半以上算\"致命\"" }
+  },
+  "digestion": {
+    "referenceSoluble": { "value": 0.25, "basis": "assumption", "confidence": "unverified", "source": "部件的植物消化率（digest.plant）定义为大体型动物吃整株草本时的消化率，草本整株的可溶部分是 0.25（plants.json）；由此反推出这副消化道能发酵掉多少纤维" },
+    "headroom": { "value": 1.4, "basis": "assumption", "confidence": "unverified", "source": "消化道一天最多能过平时食量的 1.4 倍（哺乳期等时候摄食会上升三到五成，未核对）；按 17 条现有技术校准：最紧的是小家鼠、褐家鼠在灌丛里（余量约 1.02）" },
+    "smallKg": { "value": 0.5, "basis": "law", "confidence": "checked", "source": "Clauss 等 2007 Comp. Biochem. Physiol. A 148:249：约 500 克以上，食物在肠里留的时间不再明显随体型变；更小的留不住，纤维发酵不完全" },
+    "sizeExp": { "value": 0.3, "basis": "law", "confidence": "checked", "source": "同上：消化道容量 ∝ M^1.06、干物质摄食 ∝ M^0.76，容量 ÷ 需求 ∝ M^0.30（Jarman–Bell 的出发点）；只用在 smallKg 以下" },
+    "caecotrophyRecovery": { "value": 0.7, "basis": "assumption", "confidence": "unverified", "source": "吃盲肠便把小体型的纤维损失补回七成（Demment & Van Soest 1985：小型草食动物靠后肠发酵加食粪；检索摘录）。没有它，30 克的后肠发酵者吃不了草" },
+    "strainedFed": { "value": 0.9, "basis": "assumption", "confidence": "unverified", "source": "只吃草本时消化得到的能量不到需求的九成算\"吃力\"（推演里有别的食物或吃得更多能补上）" },
+    "failingFed": { "value": 0.6, "basis": "assumption", "confidence": "unverified", "source": "不到六成算\"不行\"：和推演的 FED_SUFFICIENT 一致，低于它就开始营养不良、少生" },
+    "fatalFed": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "不到三成算\"致命\"：多数会在几周到几个月里因营养不良死去" },
+    "insectivoreMaxKg": { "value": 21.5, "basis": "law", "confidence": "checked", "source": "Carbone, Mace, Roberts & Macdonald 1999 Nature 402:286：靠吃虫子（小猎物）能养活的最大体重约 21.5 千克。只出提醒，不设上限（2026-10-15 定）" },
+    "carnivoreMaxKg": { "value": 1000, "basis": "law", "confidence": "checked", "source": "Carbone, Teacher & Rowcliffe 2007 PLoS Biol. 5:e22：哺乳类食肉动物的体重上限约 1 吨。只出提醒，吃不饱是推演里自然发生的事（2026-10-15 定）" }
   }
 }

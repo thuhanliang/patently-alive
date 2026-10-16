@@ -376,7 +376,17 @@ function viabilityText(r: CheckResult): string {
   if (r.skipped) return '—';
   if (r.id === 'skeleton') return `安全系数 ${(r.evidence.safety ?? 0).toFixed(1)}（${SKELETON_GRADES[r.grade]}）`;
   if (r.id === 'reproduction') return reproductionText(r);
+  if (r.id === 'digestion') return digestionText(r);
   return r.grade === 'ok' ? '正常' : '有问题';
+}
+
+const DIGESTION_GRADES: Record<Grade, string> = { ok: '吃得够', strained: '吃力', failing: '营养不良', fatal: '养不活' };
+
+/** 消化一行：食谱里的植物都是草本时，能量够需要的几成（提醒在批注里）；不吃植物的写"不吃植物"。 */
+function digestionText(r: CheckResult): string {
+  const fed = r.evidence.herbFed;
+  if (fed === undefined) return '不吃植物';
+  return `植物都是草时，能量够需要的 ${percentText(fed)}%（${DIGESTION_GRADES[r.grade]}）`;
 }
 
 /** 繁殖一行：兽写每个新生儿多重，鸟写蛋数是否超出；有后果的写出来（提醒在批注里）。 */

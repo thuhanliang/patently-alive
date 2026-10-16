@@ -64,5 +64,27 @@ export const ViabilityRulesSchema = z.strictObject({
     failingDystocia: ThresholdSchema,
     fatalDystocia: ThresholdSchema,
   }),
+  /**
+   * 消化与食性（阶段 3.5）：能从植物里得到多少能量 = 可溶部分 + 纤维 × 这副消化道能发酵掉的比例；
+   * 一天能过的食物量 = headroom × 部件的容量 × 消化道份额；和这具身体要的能量比。公式见 src/sim/viability.ts。
+   */
+  digestion: z.strictObject({
+    /** 部件的植物消化率是按这个可溶比例的植物定的（大体型吃整株草本）。 */
+    referenceSoluble: ThresholdSchema,
+    /** 一天最多能过平时食量的几倍。 */
+    headroom: ThresholdSchema,
+    /** 比这个体重（千克）小，纤维在肠里留不够久，按 (M / smallKg)^sizeExp 打折。 */
+    smallKg: ThresholdSchema,
+    sizeExp: ThresholdSchema,
+    /** 吃盲肠便把小体型的折扣补回多少（0–1）。 */
+    caecotrophyRecovery: ThresholdSchema,
+    /** 分级：只吃草本时得到的能量占需求的比例低于这几个数，是"吃力""不行""致命"。 */
+    strainedFed: ThresholdSchema,
+    failingFed: ThresholdSchema,
+    fatalFed: ThresholdSchema,
+    /** 只出提醒、不设上限：以虫子为主的超过这个体重、以肉为主的超过这个体重，很可能吃不饱（千克）。 */
+    insectivoreMaxKg: ThresholdSchema,
+    carnivoreMaxKg: ThresholdSchema,
+  }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;

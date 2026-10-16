@@ -94,6 +94,15 @@ export const SpeciesSchema = z
         neonateSurvival: z.number().gt(0).lt(1).optional(),
         /** 每生一窝母亲难产死亡的概率。 */
         dystociaPerLitter: z.number().gt(0).max(1).optional(),
+        /**
+         * 消化道（阶段 3.5，消化检查）：这具身体自己的性质，和世界无关；推演里再拿它和这片地的植物比（见 sim/physiology.ts 的 plantValue）。
+         * fiber：纤维能发酵掉的比例（0–1，已算上体型）；capacity：一天最多能过多少植物（相对同体重真实食草动物的食量）；
+         * scale：capacity ÷ 要的能量；selective：挑着吃最好的部分。
+         * 真实物种不写，吃什么都按原来的算。
+         */
+        gut: z
+          .strictObject({ fiber: z.number().min(0).max(1), capacity: z.number().positive(), scale: z.number().positive(), selective: z.literal(true).optional() })
+          .optional(),
       })
       .refine((b) => Object.keys(b).length > 0, { message: 'body 不写就整个省掉' })
       .refine((b) => [b.boneSafety, b.runFactor, b.walkFactor, b.fractureDaily].every((v) => v === undefined) || [b.boneSafety, b.runFactor, b.walkFactor, b.fractureDaily].every((v) => v !== undefined), {

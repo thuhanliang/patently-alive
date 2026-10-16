@@ -1,4 +1,5 @@
 import { SLOTS, type Design, type EffectTarget, type HintId, type HintTemplates, type Part, type Slot } from '../data/schema/design';
+import type { PlantType } from '../data/schema/plant';
 import type { ScalingLaws } from '../data/schema/scaling';
 import type { SpeciesParams } from '../data/schema/species';
 import type { ViabilityRules } from '../data/schema/viability';
@@ -6,7 +7,7 @@ import { allocateBody, type BodyAllocation } from './body';
 import { detExp, detLog } from './detmath';
 import { applyLaw, scaleTraits, trophicLevel, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
-import { runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
+import { gutEffects, runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
 
 /**
  * 设计编译器（阶段 3）：一份设计 → 物种参数、推导属性、能量收支、提醒。确定、纯函数。
@@ -22,6 +23,8 @@ export interface DesignKit {
   hints: HintTemplates;
   /** 身体可行性检查的阈值（阶段 3.5，viability.json）。 */
   viability: ViabilityRules;
+  /** 植物类型（消化检查用，plants.json）。 */
+  plants: readonly PlantType[];
   /** 现有技术写成设计后"能量需求 ÷ 消化率 ÷ 基础开销"的几何平均：这个值算胃口 1 倍。 */
   appetiteBaseline: number;
 }
@@ -227,13 +230,16 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
 
   // 身体可行性（阶段 3.5）：等级和提醒；撑不住的身体，后果写进物种参数（撑得住的不写，参数和以前一样）。
   const body = allocateBody(design, bird, kit.viability);
-  const viability = runChecks({ design, parts, bird, body, rules: kit.viability, laws: kit.laws, ...(env ? { env } : {}) });
+  const vctx = { design, parts, bird, body, rules: kit.viability, laws: kit.laws, plants: kit.plants, energyDemand: appetite * digestibility, ...(env ? { env } : {}) };
+  const viability = runChecks(vctx);
   for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
   const bone = viability.find((r) => r.id === 'skeleton');
   if (bone && bone.grade !== 'ok') params.body = skeletonEffects(bone.evidence.safety!, kit.viability);
   const birth = viability.find((r) => r.id === 'reproduction')?.evidence;
   if (birth && birth.neonateSurvival! < 1) params.body = { ...params.body, neonateSurvival: birth.neonateSurvival! };
   if (birth && birth.dystociaPerLitter! > 0) params.body = { ...params.body, dystociaPerLitter: birth.dystociaPerLitter! };
+  // 消化道的性质和世界无关，吃植物的都写；吃到什么植物、够不够，推演里再比（见 physiology.ts 的 plantValues）。
+  if (diet.plant > 0) params.body = { ...params.body, gut: gutEffects(vctx) };
 
   return { params, scaled, multipliers: m, energy: { lines, needKjPerDay, digestibility, appetite }, hints, tooHeavyToFly, bird, littersPerYear, body, viability };
 }
@@ -255,19 +261,20 @@ export function makeDesignKit(
   laws: ScalingLaws,
   hints: HintTemplates,
   viability: ViabilityRules,
+  plants: readonly PlantType[],
   templates: readonly Design[],
 ): DesignKit {
-  const kit = { parts, laws, hints, viability };
+  const kit = { parts, laws, hints, viability, plants };
   return { ...kit, appetiteBaseline: calibrate(templates, kit) };
 }
 
 /** 配置里的设计数据（DesignData，见 config.ts）和设计台用的 DesignKit 互相转换：两边编译的结果必须一样。 */
-type DesignData = { parts: readonly Part[]; laws: ScalingLaws; hints: HintTemplates; viability: ViabilityRules; appetiteBaseline: number };
+type DesignData = { parts: readonly Part[]; laws: ScalingLaws; hints: HintTemplates; viability: ViabilityRules; plants: readonly PlantType[]; appetiteBaseline: number };
 
 export function designKitFromData(data: DesignData): DesignKit {
-  return { parts: new Map(data.parts.map((p) => [p.id, p] as const)), laws: data.laws, hints: data.hints, viability: data.viability, appetiteBaseline: data.appetiteBaseline };
+  return { parts: new Map(data.parts.map((p) => [p.id, p] as const)), laws: data.laws, hints: data.hints, viability: data.viability, plants: data.plants, appetiteBaseline: data.appetiteBaseline };
 }
 
-export function designDataOf(kit: DesignKit): DesignData & { parts: Part[] } {
-  return { parts: [...kit.parts.values()], laws: kit.laws, hints: kit.hints, viability: kit.viability, appetiteBaseline: kit.appetiteBaseline };
+export function designDataOf(kit: DesignKit): DesignData & { parts: Part[]; plants: PlantType[] } {
+  return { parts: [...kit.parts.values()], laws: kit.laws, hints: kit.hints, viability: kit.viability, plants: [...kit.plants], appetiteBaseline: kit.appetiteBaseline };
 }
