@@ -11,7 +11,8 @@ import { Rng } from '../src/sim/rng';
 const createRng = (seed: number): Rng => Rng.fromSeed(seed);
 import damageJson from '../src/data/plants/damage.json';
 
-const island = worldFor(scenarioLibrary.get('bird-island-small')!);
+// 关着"吃坏"的小鸟岛（第 8 步起鸟岛默认打开），用来和打开的比。
+const { grazingDamage: _on, ...island }: WorldParams = worldFor(scenarioLibrary.get('bird-island-small')!);
 const damaged: WorldParams = { ...island, grazingDamage: grazingDamageRules };
 const R = grazingDamageRules;
 
@@ -38,8 +39,8 @@ describe('植被被吃坏：数据与开关（阶段 3.5 第 7 步）', () => {
     expect(GrazingDamageSchema.safeParse(noBasis).success).toBe(false);
   });
 
-  it('默认关闭：现有世界都不写；关着时格子里没有吃坏的状态', () => {
-    for (const id of ['bird-island', 'bird-island-small']) expect(worldFor(scenarioLibrary.get(id)!).grazingDamage).toBeUndefined();
+  it('鸟岛、小鸟岛打开（第 8 步），草原不写；关着时格子里没有吃坏的状态', () => {
+    for (const id of ['bird-island', 'bird-island-small']) expect(worldFor(scenarioLibrary.get(id)!).grazingDamage).toEqual(grazingDamageRules);
     expect(createGrid({ ...island, width: 16, height: 16 }, createRng(1)).damage).toBeUndefined();
     expect(createGrid({ ...damaged, width: 16, height: 16 }, createRng(1)).damage).toBeDefined();
   });
@@ -152,5 +153,29 @@ describe('植被被吃坏：推演（阶段 3.5 第 7 步）', () => {
     expect(low).toBeLessThan(floor * 0.5);
     expect(low).toBeGreaterThanOrEqual(floor * R.seedBankShare.value);
     expect(Math.max(...sim.state.grid.damage!.pressure)).toBeGreaterThan(R.rootStop.value);
+  }, 180_000);
+});
+
+describe('鸟岛打开吃坏以后（阶段 3.5 第 8 步）', () => {
+  it('投放一大群大型食草设计，能把小鸟岛的一片草地吃坏：根储备耗下去，土壤变差', async () => {
+    const data = await import('../src/data');
+    const { compileDesign, designDataOf, makeDesignKit, scenarioRules, Session } = await import('../src/sim');
+    const kit = makeDesignKit(data.partLibrary, data.scalingLaws, data.hintTemplates, data.viabilityRules, [...data.plantLibrary.values()], data.designTemplates.map((t) => t.design));
+    const sc = scenarioLibrary.get('bird-island-small')!;
+    const rabbit = data.designTemplates.find((t) => t.species === 'rabbit')!.design;
+    // 300 千克、反刍：像一群牛。
+    const design = { ...rabbit, id: 'd_cow', name: '试验牛', bodyMassKg: 300, parts: { ...rabbit.parts, digestion: 'ruminant' } };
+    const species = compileDesign(design, kit).params;
+    const s = new Session({ seed: 3, world: worldFor(sc), species: speciesFor(worldFor(sc)), tools: data.tools, design: designDataOf(kit) }, { ...scenarioRules(sc), budget: 1e9 });
+    const g = s.sim.state.grid;
+    const cx = Math.floor(g.width / 2);
+    const cy = Math.floor(g.height / 2);
+    const before = s.sim.state.grid.damage!;
+    expect(Math.min(...before.root)).toBe(1);
+    for (const dx of [-6, 6]) expect(s.submit({ type: 'introduce', species, design, x: cx + dx, y: cy, count: 150 })).toEqual({ ok: true });
+    s.advance(360 * TICKS_PER_DAY);
+    const dmg = s.sim.state.grid.damage!;
+    expect(Math.min(...dmg.root)).toBeLessThan(0.5);
+    expect(Math.min(...dmg.soil)).toBeLessThan(0.6);
   }, 180_000);
 });

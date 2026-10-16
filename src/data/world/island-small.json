@@ -18,6 +18,7 @@
     "growthByMonth": [0.6, 1.0, 1.0, 0.75, 0.45, 0.4, 0.5, 0.45, 0.25, 0.0, 0.0, 0.15],
     "decayByMonth": [0.002, 0.002, 0.003, 0.005, 0.007, 0.007, 0.008, 0.012, 0.015, 0.01, 0.008, 0.004]
   },
+  "grazingDamage": true,
   "plants": [
     { "type": "herb", "maxBiomass": 450, "floorBiomass": 8, "initialFraction": 0.35, "growthRate": 0.08 },
     { "type": "shrub", "maxBiomass": 300, "initialFraction": 0.8, "growthRate": 0.002, "floorFraction": 0.05 }
