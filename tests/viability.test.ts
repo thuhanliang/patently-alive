@@ -460,12 +460,12 @@ describe('消化道塞满为止（阶段 3.5）', () => {
     const rabbit = template('rabbit');
     const world = worldFor(scenarioLibrary.get('bird-island-small')!);
     const short = compileDesign({ ...rabbit, parts: { ...rabbit.parts, digestion: 'short_gut' } }, kit).params;
-    const d = deriveSpecies(short, 50, world.plants);
+    const d = deriveSpecies(short, 50, world);
     expect(d.plantValue).not.toBeNull();
     const byAppetite = deriveSpecies(short, 50).plantIntakeG;
     expect(d.plantIntakeG).toBeCloseTo((byAppetite * short.body!.gut!.capacity) / short.energyFactor!, 6);
     expect(d.plantIntakeG).toBeLessThan(byAppetite / 2);
     const own = compileDesign(rabbit, kit).params;
-    expect(deriveSpecies(own, 50, world.plants).plantIntakeG).toBe(deriveSpecies(own, 50).plantIntakeG);
+    expect(deriveSpecies(own, 50, world).plantIntakeG).toBe(deriveSpecies(own, 50).plantIntakeG);
   });
 });

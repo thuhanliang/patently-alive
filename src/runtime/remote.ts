@@ -45,7 +45,7 @@ export class RemoteSession implements SessionReadout {
     speed: number,
     held: boolean,
   ) {
-    this.derived = deriveAll(config.species, config.world.cellSizeM, config.world.plants).derived;
+    this.derived = deriveAll(config.species, config.world.cellSizeM, config.world).derived;
     this.held = held;
     worker.onmessage = (e: MessageEvent<FromHost>) => this.receive(e.data);
     worker.onerror = (e: ErrorEvent) => this.fail(e.message || 'Worker 出错了');
@@ -81,7 +81,7 @@ export class RemoteSession implements SessionReadout {
         // 引进了新物种（或换了一局、读档后物种不同）：按状态里的物种列表重新推导。
         const all = speciesOf(v.state);
         if (all.length !== this.derived.length || all.some((p, i) => p.id !== this.derived[i]!.params.id)) {
-          this.derived = deriveAll(all, v.state.config.world.cellSizeM, v.state.config.world.plants).derived;
+          this.derived = deriveAll(all, v.state.config.world.cellSizeM, v.state.config.world).derived;
           this.speciesVersion += 1;
         }
       }

@@ -389,13 +389,13 @@ function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: 
     if (sp.plantValue) {
       // 和格子模型一致（阶段 3.5）：消化不了的部分记进 lost，不算吃饱。
       const split = (ctx.plantSplit ??= new Float64Array(grid.plants.length));
-      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food, split);
+      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food, split, sp.herbResidual);
       let got = 0;
       for (let k = 0; k < split.length; k++) got += split[k]! * sp.plantValue[k]!;
       ind.fed[i] = ind.fed[i]! + (diet.plant * got) / need;
       ind.lost[i] = ind.lost[i]! + (diet.plant * (eaten - got)) / need;
     } else {
-      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food);
+      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food, undefined, sp.herbResidual);
       ind.fed[i] = ind.fed[i]! + (diet.plant * eaten) / need;
     }
   }

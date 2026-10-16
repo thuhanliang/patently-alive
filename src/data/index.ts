@@ -1,6 +1,7 @@
 import { WorldParamsSchema, type WorldParams } from './schema/world';
-import { PlantsFileSchema, type PlantType } from './schema/plant';
+import { GrazingDamageSchema, PlantsFileSchema, type GrazingDamage, type PlantType } from './schema/plant';
 import plantsJson from './plants/plants.json';
+import damageJson from './plants/damage.json';
 import { SpeciesSchema, type SpeciesParams } from './schema/species';
 import { GoalSchema, ScenarioSchema, type Goal, type Scenario } from './schema/scenario';
 import { ToolsSchema, type Tools } from './schema/tools';
@@ -71,12 +72,20 @@ for (const id of speciesLibrary.keys()) {
 /** 植物类型，按 id 索引。 */
 export const plantLibrary: ReadonlyMap<string, PlantType> = new Map(PlantsFileSchema.parse(plantsJson).types.map((t) => [t.id, t] as const));
 
-/** 世界数据里植物写的是类型 id，加载时换成完整的类型数据（配置因此自带植物数据，日志和存档不依赖植物库）。 */
+/** 植被被吃坏的规则（阶段 3.5 第 7 步）；世界数据写 "grazingDamage": true 时用这一份。 */
+export const grazingDamageRules: GrazingDamage = GrazingDamageSchema.parse(Object.fromEntries(Object.entries(damageJson).filter(([k]) => k !== '说明')));
+
+/**
+ * 世界数据里植物写的是类型 id，加载时换成完整的类型数据（配置因此自带植物数据，日志和存档不依赖植物库）。
+ * "grazingDamage": true 同样换成完整的规则。
+ */
 export function resolvePlants(json: unknown, name: string): unknown {
-  const w = json as { plants?: Array<{ type: unknown }> };
+  const w = json as { plants?: Array<{ type: unknown }>; grazingDamage?: unknown };
   if (!Array.isArray(w.plants)) return json;
+  if (w.grazingDamage !== undefined && w.grazingDamage !== true) throw new Error(`世界「${name}」的 grazingDamage 只能写 true（规则在 src/data/plants/damage.json）`);
   return {
     ...w,
+    ...(w.grazingDamage === true ? { grazingDamage: grazingDamageRules } : {}),
     plants: w.plants.map((p) => {
       // 植物类型只能引用植物库里的 id，不能在世界数据里另写一份。
       if (p === null || typeof p !== 'object' || typeof p.type !== 'string') throw new Error(`世界「${name}」的植物要写成 { "type": "植物类型 id", ... }`);

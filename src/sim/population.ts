@@ -428,16 +428,20 @@ function graze(ctx: DailyContext, c: number, fed: FedByFood): void {
   const { species, populations, grid, cellAreaM2 } = ctx;
   let demand = 0;
   let valued = false;
+  // 吃坏打开时（阶段 3.5 第 7 步）：这一格里啃得最低的那种动物定草本的残留（一起吃，啃到它啃得到的地方）。
+  let residual = 1;
   for (let s = 0; s < species.length; s++) {
     const sp = species[s]!;
     if (!sp.grazer) continue;
-    demand += sizeWeighted(populations[s]!, c) * sp.plantIntakeG;
+    const n = sizeWeighted(populations[s]!, c);
+    demand += n * sp.plantIntakeG;
     if (sp.plantValue) valued = true;
+    if (n > 0 && sp.herbResidual < residual) residual = sp.herbResidual;
   }
   let ratio = 1;
   const split = valued ? (ctx.plantSplit ??= new Float64Array(grid.plants.length)) : undefined;
   if (demand > 0) {
-    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.food, split) / demand;
+    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.food, split, residual) / demand;
   }
   for (let s = 0; s < species.length; s++) {
     const sp = species[s]!;
@@ -467,14 +471,16 @@ function mixValue(value: readonly number[], eaten: Float64Array): number {
  * 一格里吃掉 demand 克植物（干物质），返回实际吃到的量。有木本的格子先按 BROWSE_SHARE 啃木本，其余吃草本，
  * 草本不够再拿木本补。每种植物每天最多被啃掉下限以上部分的 eatenPerDay（植物类型的数据）。
  * 格子模型一天调用一次（整格一起吃），个体模型每小时每只调用一次。
+ * herbResidual：草本啃得到的下限乘它（吃坏打开时小个子啃得更低，见 grazingResidual；关着时为 1）。
  */
-export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: number, food: PlantFood, split?: Float64Array): number {
+export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: number, food: PlantFood, split?: Float64Array, herbResidual = 1): number {
   const woody = food.woody >= 0 ? grid.plants[food.woody]! : undefined;
   const woodyAvail = woody === undefined ? 0 : Math.max(0, woody[c]! - food.woodyFloor) * cellAreaM2 * food.woodyEaten;
   let browsed = Math.min(demand * BROWSE_SHARE, woodyAvail);
   const herb = grid.plants[food.herb]!;
   const veg = herb[c]!;
-  const grazed = Math.min(demand - browsed, Math.max(0, veg - food.herbFloor) * cellAreaM2 * food.herbEaten);
+  const floor = herbResidual === 1 ? food.herbFloor : food.herbFloor * herbResidual;
+  const grazed = Math.min(demand - browsed, Math.max(0, veg - floor) * cellAreaM2 * food.herbEaten);
   herb[c] = veg - grazed / cellAreaM2;
   browsed = Math.min(demand - grazed, woodyAvail);
   if (browsed > 0) woody![c] = woody![c]! - browsed / cellAreaM2;

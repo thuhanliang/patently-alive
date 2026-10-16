@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PlantTypeSchema } from './plant';
+import { GrazingDamageSchema, PlantTypeSchema } from './plant';
 
 const monthly = z.array(z.number().min(0)).length(12);
 
@@ -98,6 +98,11 @@ export const WorldParamsSchema = z.object({
     min: z.number().min(0),
     max: z.number().min(0),
   }).refine((w) => w.min <= w.max, { message: 'weather.min 不能大于 weather.max' }),
+  /**
+   * 植被会被吃坏（阶段 3.5 第 7 步）：写了才打开，不写就是原来的植被（逐位不变）。
+   * 世界数据里写 true，加载时换成 src/data/plants/damage.json 的完整规则（随配置进存档）。
+   */
+  grazingDamage: GrazingDamageSchema.optional(),
   /** 地形生成参数；不写就整张图都是草地。 */
   terrain: IslandTerrainSchema.optional(),
   /** 这片世界里的预设物种（物种数据文件的 id）。 */
