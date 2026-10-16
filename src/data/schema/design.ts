@@ -97,8 +97,13 @@ export const DesignSchema = z.object({
   bodyMassKg: z.number().min(0.005).max(100_000),
   /** 每窝仔数（鸟是每窝蛋数）。 */
   litterSize: z.number().int().min(1).max(16),
-  /** 写 true：仔数不用上面那个数，按同体型、同食性的典型值推（设计台的"自动"，阶段 3.5）。 */
+  /** 写 true：仔数不用上面那个数，按同体型、同食性的典型值推（阶段 3.5 第 4 步；等于 litterBias 写 0）。 */
   litterAuto: z.literal(true).optional(),
+  /**
+   * 仔数写成"比同体型、同食性的典型值多多少"（以 10 为底的对数，0 = 一般，0.3 ≈ 两倍；阶段 3.5）。
+   * 写了它，仔数就不用 litterSize，而是 典型值 × 10^litterBias 四舍五入：体型变了仔数跟着变，猫放大还是"猫的生法"。
+   */
+  litterBias: z.number().min(-1.5).max(1.5).optional(),
   activity: z.enum(['diurnal', 'nocturnal', 'crepuscular', 'cathemeral']),
   /** 繁殖季几个月，从春季第一个月算起。 */
   breedingMonths: z.number().int().min(1).max(12),

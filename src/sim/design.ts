@@ -115,9 +115,25 @@ function fill(template: string, vars: Readonly<Record<string, string | number>>)
  * 四舍五入，夹在 1–16。
  */
 export function typicalLitterSize(laws: ScalingLaws, bodyMassKg: number, diet: SpeciesParams['diet'], bird: boolean): number {
+  return clampLitter(typicalLitterRaw(laws, bodyMassKg, diet, bird));
+}
+
+/** 同上，不取整：仔数的"比一般多多少"（litterBias）以它为基准。 */
+export function typicalLitterRaw(laws: ScalingLaws, bodyMassKg: number, diet: SpeciesParams['diet'], bird: boolean): number {
   const vars = { log10MassG: detLog(bodyMassKg * 1000) / detLog(10), trophicLevel: trophicLevel(diet) };
-  const n = bird ? applyLaw(laws.reproduction.bird.clutchSize, vars) : applyLaw(laws.pace.typicalLitter, vars);
-  return Math.min(16, Math.max(1, Math.round(n)));
+  return bird ? applyLaw(laws.reproduction.bird.clutchSize, vars) : applyLaw(laws.pace.typicalLitter, vars);
+}
+
+const clampLitter = (n: number): number => Math.min(16, Math.max(1, Math.round(n)));
+
+/** 按"比一般多多少"推出的仔数（litterBias 见 DesignSchema）。 */
+export function litterFromBias(laws: ScalingLaws, bodyMassKg: number, diet: SpeciesParams['diet'], bird: boolean, bias: number): number {
+  return clampLitter(typicalLitterRaw(laws, bodyMassKg, diet, bird) * detExp(bias * detLog(10)));
+}
+
+/** 反过来：在这个体重下生 litter 个，比一般多多少（设计台改仔数时用；四舍五入回去正好是 litter）。 */
+export function biasOfLitter(laws: ScalingLaws, bodyMassKg: number, diet: SpeciesParams['diet'], bird: boolean, litter: number): number {
+  return (detLog(litter) - detLog(typicalLitterRaw(laws, bodyMassKg, diet, bird))) / detLog(10);
 }
 
 /**
@@ -128,8 +144,9 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   const all = SLOTS.map((s) => parts[s]);
   const bird = parts.coat.bodyPlan === 'bird';
   const diet = parts.mouth.diet!;
-  // "自动"仔数在最前面换成数：后面的推导、检查、提醒、相似度都只看数。
-  if (design.litterAuto) design = { ...design, litterSize: typicalLitterSize(kit.laws, design.bodyMassKg, diet, bird) };
+  // "比一般多多少"和"自动"（= 一般）的仔数在最前面换成数：后面的推导、检查、提醒、相似度都只看数。
+  const bias = design.litterBias ?? (design.litterAuto ? 0 : undefined);
+  if (bias !== undefined) design = { ...design, litterSize: litterFromBias(kit.laws, design.bodyMassKg, diet, bird, bias) };
   const hasWings = all.some((p) => p.flies === true);
   const climbs = all.some((p) => p.climbs === true);
   const scaled = scaleTraits(kit.laws, { bodyMassKg: design.bodyMassKg, litterSize: design.litterSize, diet, bird, flies: hasWings });

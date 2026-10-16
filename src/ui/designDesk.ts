@@ -1,5 +1,5 @@
 import { DesignSchema, type Design, type Part, type SpeciesParams } from '../data';
-import { checksum, compileDesign, percentText, partsOf, nearest, traitsOf, type CheckId, type CheckResult, type CompiledDesign, type DesignKit, type Grade } from '../sim';
+import { biasOfLitter, checksum, compileDesign, percentText, partsOf, nearest, traitsOf, type CheckId, type CheckResult, type CompiledDesign, type DesignKit, type Grade } from '../sim';
 import { BLUEPRINT, DESIGN_COLORS, cssAlpha } from '../render/palette';
 import { countPicker } from './countPicker';
 import { drawBlueprint, massText } from './blueprint';
@@ -34,8 +34,10 @@ export class DesignDesk {
   private open = false;
   private design: Design;
   private compiled: CompiledDesign | null = null;
-  /** 每窝仔数的输入框："自动"时显示推出来的数（不能改）。 */
+  /** 每窝仔数的输入框：体型、食性变了，里面的数跟着变（设计记的是"比一般多多少"）。 */
   private litterInput: HTMLInputElement | null = null;
+  /** 仔数旁边的"比同体型的一般多几倍"。 */
+  private litterNote: HTMLElement | null = null;
   private readonly canvas = document.createElement('canvas');
   private readonly energyBox = div('desk-energy');
   private readonly derivedBox = div('desk-derived');
@@ -57,7 +59,7 @@ export class DesignDesk {
     // 草稿里的部件可能已经改名或删掉了：编译不了就不用它。
     const draft = loadDraft();
     const usable = draft !== null && canCompile(draft, kit);
-    this.design = usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计', color: DESIGN_COLORS[0] };
+    this.design = relativeLitter(usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计', color: DESIGN_COLORS[0] }, kit);
     el.addEventListener('click', (e) => {
       if (e.target === el) this.close();
     });
@@ -154,7 +156,7 @@ export class DesignDesk {
     from.addEventListener('change', () => {
       const t = this.templates.find((x) => x.species === from.value);
       if (!t) return;
-      this.design = { ...t.design, name: `仿${t.design.name}`.slice(0, 20), color: this.design.color ?? DESIGN_COLORS[0] };
+      this.design = relativeLitter({ ...t.design, name: `仿${t.design.name}`.slice(0, 20), color: this.design.color ?? DESIGN_COLORS[0] }, this.kit);
       saveDraft(this.design);
       this.render();
     });
@@ -196,27 +198,16 @@ export class DesignDesk {
     }
     box.append(row('主色', colors));
 
-    const litter = numberInput(1, 16, d.litterSize, (v) => this.set({ litterSize: v }));
+    // 仔数：填的是"在这个体型下生几个"，记下的是"比同体型、同食性的一般多多少"，所以放大体型时仔数跟着变（阶段 3.5）。
+    const litter = numberInput(1, 16, d.litterSize, (v) => this.set({ litterSize: v, litterBias: this.biasFor(v) }));
     this.litterInput = litter;
-    // "自动"：按同体型、同食性的典型值推（阶段 3.5）。手填的数留着，取消勾选时还原。
-    const auto = document.createElement('input');
-    auto.type = 'checkbox';
-    auto.checked = d.litterAuto === true;
-    litter.disabled = auto.checked;
-    auto.addEventListener('change', () => {
-      litter.disabled = auto.checked;
-      if (auto.checked) this.set({ litterAuto: true });
-      else {
-        const { litterAuto: _, ...rest } = this.design;
-        this.design = rest;
-        litter.value = String(rest.litterSize);
-        this.set({});
-      }
-    });
-    const autoLabel = document.createElement('label');
-    autoLabel.append(auto, ' 自动');
-    autoLabel.title = '按同体型、同食性的真实动物一般一窝几个来定';
-    box.append(row('每窝', litter, textEl('span', '个', 'note'), autoLabel));
+    this.litterNote = textEl('span', '', 'note');
+    const typical = document.createElement('button');
+    typical.textContent = '一般';
+    typical.style.whiteSpace = 'nowrap';
+    typical.title = '按同体型、同食性的真实动物一般一窝几个来定';
+    typical.addEventListener('click', () => this.set({ litterBias: 0 }));
+    box.append(row('每窝', litter, textEl('span', '个', 'note'), typical, this.litterNote));
     const months = numberInput(1, 12, d.breedingMonths, (v) => this.set({ breedingMonths: v }));
     box.append(row('繁殖季', months, textEl('span', '个月（从春天算起）', 'note')));
 
@@ -258,8 +249,13 @@ export class DesignDesk {
 
   private set(patch: Partial<Design>): void {
     this.design = { ...this.design, ...patch };
-    saveDraft(this.design);
     this.update();
+    saveDraft(this.design);
+  }
+
+  /** 在现在的体型、食性下生 litter 个，比一般多多少。 */
+  private biasFor(litter: number): number {
+    return litterBiasOf(this.design, litter, this.kit);
   }
 
   /** 重新编译，刷新线稿、能量收支、推导属性和提醒（控件不重建，免得丢焦点）。 */
@@ -275,7 +271,11 @@ export class DesignDesk {
         if (this.open && this.compiled) drawBlueprint(this.canvas, this.withId(), this.compiled.bird);
       });
     }
-    if (this.litterInput && design.litterAuto) this.litterInput.value = String(c.params.reproduction.litterSize);
+    // 仔数由引擎按"比一般多多少"推：输入框显示推出来的数，设计里的数也跟上（存草稿、换算都用它）。
+    const n = c.params.reproduction.litterSize;
+    this.design = { ...this.design, litterSize: n };
+    if (this.litterInput && document.activeElement !== this.litterInput) this.litterInput.value = String(n);
+    if (this.litterNote) this.litterNote.textContent = biasText(this.design.litterBias ?? 0);
     this.renderEnergy(c);
     this.renderDerived(c);
     this.renderHints(c);
@@ -331,7 +331,6 @@ export class DesignDesk {
       .filter(([, v]) => (v as number) > 0)
       .map(([k, v]) => `${k} ${Math.round((v as number) * 100)}%`)
       .join('，');
-    const littersPerYear = c.littersPerYear;
     const move = [p.movement.flies ? '会飞' : c.tooHeavyToFly ? '有翅膀但飞不起来' : null, p.movement.climbs ? '会爬' : null, p.movement.territorial ? '守领地' : null]
       .filter(Boolean)
       .join('，');
@@ -339,12 +338,8 @@ export class DesignDesk {
     dl.className = 'archive-data';
     const rows: Array<[string, string]> = [
       ['食性', diet],
-      [bird ? '孵化期' : '妊娠期', `${r.gestationDays} 天`],
-      ['窝里', `${r.nestDays} 天`],
-      ['两窝间隔', `${r.litterIntervalDays} 天（一年约 ${littersPerYear.toFixed(1)} 窝）`],
-      ['性成熟', days(r.ageAtMaturityDays)],
-      ['最长寿命', `${p.maxLifespanYears} 年`],
-      ['成体年存活', `${Math.round(p.survival.adultAnnual * 100)}%`],
+      ['生养', paceText(c)],
+      ['一辈子', `${days(r.ageAtMaturityDays)}后成年，最多活 ${p.maxLifespanYears} 年；成年后一年活下来 ${Math.round(p.survival.adultAnnual * 100)}%`],
       ['每天活动', `${p.movement.dailyRangeM} 米`],
       ['家域', `${p.movement.homeRangeKm2} 平方公里`],
       ['移动', move || '—'],
@@ -356,6 +351,7 @@ export class DesignDesk {
       textEl('div', '推导属性', 'log-head'),
       textEl('p', '这些都由体型、部件和繁殖策略推出来，不能直接填。', 'note'),
       dl,
+      textEl('p', '同样的体型，一窝生得多，就怀得短、生得小、长得快、活得短；体型越大，一切都越慢。', 'note'),
       ...(near ? [textEl('p', `最像的现有技术：${this.priorArt.get(near.id)!.name}（相似度 ${Math.round(near.similarity * 100)}%）`, 'note')] : []),
     );
   }
@@ -411,6 +407,26 @@ function canCompile(d: Design, kit: DesignKit): boolean {
   } catch {
     return false;
   }
+}
+
+function litterBiasOf(design: Design, litter: number, kit: DesignKit): number {
+  const parts = partsOf(design, kit);
+  const b = biasOfLitter(kit.laws, design.bodyMassKg, parts.mouth.diet!, parts.coat.bodyPlan === 'bird', litter);
+  return Math.min(1.5, Math.max(-1.5, b));
+}
+
+/** 老设计、现有技术写的是仔数：换成"比一般多多少"（在它自己的体型下正好推回原来的数），"自动"就是一般。 */
+function relativeLitter(design: Design, kit: DesignKit): Design {
+  if (design.litterBias !== undefined) return design;
+  const { litterAuto, ...rest } = design;
+  return { ...rest, litterBias: litterAuto ? 0 : litterBiasOf(rest, rest.litterSize, kit) };
+}
+
+/** 仔数旁边的注："一般的 1.7 倍"之类。 */
+function biasText(bias: number): string {
+  const f = 10 ** bias;
+  if (f > 1.15 || f < 1 / 1.15) return `一般的 ${f.toFixed(1)} 倍`;
+  return '和一般一样';
 }
 
 function loadDraft(): Design | null {
@@ -482,6 +498,13 @@ function numberInput(min: number, max: number, value: number, onChange: (v: numb
 /** 体重取两位有效数字（滑杆上的值不必那么精确）。 */
 function roundMass(kg: number): number {
   return Number(Math.min(MASS_MAX, Math.max(MASS_MIN, kg)).toPrecision(2));
+}
+
+/** 繁殖节奏一句话：一窝几个、多久一窝、怀多久、窝里养多久。 */
+function paceText(c: CompiledDesign): string {
+  const r = c.params.reproduction;
+  const often = c.littersPerYear < 1 ? `${(1 / c.littersPerYear).toFixed(1)} 年一窝` : `一年约 ${c.littersPerYear.toFixed(1)} 窝`;
+  return `一窝 ${r.litterSize} 个，${often}；${c.bird ? '孵' : '怀'} ${r.gestationDays} 天，窝里养 ${days(r.nestDays ?? 0)}`;
 }
 
 const days = (d: number): string => (d >= 360 ? `${(d / 360).toFixed(1)} 年` : `${d} 天`);
