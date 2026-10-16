@@ -4,6 +4,7 @@ import {
   designTemplates,
   hintTemplates,
   partLibrary,
+  plantLibrary,
   scalingLaws,
   scenarioLibrary,
   viabilityRules,
@@ -23,6 +24,7 @@ const kit = makeDesignKit(
   scalingLaws,
   hintTemplates,
   viabilityRules,
+  [...plantLibrary.values()],
   designTemplates.map((t) => t.design),
 );
 const template = (species: string): Design => designTemplates.find((t) => t.species === species)!.design;
@@ -230,5 +232,5 @@ describe('设计物种进推演', () => {
   });
 });
 
-/** 野猫模板编译出的物种参数的校验和；改了公式、部件或模板要跟着改（先确认变化是有意的）。 */
-const PINNED_CAT_CHECKSUM = 3204873826;
+/** 野猫模板编译出的物种参数的校验和；改了公式、部件或模板要跟着改（先确认变化是有意的）。阶段 3.5 第 6 步：只多了 body.gut。 */
+const PINNED_CAT_CHECKSUM = 4118219802;

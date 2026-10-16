@@ -411,8 +411,8 @@ function necropsyDay(job: NecropsyJob, ctx: JobContext): void {
     ledger.fresh[i] = ledger.fresh[i]! - 1;
     const cells = byBlock.get(v.block)!;
     const c = cells[rng.nextInt(cells.length)]!;
-    // 尸体的体况：饿死的按营养 0 评分；其他的按发现的那一格现在的食物（账本没记死时的体况，见 MODEL.md 已知问题）。
-    const nutrition = v.cause === CAUSE.starvation ? 0 : cellNutrition(ctx.fedLast, v.s, c);
+    // 尸体的体况：饿死、营养不良死的按营养 0 评分；其他的按发现的那一格现在的食物（账本没记死时的体况，见 MODEL.md 已知问题）。
+    const nutrition = v.cause === CAUSE.starvation || v.cause === CAUSE.malnutrition ? 0 : cellNutrition(ctx.fedLast, v.s, c);
     found.push({ species: v.s, cause: v.cause, x: c % grid.width, y: Math.floor(c / grid.width), daysDead: v.ago, bcs: scoreBcs(nutrition, rng) });
   }
   ctx.necropsies.push({ day: ctx.day, job: job.id, x: job.x, y: job.y, species: job.species, found });

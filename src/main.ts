@@ -1,4 +1,4 @@
-import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, scalingLaws, viabilityRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
 import { RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     scalingLaws,
     hintTemplates,
     viabilityRules,
+    [...plantLibrary.values()],
     designTemplates.map((t) => t.design),
   );
   // 档案馆的条目也进配置：不附设计的引种必须和其中一条一模一样。

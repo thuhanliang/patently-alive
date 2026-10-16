@@ -22,6 +22,12 @@ export const PlantTypeSchema = z.strictObject({
   eatenPerDay: z.number().gt(0).max(1),
   /** 一格每天能找到的虫子 = 系数 × 生物量（g/m²）× 面积；虫子不单独模拟，跟着植物走。0 = 不养虫。 */
   invertebrateYield: z.number().min(0),
+  /**
+   * 食物质量（阶段 3.5）：干物质里不用发酵就能消化的部分（细胞内容物）占多少，其余是要靠微生物发酵的纤维。
+   * whole 是整株一起吃，select 是挑着吃最好的部分（种子、嫩叶、芽），挑食的嘴（部件的 selective）吃的是后者。
+   * 消化检查用它（src/sim/viability.ts），见 docs/MODEL.md。
+   */
+  soluble: z.strictObject({ whole: z.number().gt(0).max(1), select: z.number().gt(0).max(1) }).refine((q) => q.select >= q.whole, { message: '挑着吃的部分不会比整株差' }),
   /** 在哪种地形上给地面的窝提供掩护，长满时算多少（0–1）；按生物量占上限的比例折算。 */
   cover: z.strictObject({ terrain: z.enum(PLANT_TERRAINS), atFull: z.number().min(0).max(1) }),
   source: z.string().min(1),

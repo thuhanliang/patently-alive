@@ -45,6 +45,8 @@ export interface Individuals {
   fed: Float64Array;
   /** 今天吃到的肉（脊椎动物），同样按占自己日需求的比例计；吃够食谱里肉的份额就不再捕猎。 */
   meat: Float64Array;
+  /** 今天吃到、却消化不了的植物（阶段 3.5），占日需求的比例；只有消化道对付不了这里植物的设计物种才大于 0。 */
+  lost: Float64Array;
 }
 
 export function createIndividuals(capacity = 256): Individuals {
@@ -60,10 +62,11 @@ export function createIndividuals(capacity = 256): Individuals {
     reserve: new Float64Array(capacity),
     fed: new Float64Array(capacity),
     meat: new Float64Array(capacity),
+    lost: new Float64Array(capacity),
   };
 }
 
-const FIELDS = ['species', 'x', 'y', 'vx', 'vy', 'born', 'female', 'reserve', 'fed', 'meat'] as const;
+const FIELDS = ['species', 'x', 'y', 'vx', 'vy', 'born', 'female', 'reserve', 'fed', 'meat', 'lost'] as const;
 
 function ensureCapacity(ind: Individuals, n: number): void {
   if (n <= ind.x.length) return;
@@ -111,6 +114,7 @@ function push(
   ind.fed[i] = fed;
   // 一天中途展开的当作已经按时吃过（见 expandCell），肉也按食谱比例算吃过。
   ind.meat[i] = fed * meatShare;
+  ind.lost[i] = 0;
 }
 
 /**
@@ -287,6 +291,8 @@ export interface HourlyContext {
   cellAreaM2: number;
   /** 吃植物、找虫子的参数（见 plantFood）。 */
   food: PlantFood;
+  /** 暂存：这一口各种植物各吃了多少（见 eatPlants），不进状态。 */
+  plantSplit?: Float64Array;
   rng: Rng;
   /** 当天累计的账目（被捕食的计入这里）。 */
   stats: DayStats[];
@@ -380,8 +386,18 @@ function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: 
   const diet = sp.params.diet;
   if (sp.grazer) {
     const need = sp.plantIntakeG * size;
-    const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food);
-    ind.fed[i] = ind.fed[i]! + (diet.plant * eaten) / need;
+    if (sp.plantValue) {
+      // 和格子模型一致（阶段 3.5）：消化不了的部分记进 lost，不算吃饱。
+      const split = (ctx.plantSplit ??= new Float64Array(grid.plants.length));
+      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food, split);
+      let got = 0;
+      for (let k = 0; k < split.length; k++) got += split[k]! * sp.plantValue[k]!;
+      ind.fed[i] = ind.fed[i]! + (diet.plant * got) / need;
+      ind.lost[i] = ind.lost[i]! + (diet.plant * (eaten - got)) / need;
+    } else {
+      const eaten = eatPlants(grid, c, need / sp.activeHours, ctx.cellAreaM2, ctx.food);
+      ind.fed[i] = ind.fed[i]! + (diet.plant * eaten) / need;
+    }
   }
   if (sp.insectivore) {
     const need = sp.invertebrateIntakeG * size;
@@ -514,9 +530,13 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
     // 和格子模型一样，吃到需求的 FED_SUFFICIENT 就算吃够（杂食的少了一类食物不至于挨饿）。
     const enough = Math.min(1, ind.fed[i]! / FED_SUFFICIENT);
     const reserve = Math.max(-1, Math.min(sp.maxReserveDays, ind.reserve[i]! + enough - 1));
+    // 饥饿里有多少是消化不了造成的（和格子模型同一条规则）：按今天"消化得了的话还差多少"拆。
+    const lost = ind.lost[i]!;
+    const malShare = lost > 0 && enough < 1 ? (Math.min(1, (ind.fed[i]! + lost) / FED_SUFFICIENT) - enough) / (1 - enough) : 0;
     ind.reserve[i] = reserve;
     ind.fed[i] = 0;
     ind.meat[i] = 0;
+    ind.lost[i] = 0;
 
     const base = juvenile ? sp.juvenileDailyMortality : sp.adultDailyMortality;
     const starve = reserve < 0 ? sp.starvationRate * Math.min(1, -reserve) : 0;
@@ -531,7 +551,8 @@ export function individualsDaily(ind: Individuals, ctx: IndividualDailyContext):
         recordDeaths(ctx.ledger, s, CAUSE.fracture, block, 1);
       } else if (starve > 0 && rng.nextFloat() < starve / (base + starve)) {
         stats[s]!.deathsStarvation += 1;
-        recordDeaths(ctx.ledger, s, CAUSE.starvation, block, 1);
+        const weak = malShare > 0 && rng.nextFloat() < malShare;
+        recordDeaths(ctx.ledger, s, weak ? CAUSE.malnutrition : CAUSE.starvation, block, 1);
       } else {
         stats[s]!.deathsOther += 1;
         recordDeaths(ctx.ledger, s, CAUSE.other, block, 1);

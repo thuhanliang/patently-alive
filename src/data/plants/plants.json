@@ -8,7 +8,8 @@
       "eatenPerDay": 0.05,
       "invertebrateYield": 0.001,
       "cover": { "terrain": "grass", "atFull": 0.5 },
-      "source": "阶段 0–1 的草本植被（MODEL.md：MAX_GRAZE_FRACTION 0.05、INVERTEBRATE_YIELD 0.001、GRASS_COVER 0.5）"
+      "soluble": { "whole": 0.25, "select": 0.7 },
+      "source": "阶段 0–1 的草本植被（MODEL.md：MAX_GRAZE_FRACTION 0.05、INVERTEBRATE_YIELD 0.001、GRASS_COVER 0.5）；食物质量：禾草细胞内容物约占干物质的两到三成（其余是纤维，Van Soest 1994，未核对），种子、嫩叶约七成（假设）"
     },
     {
       "id": "shrub",
@@ -17,7 +18,8 @@
       "eatenPerDay": 0.01,
       "invertebrateYield": 0,
       "cover": { "terrain": "shrub", "atFull": 1 },
-      "source": "阶段 1 的灌丛（MODEL.md：MAX_BROWSE_FRACTION 0.01，长满算全掩护）"
+      "soluble": { "whole": 0.2, "select": 0.55 },
+      "source": "阶段 1 的灌丛（MODEL.md：MAX_BROWSE_FRACTION 0.01，长满算全掩护）；食物质量：嫩枝、树皮木质化，可溶部分比草少（假设 0.2），芽和浆果约 0.55（假设）"
     }
   ]
 }

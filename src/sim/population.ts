@@ -119,6 +119,8 @@ export interface DailyContext {
   cellAreaM2: number;
   /** 吃植物、找虫子的参数（见 plantFood）。 */
   food: PlantFood;
+  /** 暂存：一格里各种植物各被吃掉多少（见 eatPlants），只在有消化不了的物种时用，不进状态。 */
+  plantSplit?: Float64Array;
   /** 当月各物种的繁殖期系数。 */
   breeding: readonly number[];
   rng: Rng;
@@ -154,21 +156,28 @@ export function landCells(grid: Pick<Grid, 'terrain'>): Int32Array {
 export function dailyPopulation(ctx: DailyContext): DayStats[] {
   const { species, populations, grid } = ctx;
   const stats = species.map(() => emptyDayStats());
-  const fed: FedByFood = { plant: new Float64Array(species.length), vertebrate: new Float64Array(species.length), invertebrate: new Float64Array(species.length) };
+  const fed: FedByFood = {
+    plant: new Float64Array(species.length),
+    plantLoss: new Float64Array(species.length),
+    vertebrate: new Float64Array(species.length),
+    invertebrate: new Float64Array(species.length),
+  };
   const { crowding, blockOf } = ctx;
   const hunting = huntingByBlock(ctx, crowding[0]!.length);
 
   // 只走陆地格：水里没有动物，海岛地图上大半是水。
   for (const c of ctx.land) {
     hunt(ctx, c, hunting, fed.vertebrate, stats);
-    graze(ctx, c, fed.plant);
+    graze(ctx, c, fed);
     forage(ctx, c, fed.invertebrate);
     const block = blockOf[c]!;
     for (let s = 0; s < species.length; s++) {
       // 空格子也记：今天扩散进来的动物明天被抓到时，体况按这一格的食物算。
       const f = combineFed(species[s]!, fed, s);
       if (ctx.fedLast) ctx.fedLast[s]![c] = f;
-      if (countAt(populations[s]!, c) > 0) lifeCycle(ctx, s, c, f, crowding[s]![block]!, stats[s]!);
+      // 消化不了的那部分（阶段 3.5）：吃到了、但没能取出能量。只有消化道对付不了这里的植物的设计物种才大于 0。
+      const lost = species[s]!.plantValue ? species[s]!.params.diet.plant * fed.plantLoss[s]! : 0;
+      if (countAt(populations[s]!, c) > 0) lifeCycle(ctx, s, c, f, crowding[s]![block]!, stats[s]!, f + lost);
     }
   }
 
@@ -186,6 +195,8 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
 /** 各物种今天每类食物吃到的份额（0–1）。 */
 interface FedByFood {
   plant: Float64Array;
+  /** 吃到的植物里消化不了的份额（已从 plant 里扣掉；见 graze）。 */
+  plantLoss: Float64Array;
   vertebrate: Float64Array;
   invertebrate: Float64Array;
 }
@@ -409,21 +420,47 @@ function rawJuvAdd(out: Float64Array, pop: Population, pending: Population | und
 
 /**
  * 吃植被的分享这一格能啃的植被；草不够时再啃灌丛（灌丛长得慢，啃掉的掩护要很久才长回来）。
- * fed[s] 记下各物种植物这一类吃到的份额。
+ * fed.plant[s] 记下各物种植物这一类吃到的份额。
+ * 消化道对付不了这里植物的设计物种（plantValue，阶段 3.5）：吃到肠子塞满为止（plantIntakeG 按消化道容量算），
+ * 但只取出一部分能量，取不出的份额从 fed.plant 里扣掉、记进 fed.plantLoss。按这一格各种植物实际被吃掉的比例加权。
  */
-function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
+function graze(ctx: DailyContext, c: number, fed: FedByFood): void {
   const { species, populations, grid, cellAreaM2 } = ctx;
   let demand = 0;
+  let valued = false;
   for (let s = 0; s < species.length; s++) {
     const sp = species[s]!;
     if (!sp.grazer) continue;
     demand += sizeWeighted(populations[s]!, c) * sp.plantIntakeG;
+    if (sp.plantValue) valued = true;
   }
   let ratio = 1;
+  const split = valued ? (ctx.plantSplit ??= new Float64Array(grid.plants.length)) : undefined;
   if (demand > 0) {
-    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.food) / demand;
+    ratio = eatPlants(grid, c, demand, cellAreaM2, ctx.food, split) / demand;
   }
-  for (let s = 0; s < species.length; s++) if (species[s]!.grazer) fed[s] = ratio;
+  for (let s = 0; s < species.length; s++) {
+    const sp = species[s]!;
+    if (!sp.grazer) continue;
+    fed.plant[s] = ratio;
+    if (sp.plantValue) {
+      // 这一格吃掉的植物里消化得了的比例；什么都没吃到时按草本算（体检、扩散进来的个体看这一格）。
+      const value = split && demand > 0 ? mixValue(sp.plantValue, split) : sp.plantValue[ctx.food.herb]!;
+      fed.plantLoss[s] = ratio * (1 - value);
+      fed.plant[s] = ratio * value;
+    }
+  }
+}
+
+/** 按各种植物被吃掉的克数加权的消化比例；一点没吃到时为 1（没有可比的）。 */
+function mixValue(value: readonly number[], eaten: Float64Array): number {
+  let total = 0;
+  let got = 0;
+  for (let k = 0; k < eaten.length; k++) {
+    total += eaten[k]!;
+    got += eaten[k]! * value[k]!;
+  }
+  return total > 0 ? got / total : 1;
 }
 
 /**
@@ -431,7 +468,7 @@ function graze(ctx: DailyContext, c: number, fed: Float64Array): void {
  * 草本不够再拿木本补。每种植物每天最多被啃掉下限以上部分的 eatenPerDay（植物类型的数据）。
  * 格子模型一天调用一次（整格一起吃），个体模型每小时每只调用一次。
  */
-export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: number, food: PlantFood): number {
+export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: number, food: PlantFood, split?: Float64Array): number {
   const woody = food.woody >= 0 ? grid.plants[food.woody]! : undefined;
   const woodyAvail = woody === undefined ? 0 : Math.max(0, woody[c]! - food.woodyFloor) * cellAreaM2 * food.woodyEaten;
   let browsed = Math.min(demand * BROWSE_SHARE, woodyAvail);
@@ -441,6 +478,12 @@ export function eatPlants(grid: Grid, c: number, demand: number, cellAreaM2: num
   herb[c] = veg - grazed / cellAreaM2;
   browsed = Math.min(demand - grazed, woodyAvail);
   if (browsed > 0) woody![c] = woody![c]! - browsed / cellAreaM2;
+  // 各种植物各被吃掉多少（消化检查要按比例加权，见 graze、个体的 feed）；只在需要时写。
+  if (split) {
+    split.fill(0);
+    split[food.herb] = grazed;
+    if (food.woody >= 0) split[food.woody] = browsed;
+  }
   return grazed + browsed;
 }
 
@@ -613,7 +656,7 @@ function hunt(ctx: DailyContext, c: number, hunting: readonly (BlockHunting | nu
  * 一个物种在一格里的出生、死亡、长大。
  * fedRatio 是今天吃饱的比例；crowding 是所在区块的拥挤程度（1 = 住满）。
  */
-function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, crowding: number, st: DayStats): void {
+function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, crowding: number, st: DayStats, fullRatio = fedRatio): void {
   const sp = ctx.species[s]!;
   const pop = ctx.populations[s]!;
   const rng = ctx.rng;
@@ -648,13 +691,15 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
 
   // 死亡：基础死亡（衰老、疾病、意外）+ 饥饿 + 骨折（阶段 3.5）。先抽总数，再按比例分死因。
   const starve = sp.starvationRate * Math.max(0, 1 - fedRatio / FED_SUFFICIENT);
+  // 饥饿里有多少是消化不了造成的（营养不良，阶段 3.5）：按"消化得了的话还饿不饿"拆。
+  const mal = fullRatio > fedRatio ? starve - sp.starvationRate * Math.max(0, 1 - fullRatio / FED_SUFFICIENT) : 0;
   const block = ctx.blockOf[c]!;
-  adults -= dieOff(ctx, s, block, adults, sp.adultDailyMortality, starve, sp.fractureDaily, st);
+  adults -= dieOff(ctx, s, block, adults, sp.adultDailyMortality, starve, sp.fractureDaily, st, mal);
   const stages = pop.juveniles;
   // 窝里的幼体（蛋、雏、窝里的幼崽）不自己承重，不骨折。
   const inNest = sp.nest !== null ? sp.nestStages : 0;
   stages.forEach((stage, k) => {
-    stage[c] = stage[c]! - dieOff(ctx, s, block, stage[c]!, sp.juvenileDailyMortality, starve, k < inNest ? 0 : sp.fractureDaily, st);
+    stage[c] = stage[c]! - dieOff(ctx, s, block, stage[c]!, sp.juvenileDailyMortality, starve, k < inNest ? 0 : sp.fractureDaily, st, mal);
   });
 
   // 长大由传送带负责（见 shiftStages）；新生的进第 0 段。
@@ -663,8 +708,11 @@ function lifeCycle(ctx: DailyContext, s: number, c: number, fedRatio: number, cr
   pop.adults[c] = adults;
 }
 
-/** fracture：每天骨折的概率，只有骨骼撑不住的设计才大于 0；为 0 时不多抽随机数，真实物种的随机数流不变。 */
-function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: number, starve: number, fracture: number, st: DayStats): number {
+/**
+ * fracture：每天骨折的概率，只有骨骼撑不住的设计才大于 0；为 0 时不多抽随机数，真实物种的随机数流不变。
+ * mal：饥饿里营养不良（消化不了）的那一部分（≤ starve），同样只有设计物种才大于 0。营养不良也记进 deathsStarvation（都是能量不够）。
+ */
+function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: number, starve: number, fracture: number, st: DayStats, mal = 0): number {
   if (n === 0) return 0;
   const rng = ctx.rng;
   const p = Math.min(1, base + starve + fracture);
@@ -674,9 +722,11 @@ function dieOff(ctx: DailyContext, s: number, block: number, n: number, base: nu
     const broken = fracture > 0 ? binomial(rng, dead, fracture / (base + starve + fracture)) : 0;
     const rest = dead - broken;
     const starved = starve > 0 ? binomial(rng, rest, starve / (base + starve)) : 0;
+    const weak = mal > 0 && starved > 0 ? binomial(rng, starved, Math.min(1, mal / starve)) : 0;
     st.deathsStarvation += starved;
     st.deathsOther += rest - starved + broken;
-    recordDeaths(ctx.ledger, s, CAUSE.starvation, block, starved);
+    recordDeaths(ctx.ledger, s, CAUSE.starvation, block, starved - weak);
+    if (weak > 0) recordDeaths(ctx.ledger, s, CAUSE.malnutrition, block, weak);
     recordDeaths(ctx.ledger, s, CAUSE.other, block, rest - starved);
     if (broken > 0) recordDeaths(ctx.ledger, s, CAUSE.fracture, block, broken);
   }

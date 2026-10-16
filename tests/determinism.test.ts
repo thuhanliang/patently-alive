@@ -60,10 +60,11 @@ describe('确定性', () => {
     expect(checksum(sim.state)).toBe(before);
   });
 
+  // 阶段 3.5 第 6 步：状态多了 individuals.lost、植物类型多了食物质量，校验和变了；推演行为逐位不变（指纹核对过）。
   it('长跑校验和固定（改了推演规则就要有意识地更新它）', () => {
     const sim = Sim.create(makeConfig(1, { ...grassland, width: 48, height: 48 }));
     sim.stepN(TICKS_PER_DAY * 360 * 2);
-    expect(checksum(sim.state)).toMatchInlineSnapshot(`2929026266`);
+    expect(checksum(sim.state)).toMatchInlineSnapshot(`1861422966`);
   });
 
   it('鸟岛：带个体的快照一天中途存档再恢复，和一口气跑完逐位相同（掩护、灌丛、窝都在状态里）', () => {

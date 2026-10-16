@@ -146,8 +146,9 @@ export const LOG_FORMAT = 'patently-alive/oplog';
  * 11：体重上限放到 100 吨，缩放数据多了 dataRange。12：世界的植被改成植物类型列表（world.plants，阶段 3.5）。
  * 13：繁殖检查（阶段 3.5）：缩放数据和阈值数据都多了 reproduction，物种参数 body 多了两项。
  * 14：繁殖节奏（阶段 3.5）：大型动物几年一窝（间隔可超过一年），设计可以写"自动"仔数，缩放数据多了 pace。
+ * 15：消化检查（阶段 3.5）：设计数据多了植物类型和消化阈值，部件多了消化道、挑食和反刍，植物类型多了食物质量，物种参数 body 多了 gut。
  */
-export const LOG_VERSION = 14;
+export const LOG_VERSION = 15;
 
 export const OpLogSchema = z
   .object({
