@@ -59,7 +59,8 @@ export class DesignDesk {
     // 草稿里的部件可能已经改名或删掉了：编译不了就不用它。
     const draft = loadDraft();
     const usable = draft !== null && canCompile(draft, kit);
-    this.design = relativeLitter(usable ? draft : { ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计', color: DESIGN_COLORS[0] }, kit);
+    // 草稿照原样（不勾"自动"的仔数是固定的）；只有老草稿的"自动"换成新写法。从现有技术开始的默认勾上"自动"。
+    this.design = usable ? legacyAuto(draft) : relativeLitter({ ...templates.find((t) => t.species === 'mongoose')!.design, name: '新设计', color: DESIGN_COLORS[0] }, kit);
     el.addEventListener('click', (e) => {
       if (e.target === el) this.close();
     });
@@ -199,15 +200,27 @@ export class DesignDesk {
     box.append(row('主色', colors));
 
     // 仔数：填的是"在这个体型下生几个"，记下的是"比同体型、同食性的一般多多少"，所以放大体型时仔数跟着变（阶段 3.5）。
-    const litter = numberInput(1, 16, d.litterSize, (v) => this.set({ litterSize: v, litterBias: this.biasFor(v) }));
+    // 仔数（阶段 3.5）。勾上"自动"：体型、食性变了仔数跟着变，保持"比同体型的一般多几倍"（设计记 litterBias），
+    // 所以猫放大还是猫的生法；勾着也能改数，改了就按新的数重新记倍数。不勾：就是这个数，固定不变。
+    const auto = document.createElement('input');
+    auto.type = 'checkbox';
+    auto.checked = d.litterBias !== undefined;
+    const litter = numberInput(1, 16, d.litterSize, (v) => this.set(auto.checked ? { litterSize: v, litterBias: this.biasFor(v) } : { litterSize: v }));
     this.litterInput = litter;
     this.litterNote = textEl('span', '', 'note');
-    const typical = document.createElement('button');
-    typical.textContent = '一般';
-    typical.style.whiteSpace = 'nowrap';
-    typical.title = '按同体型、同食性的真实动物一般一窝几个来定';
-    typical.addEventListener('click', () => this.set({ litterBias: 0 }));
-    box.append(row('每窝', litter, textEl('span', '个', 'note'), typical, this.litterNote));
+    auto.addEventListener('change', () => {
+      if (auto.checked) this.set({ litterBias: this.biasFor(this.design.litterSize) });
+      else {
+        const { litterBias: _, ...rest } = this.design;
+        this.design = rest;
+        this.set({});
+      }
+    });
+    const autoLabel = document.createElement('label');
+    autoLabel.style.whiteSpace = 'nowrap';
+    autoLabel.append(auto, ' 自动');
+    autoLabel.title = '勾上：体型、食性变了，仔数跟着变，保持和现在一样"比同体型的一般多几倍"；不勾：固定这个数';
+    box.append(row('每窝', litter, textEl('span', '个', 'note'), autoLabel, this.litterNote));
     const months = numberInput(1, 12, d.breedingMonths, (v) => this.set({ breedingMonths: v }));
     box.append(row('繁殖季', months, textEl('span', '个月（从春天算起）', 'note')));
 
@@ -275,7 +288,7 @@ export class DesignDesk {
     const n = c.params.reproduction.litterSize;
     this.design = { ...this.design, litterSize: n };
     if (this.litterInput && document.activeElement !== this.litterInput) this.litterInput.value = String(n);
-    if (this.litterNote) this.litterNote.textContent = biasText(this.design.litterBias ?? 0);
+    if (this.litterNote) this.litterNote.textContent = this.design.litterBias === undefined ? '' : biasText(this.design.litterBias);
     this.renderEnergy(c);
     this.renderDerived(c);
     this.renderHints(c);
@@ -413,6 +426,13 @@ function litterBiasOf(design: Design, litter: number, kit: DesignKit): number {
   const parts = partsOf(design, kit);
   const b = biasOfLitter(kit.laws, design.bodyMassKg, parts.mouth.diet!, parts.coat.bodyPlan === 'bird', litter);
   return Math.min(1.5, Math.max(-1.5, b));
+}
+
+/** 老草稿的"自动"（阶段 3.5 第 4 步）就是"和一般一样"。 */
+function legacyAuto(design: Design): Design {
+  if (!design.litterAuto) return design;
+  const { litterAuto: _, ...rest } = design;
+  return { ...rest, litterBias: rest.litterBias ?? 0 };
 }
 
 /** 老设计、现有技术写的是仔数：换成"比一般多多少"（在它自己的体型下正好推回原来的数），"自动"就是一般。 */
