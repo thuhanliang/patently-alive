@@ -104,7 +104,7 @@ export function createInitialState(config: SimConfig): SimState {
   const parsed = SimConfigSchema.parse(config);
   const rng = Rng.fromSeed(parsed.seed);
   const grid = createGrid(parsed.world, rng);
-  const { derived } = deriveAll(parsed.species, parsed.world.cellSizeM, parsed.world.plants);
+  const { derived } = deriveAll(parsed.species, parsed.world.cellSizeM, parsed.world);
   const mainOnly = new Set(parsed.world.mainIslandOnly ?? []);
   const populations = derived.map((d) => createPopulation(d, grid, cellArea(parsed), rng, mainOnly.has(d.params.id)));
   return {
@@ -152,7 +152,7 @@ export class Sim {
   constructor(state: SimState) {
     this.s = cloneData(state);
     this.rng = Rng.fromState(this.s.rng);
-    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM, this.s.config.world.plants));
+    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM, this.s.config.world));
     this.scratch = new Int32Array(this.s.grid.width * this.s.grid.height);
     this.blocks = crowdingBlocks(this.s.grid.width, this.s.grid.height, this.s.grid.terrain);
     this.land = landCells(this.s.grid);
@@ -229,7 +229,7 @@ export class Sim {
   introduce(params: SpeciesParams): number {
     if (speciesOf(this.s).some((p) => p.id === params.id)) throw new RangeError(`已经有物种「${params.id}」了`);
     this.s.introduced.push(cloneData(params));
-    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM, this.s.config.world.plants));
+    ({ derived: this.derived, prey: this.prey } = deriveAll(speciesOf(this.s), this.s.config.world.cellSizeM, this.s.config.world));
     const sp = this.derived.at(-1)!;
     const cells = this.s.grid.width * this.s.grid.height;
     const pop: Population = { juveniles: Array.from({ length: sp.juvenileStages }, () => new Int32Array(cells)), adults: new Int32Array(cells) };

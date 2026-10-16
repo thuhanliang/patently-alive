@@ -1,0 +1,15 @@
+{
+  "说明": "植被被吃坏的规则（阶段 3.5 第 7 步）。默认关闭：世界数据写 \"grazingDamage\": true 才打开，加载时换成这一份。数值的依据见 docs/MODEL.md。",
+  "windowDays": { "value": 14, "basis": "assumption", "confidence": "unverified", "source": "啃食压力按最近约两周累计（逐日衰减的和）：草本每天最多被吃掉下限以上部分的 5%，两周连续啃满约 0.7，能越过 Crider 的五成；按第 7 步的探测，真实兔子的密度两周累计只有 1–3%" },
+  "rootStop": { "value": 0.5, "basis": "law", "confidence": "1", "source": "Crider 1955（USDA Tech. Bull. 1102）：一次啃掉五成以上的叶，根停长；docs/research/PRACTICE.md 里的检索摘录，未读原文。这里用两周累计代替\"一次\"" },
+  "rootRecover": { "value": 0.4, "basis": "law", "confidence": "1", "source": "同上：啃掉四成以下，根照常生长" },
+  "rootLossPerDay": { "value": 0.02, "basis": "assumption", "confidence": "unverified", "source": "啃食压力超过 rootStop 时，根储备每天少 2%（约 50 天耗到最低）" },
+  "rootRecoverPerDay": { "value": 0.004, "basis": "assumption", "confidence": "unverified", "source": "压力低于 rootRecover 时每天补回 0.4%（从最低补满约 7 个月，一个生长季）" },
+  "minRoot": { "value": 0.1, "basis": "assumption", "confidence": "unverified", "source": "根储备最低剩一成，长势乘它：再怎么啃也不会彻底不长，停止啃食后能恢复" },
+  "bareShare": { "value": 0.15, "basis": "assumption", "confidence": "unverified", "source": "草本不到这块地（按现在的土壤算）上限的 15% 算裸地。和退化后的上限比，所以土壤退化后只要不再被啃就能慢慢恢复，不会锁死" },
+  "soilLossPerDay": { "value": 0.002, "basis": "assumption", "confidence": "unverified", "source": "每个裸地日土壤少 0.2%（连续裸露约一年降到约 0.5）。机制：没有覆盖时侵蚀、入渗下降（Rietkerk 等 1997/2004；检索摘录）" },
+  "soilRecoverPerDay": { "value": 0.0003, "basis": "assumption", "confidence": "unverified", "source": "有覆盖时每天补回 0.03%：从最低恢复到满约 6–7 年（恢复比退化慢一个数量级；Jornada 那样 60 年不恢复的状态转换这里不做）" },
+  "minSoil": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "土壤最低剩三成：退化后草本上限只剩三成" },
+  "residualRefKg": { "value": 50, "basis": "assumption", "confidence": "unverified", "source": "啃不到的残留按吃草动物的体型推：这么重的动物（羊、鹿）啃不低于世界数据写的下限；更小的贴地啃，残留 ∝ (体重 ÷ 它)^(1/3)（口鼻随体长缩放）" },
+  "seedBankShare": { "value": 0.25, "basis": "assumption", "confidence": "unverified", "source": "怎么啃也剩下限的四分之一（根和种子库），保证停止啃食后能再长回来" }
+}

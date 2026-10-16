@@ -1,4 +1,6 @@
+import type { GrazingDamage } from '../data/schema/plant';
 import type { WorldParams } from '../data/schema/world';
+import { detPow } from './detmath';
 import type { Rng } from './rng';
 import { valueNoise } from './noise';
 import { generateTerrain, TERRAIN } from './terrain';
@@ -30,6 +32,20 @@ export interface Grid {
    * 存在状态里而不是现算：一天里植物会被啃，掩护按当天开始时算，快照恢复后才对得上。
    */
   cover: Float64Array;
+  /** 植被被吃坏的状态（阶段 3.5 第 7 步），只在世界打开 grazingDamage 时有；只管草本。 */
+  damage?: GrazingState;
+}
+
+/** 草本被吃坏的状态，每格一个数。 */
+export interface GrazingState {
+  /** 啃食压力：每天被吃掉的份额（下限以上部分）的逐日衰减和，约等于最近 windowDays 天的累计。 */
+  pressure: Float64Array;
+  /** 根储备（minRoot–1）：长势乘它。 */
+  root: Float64Array;
+  /** 土壤（minSoil–1）：草本上限乘它。 */
+  soil: Float64Array;
+  /** 上一次生长后的生物量：到下一次生长时减去现在的量，就是这一天被吃掉的（格子、个体都算上，不含枯落）。 */
+  grown: Float64Array;
 }
 
 export function cellIndex(grid: Pick<Grid, 'width'>, x: number, y: number): number {
@@ -40,6 +56,14 @@ export function cellIndex(grid: Pick<Grid, 'width'>, x: number, y: number): numb
 /** 一种植物在这片世界里啃不到的下限（g/m²）：草本是绝对量，木本是上限的比例。 */
 export function plantFloor(p: WorldPlant): number {
   return p.type.form === 'herb' ? p.floorBiomass! : p.maxBiomass * p.floorFraction!;
+}
+
+/**
+ * 吃坏打开时草本被啃到的最低量 ÷ 世界写的下限（阶段 3.5 第 7 步）：体型小、贴地啃的啃得更低，
+ * 按 (体重 ÷ residualRefKg)^(1/3)，不高于 1，不低于种子库 seedBankShare。只看体重，不另写物种数据。
+ */
+export function grazingResidual(bodyMassKg: number, rules: GrazingDamage): number {
+  return Math.max(rules.seedBankShare.value, Math.min(1, detPow(bodyMassKg / rules.residualRefKg.value, 1 / 3)));
 }
 
 /** 草本在 world.plants 里的下标（schema 保证正好一种）。 */
@@ -72,7 +96,12 @@ export function createGrid(world: WorldParams, rng: Rng): Grid {
     }
     return b;
   });
-  const grid = { width, height, terrain, island, fertility, plants, cover: new Float64Array(width * height) };
+  const grid: Grid = { width, height, terrain, island, fertility, plants, cover: new Float64Array(width * height) };
+  // 吃坏的状态只在打开时有：关着的世界状态和以前一模一样。
+  if (world.grazingDamage) {
+    const n = width * height;
+    grid.damage = { pressure: new Float64Array(n), root: new Float64Array(n).fill(1), soil: new Float64Array(n).fill(1), grown: Float64Array.from(plants[herbIndex(world)]!) };
+  }
   updateCover(grid, world);
   return grid;
 }
@@ -122,7 +151,9 @@ export function growPlants(grid: Grid, world: WorldParams, growth: number, decay
   world.plants.forEach((p, k) => {
     const b = grid.plants[k]!;
     const r = p.growthRate * growth;
-    if (p.type.form === 'herb') {
+    if (p.type.form === 'herb' && grid.damage && world.grazingDamage) {
+      growDamagedHerb(b, grid, grid.damage, world.grazingDamage, p, r, decay);
+    } else if (p.type.form === 'herb') {
       const floor = p.floorBiomass!;
       for (let i = 0; i < b.length; i++) {
         if (terrain[i] === TERRAIN.water) continue;
@@ -145,6 +176,45 @@ export function growPlants(grid: Grid, world: WorldParams, growth: number, decay
     }
   });
   updateCover(grid, world);
+}
+
+/**
+ * 吃坏打开时的草本（阶段 3.5 第 7 步），每格按顺序：
+ * 1. 啃食压力：这一天被吃掉的份额（上次生长后的量减现在的量，占种子库以上部分）累加，旧的按 1 − 1/windowDays 衰减；
+ * 2. 根储备：压力高于 rootStop 每天少 rootLossPerDay，低于 rootRecover 每天补 rootRecoverPerDay，夹在 [minRoot, 1]（Crider）；
+ * 3. 土壤：草本低于"按现在的土壤算的上限"的 bareShare 是裸地，每天少 soilLossPerDay，否则补 soilRecoverPerDay，夹在 [minSoil, 1]；
+ * 4. 生长：dv = r · 根储备 · v · (1 − v/K) − 枯落 · v，K = 上限 × 肥力 × 土壤，夹在 [种子库, K]。
+ * 不抽随机数。种子库 = 下限 × seedBankShare，比任何吃草动物啃到的都低，所以停止啃食后总能长回来。
+ */
+function growDamagedHerb(b: Float64Array, grid: Grid, st: GrazingState, rules: GrazingDamage, p: WorldPlant, r: number, decay: number): void {
+  const { fertility, terrain } = grid;
+  const seed = p.floorBiomass! * rules.seedBankShare.value;
+  const keep = 1 - 1 / rules.windowDays.value;
+  const stop = rules.rootStop.value;
+  const recover = rules.rootRecover.value;
+  for (let i = 0; i < b.length; i++) {
+    if (terrain[i] === TERRAIN.water) continue;
+    const v = b[i]!;
+    const grown = st.grown[i]!;
+    const eaten = grown > seed ? Math.max(0, grown - v) / (grown - seed) : 0;
+    const pressure = st.pressure[i]! * keep + eaten;
+    st.pressure[i] = pressure;
+    let root = st.root[i]!;
+    if (pressure > stop) root -= rules.rootLossPerDay.value;
+    else if (pressure < recover) root += rules.rootRecoverPerDay.value;
+    root = Math.min(1, Math.max(rules.minRoot.value, root));
+    st.root[i] = root;
+    const cap = p.maxBiomass * fertility[i]! * st.soil[i]!;
+    let soil = st.soil[i]! + (v < rules.bareShare.value * cap ? -rules.soilLossPerDay.value : rules.soilRecoverPerDay.value);
+    soil = Math.min(1, Math.max(rules.minSoil.value, soil));
+    st.soil[i] = soil;
+    const k = p.maxBiomass * fertility[i]! * soil;
+    let next = k > 0 ? v + r * root * v * (1 - v / k) - decay * v : 0;
+    if (next > k) next = k;
+    if (next < seed) next = seed;
+    b[i] = next;
+    st.grown[i] = next;
+  }
 }
 
 /** 陆地上草本的平均生物量（g/m²）：水格不算，否则海岛的平均值会被大片水面拉低。 */

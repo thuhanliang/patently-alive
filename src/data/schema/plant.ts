@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ThresholdSchema } from './viability';
 
 /**
  * 植物类型（阶段 3.5）：一种植物本身的性质，写在 src/data/plants/plants.json。
@@ -38,3 +39,32 @@ export const PlantsFileSchema = z.object({
   说明: z.string().optional(),
   types: z.array(PlantTypeSchema).min(1),
 });
+
+/**
+ * 植被被吃坏（阶段 3.5 第 7 步，src/data/plants/damage.json）：啃食压力、根储备、土壤、按体型的残留。
+ * 公式由引擎定义（src/sim/grid.ts 的 growPlants、grazingResidual），数据只给数，每个数带依据。默认关闭。
+ */
+export const GrazingDamageSchema = z.strictObject({
+  /** 啃食压力按最近多少天累计（压力 = 每天被吃掉的份额的逐日衰减和，衰减 1 − 1/windowDays）。 */
+  windowDays: ThresholdSchema,
+  /** 压力高于它根储备减少、低于 rootRecover 才补回。 */
+  rootStop: ThresholdSchema,
+  rootRecover: ThresholdSchema,
+  rootLossPerDay: ThresholdSchema,
+  rootRecoverPerDay: ThresholdSchema,
+  /** 根储备的下限（长势乘根储备）。 */
+  minRoot: ThresholdSchema,
+  /** 草本低于（按土壤打过折的）上限的这个比例算裸地；裸地日土壤减少，否则慢慢补回。 */
+  bareShare: ThresholdSchema,
+  soilLossPerDay: ThresholdSchema,
+  soilRecoverPerDay: ThresholdSchema,
+  /** 土壤的下限（草本上限乘土壤）。 */
+  minSoil: ThresholdSchema,
+  /** 啃不到的残留：比这个体重轻的吃草动物按 (M / 它)^(1/3) 啃得更低。 */
+  residualRefKg: ThresholdSchema,
+  /** 再低也剩下限的这个比例（根和种子库）。 */
+  seedBankShare: ThresholdSchema,
+})
+  .refine((d) => d.rootRecover.value <= d.rootStop.value, { message: 'rootRecover 不能高于 rootStop' })
+  .refine((d) => d.minSoil.value > 0 && d.minRoot.value > 0 && d.seedBankShare.value > 0, { message: '根、土壤、种子库的下限都要大于 0，否则吃坏了长不回来' });
+export type GrazingDamage = z.infer<typeof GrazingDamageSchema>;
