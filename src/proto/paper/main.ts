@@ -57,6 +57,17 @@ async function loadPalette(): Promise<Palette> {
   };
 }
 
+/** P7 里每种木偶在第几行，以及代表单位可以随机用的姿势（列）。 */
+const P7_ROW: Partial<Record<PuppetKind, number>> = { 'cat-orange': 0, 'cat-piebald': 1, bird: 2, rabbit: 3, rat: 4 };
+const P7_POSES: Partial<Record<PuppetKind, number[]>> = {
+  'cat-orange': [0, 1, 2, 3, 4],
+  'cat-piebald': [0, 1, 2, 3, 4],
+  bird: [0, 3],
+  rabbit: [0, 1, 2, 3, 4],
+  rat: [0, 1, 2, 3, 4],
+};
+const si = (id: string): number => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 1000;
+
 async function main(): Promise<void> {
   const status = document.getElementById('status')!;
   status.textContent = `推演 ${DAYS} 天……`;
@@ -93,7 +104,7 @@ async function main(): Promise<void> {
   cv.getContext('2d')!.putImageData(new ImageData(painted.data, painted.width, painted.height), 0, 0);
   const paintMs = Math.round(performance.now() - t0);
 
-  const [P1, P2, P3, P5, P6] = await Promise.all(['P1', 'P2', 'P3', 'P5', 'P6'].map(loadSheet));
+  const [P1, P2, P3, P5, P6, P7] = await Promise.all(['P1', 'P2', 'P3', 'P5', 'P6', 'P7'].map(loadSheet));
   void P5;
 
   const app = new Application();
@@ -220,16 +231,32 @@ async function main(): Promise<void> {
     tokens.forEach((tk, j) => {
       const cx = (tk.x + 0.5) * PX;
       const cy = (tk.y + 0.5) * PX;
-      if (id === 'dotterel') {
-        if (nestTex) stick(nestTex[1 + (j % 2)]!, cx - len * 0.05, cy + len * 0.15, len * 0.95, false, cy - 1);
-      }
       const k: PuppetKind = id === 'cat' && j % 2 === 1 ? 'cat-piebald' : kind;
       const unit = new Container();
       unit.position.set(cx, cy);
       unit.zIndex = cy + 0.5;
-      const pup = drawPuppet(k, len);
-      if (j % 3 === 2 && id !== 'dotterel') pup.scale.x = -1;
-      unit.addChild(pup);
+      const flip = j % 3 === 2 && id !== 'dotterel';
+      // P7 整只剪纸：每个物种一行五个姿势；同一物种按站姿（第 0 个）统一缩放，换姿势大小不变。
+      // 按剪纸面积的平方根缩放，而不是按宽度：长尾巴、长耳朵不会让一个物种显得更小或更大。
+      const rowI = P7_ROW[k] ?? -1;
+      const row = P7?.tex[rowI];
+      if (row) {
+        const poses = P7_POSES[k]!;
+        // 鸟：偶数个代表趴在巢里（P7 自带巢），其余站在巢边。
+        const pose = id === 'dotterel' ? (j % 2 === 0 ? 3 : 0) : poses[Math.floor(rnd(j, si(id), 9) * poses.length)]!;
+        if (id === 'dotterel' && pose !== 3 && nestTex) stick(nestTex[1 + (j % 3 === 1 ? 1 : 0)]!, cx - len * 0.45, cy + len * 0.05, len * 0.8, false, cy - 1);
+        const area = P7!.rows[rowI]![0]![2] ?? (row[0]!.width / 1.65) ** 2;
+        const kk = (len * 0.79) / Math.sqrt(area);
+        const spr = new Sprite(row[pose]!);
+        spr.anchor.set(0.5, 1);
+        spr.scale.set(flip ? -kk : kk, kk);
+        unit.addChild(spr);
+      } else {
+        if (id === 'dotterel' && nestTex) stick(nestTex[1 + (j % 2)]!, cx - len * 0.05, cy + len * 0.15, len * 0.95, false, cy - 1);
+        const pup = drawPuppet(k, len);
+        if (flip) pup.scale.x = -1;
+        unit.addChild(pup);
+      }
       props.addChild(unit);
       iconScaled.push(unit);
       const sh = new Graphics().ellipse(cx + len * 0.06, cy + 1, len * 0.42, len * 0.1).fill(0x241a10);
