@@ -17,11 +17,14 @@ export const SpeciesSchema = z
      * 食性：三类食物各占多少（加起来为 1），口径参照 EltonTraits 1.0：
      * plant = 果实 + 花蜜 + 种子 + 其他植物部分（吃植被层）；vertebrate = 各类脊椎动物 + 腐肉（捕食别的动物）；
      * invertebrate = 无脊椎动物（昆虫等，多少跟着植被走）。
+     * aquatic（可选，2026-10-22）= 水里的猎物：鱼、蟹虾等水生无脊椎动物、蛙（EltonTraits 的 Vfish 加水生的部分）。
+     * 只在海岸格上有（世界数据的 shore），在水边觅食的动物（水獭）才写；不写为 0。
      */
     diet: z.object({
       plant: z.number().min(0).max(1),
       vertebrate: z.number().min(0).max(1),
       invertebrate: z.number().min(0).max(1),
+      aquatic: z.number().gt(0).max(1).optional(),
     }),
     /** 成体平均体重（千克）。 */
     bodyMassKg: z.number().positive(),
@@ -124,8 +127,8 @@ export const SpeciesSchema = z
   .refine((s) => !s.movement.territorial || s.movement.homeRangeKm2 !== undefined, {
     message: 'territorial 需要 homeRangeKm2',
   })
-  .refine((s) => Math.abs(s.diet.plant + s.diet.vertebrate + s.diet.invertebrate - 1) < 1e-9, {
-    message: 'diet 三项加起来要等于 1',
+  .refine((s) => Math.abs(s.diet.plant + s.diet.vertebrate + s.diet.invertebrate + (s.diet.aquatic ?? 0) - 1) < 1e-9, {
+    message: 'diet 各项加起来要等于 1',
   })
   .refine((s) => s.reproduction.nest === undefined || s.reproduction.nestDays !== undefined, {
     message: 'nest 需要 nestDays',

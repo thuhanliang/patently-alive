@@ -138,6 +138,52 @@ export interface DailyContext {
   fedLast?: Float64Array[] | undefined;
   /** 围栏挡住的格边（见 fence.ts），按物种；成体和出了窝的幼体各一套。没有围栏时可以不给。 */
   barriers?: { adult: readonly (Barrier | null)[]; juvenile: readonly (Barrier | null)[] } | undefined;
+  /** 各拥挤区块每天能捞到的水生猎物（克鲜重，见 shoreSupplyByBlock）；世界没写 shore 时不给。 */
+  shore?: Float64Array | null | undefined;
+}
+
+/**
+ * 水边的食物（2026-10-22）：各拥挤区块每天能捞到的水生猎物（克鲜重）= 区块里的海岸格数 × 每格面积 × 世界的 aquaticPerM2。
+ * 地形定了就不变，开局算一次。世界没写 shore 时为 null。
+ */
+export function shoreSupplyByBlock(grid: Pick<Grid, 'terrain'>, blockOf: Int32Array, blocks: number, cellAreaM2: number, aquaticPerM2: number | undefined): Float64Array | null {
+  if (aquaticPerM2 === undefined) return null;
+  const out = new Float64Array(blocks);
+  for (let c = 0; c < grid.terrain.length; c++) if (grid.terrain[c] === TERRAIN.coast) out[blockOf[c]!] = out[blockOf[c]!]! + aquaticPerM2 * cellAreaM2;
+  return out;
+}
+
+/**
+ * 在水边捞吃的物种（水獭）各区块吃到的份额（0–1），按物种；不在水边捞吃的为 null。没有这样的物种时返回 null，不多做任何事。
+ * 动物从所在区块出发，够得着 shoreReachBlocks 个区块以内的海岸（每天走的一半，和陷阱的诱捕半径同一个意思）：
+ * 1. 每段海岸（区块）的食物按够得着它的需求分；
+ * 2. 一个区块的动物吃到的 = 它够得着的各段海岸分给每克需求的量之和（封顶 1）。
+ * 这样同一段海岸不会被两边的动物各吃一遍，加起来不超过海岸的产量；离海岸太远的区块吃不到。
+ */
+function shoreFood(ctx: DailyContext, blocks: number): (Float64Array | null)[] | null {
+  const { species, populations, blockOf } = ctx;
+  if (!species.some((sp) => sp.fisher)) return null;
+  const bw = Math.ceil(ctx.grid.width / CROWDING_BLOCK_CELLS);
+  const supply = ctx.shore ?? new Float64Array(blocks);
+  const reach = (values: Float64Array, r: number): Float64Array => (r > 0 ? windowSum(values, bw, r) : values);
+  const reachDemand = new Float64Array(blocks);
+  for (let s = 0; s < species.length; s++) {
+    const sp = species[s]!;
+    if (!sp.fisher) continue;
+    const demand = new Float64Array(blocks);
+    for (const c of ctx.land) demand[blockOf[c]!] = demand[blockOf[c]!]! + sizeWeighted(populations[s]!, c) * sp.aquaticIntakeG;
+    const w = reach(demand, sp.shoreReachBlocks);
+    for (let b = 0; b < blocks; b++) reachDemand[b] = reachDemand[b]! + w[b]!;
+  }
+  // 没有动物够得着的海岸：谁来了都吃得饱（空格子的"能吃饱多少"）。
+  const perGram = new Float64Array(blocks);
+  for (let b = 0; b < blocks; b++) perGram[b] = supply[b]! === 0 ? 0 : reachDemand[b]! > 0 ? supply[b]! / reachDemand[b]! : Infinity;
+  return species.map((sp) => {
+    if (!sp.fisher) return null;
+    const got = new Float64Array(reach(perGram, sp.shoreReachBlocks));
+    for (let b = 0; b < blocks; b++) got[b] = Math.min(1, got[b]!);
+    return got;
+  });
 }
 
 /** 陆地格的下标，从小到大。地图建好后算一次；没有水的地图就是全部格子。 */
@@ -161,9 +207,11 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
     plantLoss: new Float64Array(species.length),
     vertebrate: new Float64Array(species.length),
     invertebrate: new Float64Array(species.length),
+    aquatic: new Float64Array(species.length),
   };
   const { crowding, blockOf } = ctx;
   const hunting = huntingByBlock(ctx, crowding[0]!.length);
+  const shore = shoreFood(ctx, crowding[0]!.length);
 
   // 只走陆地格：水里没有动物，海岛地图上大半是水。
   for (const c of ctx.land) {
@@ -171,6 +219,7 @@ export function dailyPopulation(ctx: DailyContext): DayStats[] {
     graze(ctx, c, fed);
     forage(ctx, c, fed.invertebrate);
     const block = blockOf[c]!;
+    if (shore) for (let s = 0; s < species.length; s++) if (shore[s]) fed.aquatic[s] = shore[s]![block]!;
     for (let s = 0; s < species.length; s++) {
       // 空格子也记：今天扩散进来的动物明天被抓到时，体况按这一格的食物算。
       const f = combineFed(species[s]!, fed, s);
@@ -199,6 +248,8 @@ interface FedByFood {
   plantLoss: Float64Array;
   vertebrate: Float64Array;
   invertebrate: Float64Array;
+  /** 水生猎物（只有在水边捞吃的物种用）。 */
+  aquatic: Float64Array;
 }
 
 /**
@@ -211,6 +262,7 @@ function combineFed(sp: DerivedSpecies, fed: FedByFood, s: number): number {
   if (d.plant > 0) f += d.plant * fed.plant[s]!;
   if (d.vertebrate > 0) f += d.vertebrate * fed.vertebrate[s]!;
   if (d.invertebrate > 0) f += d.invertebrate * fed.invertebrate[s]!;
+  if (d.aquatic !== undefined) f += d.aquatic * fed.aquatic[s]!;
   return f;
 }
 
@@ -390,7 +442,7 @@ export function crowdingByBlock(
 }
 
 /** 每个区块周围 (2r+1)² 个区块的和（地图边上只算地图里的）。 */
-function windowSum(values: Float64Array, bw: number, r: number): Float64Array {
+export function windowSum(values: Float64Array, bw: number, r: number): Float64Array {
   const bh = values.length / bw;
   const out = new Float64Array(values.length);
   for (let by = 0; by < bh; by++) {

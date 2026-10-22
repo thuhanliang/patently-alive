@@ -110,7 +110,7 @@ export function tokenLengthCells(bodyMassKg: number): number {
   return 2.6 * Math.pow(bodyMassKg / 0.06, 0.12);
 }
 
-export type PuppetKind = 'cat-orange' | 'cat-piebald' | 'bird' | 'rabbit' | 'rat' | 'generic';
+export type PuppetKind = 'cat-orange' | 'cat-piebald' | 'bird' | 'rabbit' | 'rat' | 'otter' | 'generic';
 
 const RIM = 0xf7f2e6;
 const BRAD = 0xc9a24a;
@@ -160,6 +160,8 @@ export function drawPuppet(kind: PuppetKind, len: number): Container {
     'cat-piebald': { main: 0xf2eee6, dark: 0x1f1f22, light: 0xf2eee6, head: 0.17, earH: 0.12, tail: 'long', legH: 0.3, bodyH: 0.17, snout: 0.05 },
     rabbit: { main: 0xcfae7f, dark: 0xa98458, light: 0xefe3cc, head: 0.16, earH: 0.3, tail: 'puff', legH: 0.14, bodyH: 0.24, snout: 0.05 },
     rat: { main: 0x7f8b9a, dark: 0x5b6573, light: 0xb9c0c8, head: 0.12, earH: 0.06, tail: 'thin', legH: 0.1, bodyH: 0.13, snout: 0.12 },
+    // 水獭：身子长而低、腿短、尾巴粗而渐细，吻和喉咙是奶油色。
+    otter: { main: 0x5a4636, dark: 0x3e3026, light: 0xdccaa8, head: 0.12, earH: 0.025, tail: 'taper', legH: 0.09, bodyH: 0.12, snout: 0.06 },
     generic: { main: 0x8fa37a, dark: 0x5d6e4d, light: 0xd8e0c8, head: 0.15, earH: 0.08, tail: 'long', legH: 0.25, bodyH: 0.17, snout: 0.06 },
   }[kind];
   const legTop = -L * look.legH;
@@ -170,6 +172,8 @@ export function drawPuppet(kind: PuppetKind, len: number): Container {
   // 尾巴
   if (look.tail === 'long')
     piece((g, e) => g.poly([-L * 0.36, bodyY - e, -L * 0.6 - e, bodyY - L * 0.28 - e, -L * 0.54 + e, bodyY - L * 0.3 - e, -L * 0.32 + e, bodyY + L * 0.06 + e]), kind === 'cat-piebald' ? look.dark : look.main);
+  else if (look.tail === 'taper')
+    piece((g, e) => g.poly([-L * 0.3, bodyY - L * 0.08 - e, -L * 0.74 - e, bodyY + L * 0.07, -L * 0.3, bodyY + L * 0.1 + e]), look.main);
   else if (look.tail === 'thin')
     piece((g, e) => g.poly([-L * 0.32, bodyY + L * 0.02 - e, -L * 0.75 - e, bodyY + L * 0.12, -L * 0.32, bodyY + L * 0.07 + e]), 0xb7a3a8);
   else piece((g, e) => g.circle(-L * 0.36, bodyY - L * 0.04, L * 0.07 + e), 0xf6f2ea);

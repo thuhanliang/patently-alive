@@ -36,6 +36,7 @@ export function stomachText(exam: Exam, species: readonly DerivedSpecies[]): str
   const parts: { share: number; text: string }[] = [];
   if (st.plant > 0.05) parts.push({ share: st.plant, text: '植物碎屑（草叶、种子）' });
   if (st.invertebrate > 0.05) parts.push({ share: st.invertebrate, text: '昆虫等无脊椎动物残片' });
+  if ((st.aquatic ?? 0) > 0.05) parts.push({ share: st.aquatic!, text: '鱼鳞、鱼骨和蟹壳碎片' });
   if (st.prey >= 0 && st.vertebrate > 0) {
     const prey = species[st.prey]!;
     const name = prey.params.name;

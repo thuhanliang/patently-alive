@@ -105,6 +105,12 @@ export const WorldParamsSchema = z.object({
   grazingDamage: GrazingDamageSchema.optional(),
   /** 地形生成参数；不写就整张图都是草地。 */
   terrain: IslandTerrainSchema.optional(),
+  /**
+   * 水边的食物（2026-10-22）：每平方米海岸格每天能捞到的水生猎物（克鲜重，鱼、蟹虾、蛙），
+   * 只给食谱里有 aquatic 的物种（水獭），按拥挤区块合起来分（动物沿着海岸跑遍家域，见 population 的 shoreFood）。
+   * 不写就没有；没有在水边觅食的物种时引擎不算这一项。
+   */
+  shore: z.strictObject({ aquaticPerM2: z.number().min(0) }).optional(),
   /** 这片世界里的预设物种（物种数据文件的 id）。 */
   species: z.array(z.string()).min(1),
   /** 开局只在主岛上的物种（离岸小岛上没有）。没有海岛地形时不起作用。 */

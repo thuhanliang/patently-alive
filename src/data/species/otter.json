@@ -1,0 +1,22 @@
+{
+  "id": "otter",
+  "name": "欧亚水獭",
+  "scientificName": "Lutra lutra",
+  "diet": { "plant": 0, "vertebrate": 0.05, "invertebrate": 0, "aquatic": 0.95 },
+  "bodyMassKg": 8,
+  "activity": "cathemeral",
+  "reproduction": {
+    "litterSize": 2,
+    "gestationDays": 63,
+    "litterIntervalDays": 365,
+    "ageAtMaturityDays": 600,
+    "breedingByMonth": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "nestDays": 70,
+    "nest": "burrow"
+  },
+  "survival": { "adultAnnual": 0.75 },
+  "maxLifespanYears": 16,
+  "movement": { "dailyRangeM": 4000 },
+  "initialDensityPerHa": 0,
+  "source": "体重取 PanTHERIA 1.0（Jones et al. 2009，8.87 千克）与 AnAge Build 15（Tacutu et al. 2018，6.75 千克）之间；窝仔数（2）、妊娠期（63 天，两库 64 / 61）、两窝间隔（365 天）两库一致；性成熟取两库之间（PanTHERIA 701 天、AnAge 548 天）。最长寿命取 16 年：AnAge 的 18.2 年是圈养记录。以下为文献常见范围内的估计（未核对）：全年都能繁殖、没有固定季节（不像白鼬那样延迟着床）；幼崽在洞里（holt）约十周才出来；成体年存活率约 0.75；海岸的水獭白天黑夜都活动（河边的多在夜里），取 cathemeral；一夜沿着海岸走几公里。食谱：鱼占大头，加上蟹虾、蛙等水生猎物（记作 aquatic 0.95），偶尔吃鸟和小兽（vertebrate 0.05，所以也会掏地面的窝，但不追捕会跑的猎物）。PanTHERIA 的家域 21 平方公里多是沿河的长条，不能按面积限定密度，这里不写家域，由海岸的食物限定（见世界数据的 shore）。开局密度为 0：预设的岛上没有水獭，只能由玩家引种。"
+}

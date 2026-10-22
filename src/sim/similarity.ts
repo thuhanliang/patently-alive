@@ -16,7 +16,7 @@ export type NestKind = 'ground' | 'burrow' | 'none';
 
 export interface TraitQuery {
   bodyMassKg?: number;
-  diet?: { plant: number; vertebrate: number; invertebrate: number };
+  diet?: { plant: number; vertebrate: number; invertebrate: number; aquatic?: number | undefined };
   activity?: Activity;
   litterSize?: number;
   /** 妊娠期；鸟是孵化期。 */
@@ -92,9 +92,10 @@ function traitDistance(key: TraitKey, q: TraitQuery, t: Required<TraitQuery>): n
     case 'bodyMassKg':
       return foldDistance(q.bodyMassKg!, t.bodyMassKg, MASS_FOLD);
     case 'diet': {
-      // 三类食物比例的 L1 距离：完全换成另一类食物算 2。
+      // 各类食物比例的 L1 距离：完全换成另一类食物算 2。
       const d = q.diet!;
-      return Math.abs(d.plant - t.diet.plant) + Math.abs(d.vertebrate - t.diet.vertebrate) + Math.abs(d.invertebrate - t.diet.invertebrate);
+      const aquatic = Math.abs((d.aquatic ?? 0) - (t.diet.aquatic ?? 0));
+      return Math.abs(d.plant - t.diet.plant) + Math.abs(d.vertebrate - t.diet.vertebrate) + Math.abs(d.invertebrate - t.diet.invertebrate) + aquatic;
     }
     case 'activity':
       return activityDistance(q.activity!, t.activity);
