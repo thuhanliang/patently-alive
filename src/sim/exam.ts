@@ -39,6 +39,8 @@ export interface Stomach {
   plant: number;
   invertebrate: number;
   vertebrate: number;
+  /** 鱼鳞、蟹壳等水生猎物（只有在水边捞吃的物种有，其余不写）。 */
+  aquatic?: number;
   /** 脊椎动物残骸是哪个物种的；认不出（或没有）时为 −1。vertebrate > 0 而 prey = −1 是认不出的肉和骨渣。 */
   prey: number;
   /** 残骸是蛋或雏（巢里的）而不是会跑的个体。 */
@@ -205,10 +207,14 @@ function stomachOf(s: number, c: number, nutrition: number, ctx: ExamContext): S
   const jitter = (): number => 0.7 + 0.6 * rng.nextFloat();
   const plant = d.plant * jitter();
   const invertebrate = d.invertebrate * jitter();
-  const onlyMeat = d.plant + d.invertebrate === 0;
+  // 水生猎物（2026-10-22）：只有食谱里有的才多抽一次，别的物种的随机数流不变。
+  const aquatic = d.aquatic !== undefined ? d.aquatic * jitter() : 0;
+  const onlyMeat = d.plant + d.invertebrate + aquatic === 0;
   const vertebrate = prey >= 0 ? Math.max(d.vertebrate, 0.1) * jitter() : onlyMeat ? d.vertebrate : 0;
-  const sum = plant + invertebrate + vertebrate;
-  return { fullness, plant: plant / sum, invertebrate: invertebrate / sum, vertebrate: vertebrate / sum, prey, preyNest };
+  const sum = plant + invertebrate + vertebrate + aquatic;
+  const out: Stomach = { fullness, plant: plant / sum, invertebrate: invertebrate / sum, vertebrate: vertebrate / sum, prey, preyNest };
+  if (aquatic > 0) out.aquatic = aquatic / sum;
+  return out;
 }
 
 /**

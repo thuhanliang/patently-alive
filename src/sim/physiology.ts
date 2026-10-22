@@ -104,6 +104,8 @@ export interface DerivedSpecies {
   readonly carnivore: boolean;
   /** 吃无脊椎动物。 */
   readonly insectivore: boolean;
+  /** 在水边捞吃的（食谱里有 aquatic，2026-10-22，水獭）：吃海岸格的水生猎物，见 population 的 shoreFood。 */
+  readonly fisher: boolean;
   readonly bodyMassG: number;
   /**
    * 每天对三类食物的需求，已乘上食谱比例：植物为干物质克数，脊椎动物、无脊椎动物为鲜重克数。
@@ -112,6 +114,10 @@ export interface DerivedSpecies {
   readonly plantIntakeG: number;
   readonly vertebrateIntakeG: number;
   readonly invertebrateIntakeG: number;
+  /** 水生猎物（鲜重克数，按吃肉的系数：鱼、蟹也是肉）。 */
+  readonly aquaticIntakeG: number;
+  /** 够得着几个区块以内的海岸（每天走的一半折成区块，见 population 的 shoreFood）。 */
+  readonly shoreReachBlocks: number;
   /** 幼体分几段、前几段在窝里。 */
   readonly juvenileStages: number;
   readonly nestStages: number;
@@ -232,11 +238,13 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number, world?: Deriv
     predator: p.diet.vertebrate > 0,
     carnivore: p.diet.vertebrate >= PURSUIT_DIET_SHARE,
     insectivore: p.diet.invertebrate > 0,
+    fisher: (p.diet.aquatic ?? 0) > 0,
     bodyMassG: p.bodyMassKg * 1000,
     // 消化道对付不了这里植物的设计（阶段 3.5）：塞满肠子为止，一天吃 capacity 倍同体重真实食草动物的量（再多也过不去）。
     plantIntakeG: p.diet.plant * HERBIVORE_INTAKE_COEF * (plantValue && p.body?.gut ? detPow(p.bodyMassKg, 0.75) * p.body.gut.capacity : metabolicMass),
     vertebrateIntakeG: p.diet.vertebrate * CARNIVORE_INTAKE_COEF * metabolicMass,
     invertebrateIntakeG: p.diet.invertebrate * INVERTEBRATE_INTAKE_COEF * metabolicMass,
+    aquaticIntakeG: (p.diet.aquatic ?? 0) * CARNIVORE_INTAKE_COEF * metabolicMass,
     juvenileStages,
     nestStages,
     nest: p.reproduction.nest ?? null,
@@ -250,6 +258,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number, world?: Deriv
     crowdingRadiusBlocks: crowdingRadius(p, cellSizeM),
     moveProb: Math.min(0.5, cellsPerDay / 2),
     moveRadius: Math.max(1, Math.min(MAX_MOVE_RADIUS, Math.round(cellsPerDay / 2))),
+    shoreReachBlocks: Math.round(cellsPerDay / 2 / CROWDING_BLOCK_CELLS),
     hourlyStepCells: cellsPerDay / activeHoursPerDay(p.activity),
     activeHours: activeHoursPerDay(p.activity),
     nestSearchCells: 2 * CATCH_RADIUS_CELLS * cellsPerDay * CATCH_SUCCESS,

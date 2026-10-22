@@ -135,6 +135,7 @@ export class ArchivePanel {
       ['植物', p.diet.plant],
       ['脊椎动物', p.diet.vertebrate],
       ['无脊椎动物', p.diet.invertebrate],
+      ['水生猎物', p.diet.aquatic ?? 0],
     ]
       .filter(([, v]) => (v as number) > 0)
       .map(([k, v]) => `${k} ${Math.round((v as number) * 100)}%`)

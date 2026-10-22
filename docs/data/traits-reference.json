@@ -240,6 +240,32 @@
         "sampleSize": "large"
       }
     },
+    "otter": {
+      "scientificName": "Lutra lutra",
+      "pantheria": {
+        "adultBodyMassG": 8868.69,
+        "litterSize": 2.01,
+        "littersPerYear": 1,
+        "gestationDays": 64.27,
+        "interbirthIntervalDays": 365,
+        "sexualMaturityDays": 700.76,
+        "maxLongevityMonths": 264,
+        "homeRangeKm2": 21.31,
+        "populationDensityPerKm2": 0.85,
+        "activityCycle": 1
+      },
+      "anage": {
+        "adultWeightG": 6750,
+        "litterSize": 2,
+        "littersPerYear": 1,
+        "gestationDays": 61,
+        "interLitterDays": 365,
+        "femaleMaturityDays": 548,
+        "maxLongevityYears": 18.2,
+        "dataQuality": "acceptable",
+        "sampleSize": "medium"
+      }
+    },
     "possum": {
       "scientificName": "Trichosurus vulpecula",
       "pantheria": {

@@ -38,6 +38,8 @@ const SPECIES_COLORS: Record<string, { body: number; chart: number }> = {
   kiwi: { body: 0x7a5b3a, chart: 0x7a5b3a },
   weka: { body: 0x8b5e34, chart: 0x8b5e34 },
   kakapo: { body: 0x7c9a4a, chart: 0x7c9a4a },
+  // 水獭：深巧克力褐，和白鼬（偏红的栗褐）分得开。
+  otter: { body: 0x5a4636, chart: 0x5a4636 },
 };
 const FALLBACK = { body: 0x8a857c, chart: 0x6a655c };
 

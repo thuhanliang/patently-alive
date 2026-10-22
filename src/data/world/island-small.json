@@ -24,7 +24,8 @@
     { "type": "shrub", "maxBiomass": 300, "initialFraction": 0.8, "growthRate": 0.002, "floorFraction": 0.05 }
   ],
   "weather": { "persistence": 0.85, "min": 0.4, "max": 1.6 },
+  "shore": { "aquaticPerM2": 0.022 },
   "species": ["dotterel", "rat", "rabbit", "cat"],
   "mainIslandOnly": ["rabbit", "cat"],
-  "source": "测试用的小地图（阶段 2A / 3 起）：和鸟岛同样的规则、物种和植被参数，只是缩成 48×48 格（2.4 公里见方），一座离岸小岛。跑得快，用来试引种和设计物种；结论再到大地图上验证。"
+  "source": "测试用的小地图（阶段 2A / 3 起）：和鸟岛同样的规则、物种和植被参数，只是缩成 48×48 格（2.4 公里见方），一座离岸小岛。跑得快，用来试引种和设计物种；结论再到大地图上验证。水边的食物同鸟岛。"
 }

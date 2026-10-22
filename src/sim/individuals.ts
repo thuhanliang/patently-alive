@@ -291,6 +291,8 @@ export interface HourlyContext {
   cellAreaM2: number;
   /** 吃植物、找虫子的参数（见 plantFood）。 */
   food: PlantFood;
+  /** 各物种在各区块够得着的水生猎物（克鲜重/天，见 Sim 的 shoreReach）；不在水边捞吃的物种、没写 shore 的世界为 null。 */
+  shoreReach?: readonly (Float64Array | null)[] | undefined;
   /** 暂存：这一口各种植物各吃了多少（见 eatPlants），不进状态。 */
   plantSplit?: Float64Array;
   rng: Rng;
@@ -378,9 +380,10 @@ export function individualsHourly(ind: Individuals, ctx: HourlyContext): void {
  * 吃这一小时的植物和无脊椎动物份额。吃饱程度按食谱比例累加（和格子模型的 combineFed 一致）。
  * 植物：见 eatPlants（先按比例啃木本，其余吃草本）。无脊椎动物：这一格当天能找到的量按活动小时平分，不和别的个体分摊
  * （虫子多半吃不完；格子模型里是同一格的动物一起分，是已知的小差别）。
+ * 水生猎物（水獭）：所在区块够得着的海岸当天能捞到的量按活动小时平分，同样不和别的个体分摊（格子模型里够得着同一段海岸的一起分）。
  */
 function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: HourlyContext): void {
-  if (!sp.grazer && !sp.insectivore) return;
+  if (!sp.grazer && !sp.insectivore && !sp.fisher) return;
   const c = Math.floor(ind.y[i]!) * grid.width + Math.floor(ind.x[i]!);
   const size = sizeOf(sp, ind.born[i]!, ctx.day);
   const diet = sp.params.diet;
@@ -404,6 +407,12 @@ function feed(ind: Individuals, i: number, sp: DerivedSpecies, grid: Grid, ctx: 
     const found = (invertebratesPerM2(grid, ctx.food, c) * ctx.cellAreaM2) / sp.activeHours;
     const eaten = Math.min(need / sp.activeHours, found);
     ind.fed[i] = ind.fed[i]! + (diet.invertebrate * eaten) / need;
+  }
+  if (sp.fisher) {
+    const need = sp.aquaticIntakeG * size;
+    const found = (ctx.shoreReach?.[ind.species[i]!]?.[ctx.blockOf[c]!] ?? 0) / sp.activeHours;
+    const eaten = Math.min(need / sp.activeHours, found);
+    ind.fed[i] = ind.fed[i]! + (diet.aquatic! * eaten) / need;
   }
 }
 

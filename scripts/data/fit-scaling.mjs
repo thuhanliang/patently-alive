@@ -234,11 +234,15 @@ export function fitLaws() {
   const heaviestBird = heaviestOf(birds);
 
   // ---------- 用现有技术条目校准的两项（数据库里没有）
+  // 只用写成了设计模板的条目（设计编译器的回归基准，src/data/design/templates.json）：
+  // 后来进档案馆、没有模板的物种（如水獭，2026-10-22）不改校准，已有的设计也就不变。
   const speciesDir = join(root, 'src', 'data', 'species');
+  const templated = new Set(JSON.parse(readFileSync(join(root, 'src', 'data', 'design', 'templates.json'), 'utf8')).templates.map((t) => t.species));
   const archive = readdirSync(speciesDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
-    .map((f) => JSON.parse(readFileSync(join(speciesDir, f), 'utf8')));
+    .map((f) => JSON.parse(readFileSync(join(speciesDir, f), 'utf8')))
+    .filter((s) => templated.has(s.id));
   const birdIds = new Set(
     readdirSync(join(root, 'src', 'data', 'archive'))
       .filter((f) => f.endsWith('.json'))

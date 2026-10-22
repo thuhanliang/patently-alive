@@ -153,10 +153,13 @@ export function catchmentRadius(sp: DerivedSpecies, cellSizeM: number): number {
   return Math.max(1, Math.min(MAX_CATCHMENT_CELLS, Math.round(range / cellSizeM / 2)));
 }
 
-/** 诱饵对一个物种的吸引力：Σ 诱饵对这类食物的吸引力 × 食谱里这一类的比例。 */
+/**
+ * 诱饵对一个物种的吸引力：Σ 诱饵对这类食物的吸引力 × 食谱里这一类的比例。
+ * 水生猎物按肉饵算（鱼饵也是肉；水獭用鱼做饵）。
+ */
 export function baitAppeal(trap: TrapType, sp: DerivedSpecies): number {
   const d = sp.params.diet;
-  return trap.bait.plant * d.plant + trap.bait.vertebrate * d.vertebrate + trap.bait.invertebrate * d.invertebrate;
+  return trap.bait.plant * d.plant + trap.bait.vertebrate * (d.vertebrate + (d.aquatic ?? 0)) + trap.bait.invertebrate * d.invertebrate;
 }
 
 /** 一只体重为 massKg 的动物能不能触发这种陷阱。 */

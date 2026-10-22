@@ -7,7 +7,7 @@ import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Toke
 
 /** 物种对应哪种剪纸木偶；没有素材的物种（引进的、设计的）用代码画的通用木偶。 */
 export function puppetKindOf(id: string): PuppetKind {
-  return id === 'cat' ? 'cat-orange' : id === 'dotterel' ? 'bird' : id === 'rabbit' ? 'rabbit' : id === 'rat' ? 'rat' : 'generic';
+  return id === 'cat' ? 'cat-orange' : id === 'dotterel' ? 'bird' : id === 'rabbit' ? 'rabbit' : id === 'rat' ? 'rat' : id === 'otter' ? 'otter' : 'generic';
 }
 
 export interface SpeciesTokens {

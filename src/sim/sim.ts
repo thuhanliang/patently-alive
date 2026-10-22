@@ -11,6 +11,8 @@ import {
   crowdingBlockCount,
   crowdingBlocks,
   landCells,
+  shoreSupplyByBlock,
+  windowSum,
   crowdingByBlock,
   dailyPopulation,
   shiftStages,
@@ -173,6 +175,28 @@ export class Sim {
   private foodCache: PlantFood | undefined;
   private get food(): PlantFood {
     return (this.foodCache ??= plantFood(this.s.config.world));
+  }
+
+  /** 各拥挤区块每天能捞到的水生猎物（见 shoreSupplyByBlock）；地形不变，算一次就够。 */
+  private shoreCache: Float64Array | null | undefined;
+  private get shore(): Float64Array | null {
+    if (this.shoreCache === undefined) {
+      this.shoreCache = shoreSupplyByBlock(this.s.grid, this.blocks.blockOf, this.blocks.cellsIn.length, cellArea(this.s.config), this.s.config.world.shore?.aquaticPerM2);
+    }
+    return this.shoreCache;
+  }
+
+  /** 个体模型用：各物种在各区块够得着的水生猎物（海岸产量在觅食半径里的和）；引种后物种变了就重算。 */
+  private shoreReachCache: { derived: DerivedSpecies[]; out: (Float64Array | null)[] } | undefined;
+  private get shoreReach(): (Float64Array | null)[] {
+    const shore = this.shore;
+    if (this.shoreReachCache?.derived !== this.derived) {
+      const out = this.derived.map((sp) =>
+        sp.fisher && shore ? (sp.shoreReachBlocks > 0 ? windowSum(shore, this.blocks.blocksWide, sp.shoreReachBlocks) : shore) : null,
+      );
+      this.shoreReachCache = { derived: this.derived, out };
+    }
+    return this.shoreReachCache.out;
   }
 
   static create(config: SimConfig): Sim {
@@ -395,6 +419,7 @@ export class Sim {
         day: hourDay,
         cellAreaM2: cellArea(this.s.config),
         food: this.food,
+        shoreReach: this.shoreReach,
         rng: this.rng,
         stats: this.s.dayAccum,
         ledger: this.s.deaths,
@@ -485,6 +510,7 @@ export class Sim {
       ledger: this.s.deaths,
       barriers: this.barriers,
       fedLast: this.s.fedLast,
+      shore: this.shore,
     });
     const acc = this.s.dayAccum;
     individualsDaily(this.s.individuals, {
