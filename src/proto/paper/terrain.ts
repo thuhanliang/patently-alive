@@ -222,6 +222,19 @@ function texAt(t: PaperTex, x: number, y: number, ox: number, oy: number): numbe
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/** 平滑的 min：两者相差小于 k 时圆滑过渡，层的轮廓不会在交汇处出尖角。 */
+function smin(a: number, b: number, k: number): number {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - (h * h * k) / 4;
+}
+
+/** 到地图边缘的距离（格）。 */
+const edgeDist = (u: number, v: number, w: number, h: number): number => Math.min(u + 0.5, v + 0.5, w - 0.5 - u, h - 0.5 - v);
+
+/** 地图边上的"离岸距离"：比最深一层（-28）再深一截，加上轮廓起伏也不会露出来；往里每格浅 EDGE_SLOPE。 */
+const EDGE_SD = -36;
+const EDGE_SLOPE = 1.8;
+
 /**
  * 灌丛指示场（加上和地形绘制相同的扭曲后）的门槛：大于 SHRUB_EDGE 的地方算灌丛，
  * 树冠下的暗地面从更靠里的 SHRUB_UNDER 开始，保证暗地面不会露出到树冠外面。
@@ -319,12 +332,12 @@ function sculptLayers(pal: Palette, soft: boolean): Layer[] {
   );
   // 草地内部的明暗台阶：亮、暗、亮交替，很浅。
   for (const [t, k] of [
-    [3.5, 1.05],
-    [7, 0.96],
-    [11, 1.04],
+    [3.5, 1.07],
+    [7, 0.95],
+    [11, 1.06],
   ] as const) {
     const m = meanOf(pal.grass);
-    layers.push({ kind: 'land', t, rim: 0.05, edge: 'light', shadow: 0.1, grad: sdGrad, tex: pal.grass, col: [m[0] * k, m[1] * k, m[2] * k], wob: 1.2, dry: pal.dry });
+    layers.push({ kind: 'land', t, rim: 0.05, edge: 'light', shadow: 0.14, grad: sdGrad, tex: pal.grass, col: [m[0] * k, m[1] * k, m[2] * k], wob: 1.2, dry: pal.dry });
   }
   layers.push(
     soft
@@ -394,6 +407,8 @@ export function paintTerrain(
   const wobS = layers.map((_, k) => Math.sin(k * 1.7));
   // 完全不透明的层（盖住下面一切）：不是碎浪花、也不是只混一半的柔和灌丛。
   const opaque = layers.map((L) => !L.lace && !(L.rim === 0 && L.kind === 'shrub'));
+  // 有刷痕的层：水里那十二层（不含浪花）。
+  const streaky = layers.map((L) => L.kind === 'sd' && L.t < 0 && L.edge === 'light');
   const hereK = new Float64Array(layers.length);
   const offK = new Float64Array(layers.length);
   for (let py = 0; py < H; py++) {
@@ -407,8 +422,16 @@ export function paintTerrain(
       // 每层各自的轮廓起伏：两张共用的噪声按层转个角度组合，省得每层算一次噪声。
       const n1 = opts.sculpt ? valueNoise(px / (PX * 2.6), py / (PX * 2.6), seed + 31) - 0.5 : 0;
       const n2 = opts.sculpt ? valueNoise(px / (PX * 2.6) + 17.3, py / (PX * 2.6) - 5.1, seed + 37) - 0.5 : 0;
-      const sdHere = sample(f.sd, w, h, u, v) + warp;
-      const sdOff = sample(f.sd, w, h, u - SHX, v - SHY) + warp;
+      let sdHere = sample(f.sd, w, h, u, v) + warp;
+      let sdOff = sample(f.sd, w, h, u - SHX, v - SHY) + warp;
+      if (opts.sculpt) {
+        // 地图是有边的：水在靠近地图边缘的地方一层层沉到最深那层，和外面的底色接上，看不出边。
+        // 只改画法，不改场（陆地不动，摆放仍按原来的场）。
+        if (sdHere < 0) sdHere = smin(sdHere, EDGE_SD + EDGE_SLOPE * edgeDist(u, v, w, h), 4);
+        if (sdOff < 0) sdOff = smin(sdOff, EDGE_SD + EDGE_SLOPE * edgeDist(u - SHX, v - SHY, w, h), 4);
+      }
+      // 水面纸上的横向刷痕（示意图的海水有笔触）：拉长的噪声，只在水里算。
+      const streak = opts.sculpt && sdHere < 0 ? 1 + 0.16 * (valueNoise(px / 46, py / 4.5, seed + 47) * 0.6 + valueNoise(px / 15, py / 2, seed + 53) * 0.4 - 0.5) : 1;
       // 碎浪花的断续：只在岸边附近才算（分形噪声，断口圆润）。
       const lace = opts.sculpt && sdHere > -3 && sdHere < 0.5 ? fbm(px / 16, py / 16, seed + 43) : 0;
       const indWarp = warp * 0.12;
@@ -421,9 +444,9 @@ export function paintTerrain(
       let g = pal.deep.rgb[ti + 1]!;
       let b = pal.deep.rgb[ti + 2]!;
       if (base && baseMean) {
-        r = (base[0] * r) / baseMean[0];
-        g = (base[1] * g) / baseMean[1];
-        b = (base[2] * b) / baseMean[2];
+        r = (base[0] * r * streak) / baseMean[0];
+        g = (base[1] * g * streak) / baseMean[1];
+        b = (base[2] * b * streak) / baseMean[2];
       }
       // 先算每层的场值，找出最上面一张完全盖住这里的纸：它下面的层看不见，不用画。
       let start = 0;
@@ -470,9 +493,10 @@ export function paintTerrain(
         let fb = L.tex.rgb[ti + 2]!;
         const m = means[k];
         if (m) {
-          fr = (L.col[0] * fr) / m[0];
-          fg = (L.col[1] * fg) / m[1];
-          fb = (L.col[2] * fb) / m[2];
+          const st = streaky[k] ? streak : 1;
+          fr = (L.col[0] * fr * st) / m[0];
+          fg = (L.col[1] * fg * st) / m[1];
+          fb = (L.col[2] * fb * st) / m[2];
         }
         const rimA = L.rim > 0 ? clamp01((here - rimEdge) / L.grad + 0.5) : 0;
         if (rimA > 0) {
