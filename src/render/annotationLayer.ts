@@ -14,7 +14,8 @@ export class AnnotationLayer {
   private readonly marks = new Graphics();
   /** 警报圈单独一层：放大到地块档时它比屏幕还大，由 MapView 藏起来。 */
   readonly alertRing = new Graphics();
-  private readonly labels = new Container();
+  /** 工作旁边的文字（剪纸画面把它们立起来、正对镜头，见 render/paper/view.ts）。 */
+  readonly labels = new Container();
   private key = '';
 
   constructor(private readonly tools: Tools | undefined) {
