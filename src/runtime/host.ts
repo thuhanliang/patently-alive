@@ -13,6 +13,7 @@ import {
   Session,
   TICKS_PER_DAY,
   type Alert,
+  type CaseStatus,
   type Op,
   type Quarter,
   type Resources,
@@ -53,6 +54,8 @@ export interface SessionView {
   money: { spent: number; received: number };
   removed: number[];
   alerts: Alert[];
+  /** 个案动物（2026-10-22）：情景里单独记着的几只现在怎么样。 */
+  cases: CaseStatus[];
   days: DayRecord[];
   /** 当天开始时的状态校验和（HUD 显示，用来对照回放）。 */
   dayChecksum: number;
@@ -214,6 +217,7 @@ export class SimHost {
       money: s.money,
       removed: [...s.removed],
       alerts: this.alertList,
+      cases: s.cases(),
       days,
       dayChecksum: this.dayChecksum,
       meanVegetation: this.meanVegetation,

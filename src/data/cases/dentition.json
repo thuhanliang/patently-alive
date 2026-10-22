@@ -1,0 +1,17 @@
+{
+  "说明": "牙齿能对付哪些食物：每类食物里能吃下去的比例（个案动物用，2026-10-22）。野外能吃饱多少 = Σ 食谱比例 × 这里的比例，由引擎算（src/sim/cases.ts）。",
+  "types": {
+    "full": {
+      "name": "牙齿齐全",
+      "edible": { "plant": 1, "vertebrate": 1, "invertebrate": 1, "aquatic": 1 },
+      "basis": "assumption",
+      "source": "对照组：牙齿齐全时食谱里的东西都吃得了，个案动物饿不着（和真实物种一样）。"
+    },
+    "none": {
+      "name": "没有牙（口炎，牙几乎掉光）",
+      "edible": { "plant": 1, "vertebrate": 0.4, "invertebrate": 0.7, "aquatic": 0.4 },
+      "basis": "assumption",
+      "source": "假设【未核对】：没有牙的猫杀不死、撕不开大一点的猎物，只能吞下小的、软的东西（腐肉、碎肉、软的虫子）。在人手里吃软食（湿粮、泡软的干粮）完全没问题：猫口炎做全口拔牙后多数吃得好、口炎痊愈或大大好转（Jennings et al. 2015, JAVMA 246:654，95 例；未核对原文）。"
+    }
+  }
+}

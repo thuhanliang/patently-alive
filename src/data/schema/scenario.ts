@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CaseSchema } from './case';
 
 /**
  * 情景：一片预设世界 + 一段"历史" + 业主的委托 + 开局资源。
@@ -67,6 +68,8 @@ export const ScenarioSchema = z.object({
     staff: z.number().int().min(0),
     satisfaction: z.number().min(0).max(100),
   }),
+  /** 个案动物（2026-10-22）：情景里单独记着的几只（见 schema/case.ts）。不写就没有。 */
+  cases: z.array(CaseSchema).optional(),
 });
 
 export type Scenario = z.infer<typeof ScenarioSchema>;

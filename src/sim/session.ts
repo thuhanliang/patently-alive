@@ -11,6 +11,7 @@ import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
 import { baselineOf, QUARTER_DAYS, QUARTERS_PER_YEAR, satisfactionChange, score, type ScoreBaseline, type ScoreDetail, type ScoreGoal, type Scores } from './score';
 import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
+import { caseLocation, caseStatus, type CaseStatus } from './cases';
 
 /** 一次季度结算。 */
 export interface Quarter {
@@ -90,6 +91,31 @@ export class Session {
     } else {
       this.scoring = null;
     }
+    for (const c of this.rules.cases ?? []) {
+      if (!this.config.species.some((s) => s.id === c.species)) throw new Error(`个案 ${c.id} 的物种「${c.species}」不是这片世界开局就有的物种`);
+      if (!c.edible) throw new Error(`个案 ${c.id} 没有 edible（牙齿要先换成能吃下去的比例）`);
+    }
+  }
+
+  /** 个案动物在哪一格（只看地形，开局算一次）。 */
+  private caseCells: Map<string, { x: number; y: number }> | null = null;
+
+  /**
+   * 个案动物现在的状态（2026-10-22，见 cases.ts）：只由情景数据、今天和日志里的救助操作推出来，
+   * 读档、回放后不用另外恢复。
+   */
+  cases(): CaseStatus[] {
+    const list = this.rules.cases ?? [];
+    if (list.length === 0) return [];
+    this.caseCells ??= new Map(list.map((c) => [c.id, caseLocation(c, this.simulation.state.grid)] as const));
+    const day = Math.floor(this.simulation.tick / TICKS_PER_DAY);
+    return list.map((c) => caseStatus(c, this.config.species.find((s) => s.id === c.species)!, this.caseCells!.get(c.id)!, day, this.rescueDay(c.id)));
+  }
+
+  /** 日志里把这只个案带回来的那天；没有为 null。 */
+  private rescueDay(id: string): number | null {
+    const e = this.log.find((x) => x.op.type === 'rescue' && x.op.case === id);
+    return e ? Math.floor(e.tick / TICKS_PER_DAY) : null;
   }
 
   /** 已经做过的季度结算（最早的在前）。 */
@@ -233,7 +259,7 @@ export class Session {
     const problem = this.check(op);
     if (problem) return { ok: false, reason: problem };
 
-    const cost = costOf(op, this.config.tools, this.config.world.cellSizeM);
+    const cost = costOf(op, this.config.tools, this.config.world.cellSizeM, this.rules);
     if (cost.budget > this.res.budget) return { ok: false, reason: `预算不够：要 ${cost.budget} 元，还剩 ${this.res.budget} 元` };
     if (cost.staff > this.freeStaff()) return { ok: false, reason: `人手不够：要 ${cost.staff} 支兽医队，空闲 ${this.freeStaff()} 支` };
 
@@ -354,6 +380,14 @@ export class Session {
     switch (op.type) {
       case 'setSpeed':
         return null;
+      case 'rescue': {
+        const status = this.cases().find((c) => c.id === op.case);
+        if (!status) return `这一局没有个案「${op.case}」`;
+        if (status.phase === 'hidden') return '还没有人见过它';
+        if (status.phase === 'rescued' || status.phase === 'office') return `${status.name}已经在事务所了`;
+        if (status.phase === 'lost') return '来不及了：已经找不到它了';
+        return null;
+      }
       case 'release': {
         if (!this.rules.allowRelease) return '管理员身份不能往岛上引入动物（引种在下一阶段解锁）';
         if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
@@ -479,6 +513,9 @@ export class Session {
 
   private apply(op: Op): void {
     switch (op.type) {
+      case 'rescue':
+        // 个案动物不在推演里：带回来这件事就记在日志里，状态由日志推出来（见 cases()）。
+        return;
       case 'setSpeed':
         this.currentSpeed = op.speed;
         return;

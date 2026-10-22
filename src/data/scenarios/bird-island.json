@@ -24,5 +24,39 @@
   "sentiment": { "cat": 0.5, "rabbit": 0.02, "rat": 0, "dotterel": 5 },
   "goal": { "target": "dotterel", "recovery": 1.3, "native": ["dotterel"], "years": 3, "quarterlyBudget": 30000 },
   "introduction": { "allowed": false, "banned": [], "designs": true },
-  "resources": { "budget": 200000, "staff": 3, "satisfaction": 70 }
+  "resources": { "budget": 200000, "staff": 3, "satisfaction": 70 },
+  "cases": [
+    {
+      "id": "toothless-kitten",
+      "name": "豆腐",
+      "species": "cat",
+      "massKg": 1.2,
+      "appearsDay": 25,
+      "anchor": { "x": 0.56, "y": 0.6 },
+      "condition": 0.7,
+      "dentition": "none",
+      "rescue": { "cost": 3500, "days": 1, "recoveryDays": 21 },
+      "text": {
+        "found": [
+          "巡查的队员在灌丛底下看见一只瘦小的流浪小猫，四个月大的样子。",
+          "它一直舔嘴、流口水，凑到吃的跟前，闻一闻又走开了。"
+        ],
+        "wild": [
+          "牙龈又红又肿，碰一下就出血；牙齿几乎掉光了。是猫口炎。",
+          "没有牙，它抓不住老鼠，也撕不开鸟，只能捡一点软的碎肉和虫子，一天比一天瘦。在野外它撑不了多久。"
+        ],
+        "rescued": [
+          "带回事务所了。做了全口拔牙，口炎的根子去掉了，伤口在慢慢长好。",
+          "现在一天几顿泡软的猫粮，吃得很香。"
+        ],
+        "office": [
+          "豆腐成了事务所的猫：没有牙，吃软食，很健康。",
+          "它只负责被摸、占桌子，偶尔压在申请书上。"
+        ],
+        "lost": [
+          "后来再也没有人见过那只小猫。"
+        ]
+      }
+    }
+  ]
 }
