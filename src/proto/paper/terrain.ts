@@ -222,6 +222,18 @@ function texAt(t: PaperTex, x: number, y: number, ox: number, oy: number): numbe
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/**
+ * 灌丛指示场（加上和地形绘制相同的扭曲后）的门槛：大于 SHRUB_EDGE 的地方算灌丛，
+ * 树冠下的暗地面从更靠里的 SHRUB_UNDER 开始，保证暗地面不会露出到树冠外面。
+ */
+export const SHRUB_EDGE = 0.5;
+export const SHRUB_UNDER = 0.62;
+
+/** 和 paintTerrain 一致的低频扭曲（格）。植被摆放、地面铺叶都用它，和地形的边对齐。 */
+export function terrainWarp(px: number, py: number, seed: number): number {
+  return (fbm(px / (PX * 5), py / (PX * 5), seed) - 0.5) * 1.6;
+}
+
 interface Layer {
   kind: 'sd' | 'grass' | 'shrub';
   t: number;
@@ -237,8 +249,15 @@ interface Layer {
 /**
  * 逐像素画地形。返回 RGBA，宽高 = 格数 × PX。
  * 每层纸：先在下面一层上落投影（往右下偏），再画白色撕边，最后铺这层的纸。
+ * softVegetation：草地、灌丛两层不要白边和投影，边缘柔和过渡（植被的轮廓交给立起来的植物），
+ * 灌丛层往里收一点，当作树冠下的暗地面；白色撕边只留在水和陆地之间。
  */
-export function paintTerrain(f: Fields, pal: Palette, seed: number): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
+export function paintTerrain(
+  f: Fields,
+  pal: Palette,
+  seed: number,
+  opts: { softVegetation?: boolean } = {},
+): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
   const W = f.width * PX;
   const H = f.height * PX;
   const out = new Uint8ClampedArray(W * H * 4);
@@ -249,8 +268,12 @@ export function paintTerrain(f: Fields, pal: Palette, seed: number): { data: Uin
     { kind: 'sd', t: -2.6, rim: 0.22, grad: sdGrad, tex: pal.shallow },
     { kind: 'sd', t: -0.75, rim: 0.3, grad: sdGrad, tex: pal.foam },
     { kind: 'sd', t: 0, rim: 0.22, grad: sdGrad, tex: pal.beach },
-    { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
-    { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
+    opts.softVegetation
+      ? { kind: 'grass', t: 0.5, rim: 0, grad: indGrad * 5, tex: pal.grass, dry: pal.dry }
+      : { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
+    opts.softVegetation
+      ? { kind: 'shrub', t: SHRUB_UNDER, rim: 0, grad: indGrad * 6, tex: pal.shrub, dry: pal.dry }
+      : { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
   ];
   // 投影往右下偏的距离（格）。
   const SHX = 5 / PX;
@@ -261,7 +284,7 @@ export function paintTerrain(f: Fields, pal: Palette, seed: number): { data: Uin
       const u = (px + 0.5) / PX - 0.5;
       const v = (py + 0.5) / PX - 0.5;
       // 低频扭曲让海岸线不跟着格子走；高频纤维决定白边的毛刺。
-      const warp = (fbm(px / (PX * 5), py / (PX * 5), seed) - 0.5) * 1.6;
+      const warp = terrainWarp(px, py, seed);
       const fibre = valueNoise(px / 2.4, py / 2.4, seed + 5);
       const fine = valueNoise(px / 7, py / 7, seed + 9);
       const sdHere = sample(f.sd, w, h, u, v) + warp;
@@ -280,20 +303,23 @@ export function paintTerrain(f: Fields, pal: Palette, seed: number): { data: Uin
         const here = L.kind === 'sd' ? sdHere : L.kind === 'grass' ? gHere : sHere;
         const off = L.kind === 'sd' ? sdOff : L.kind === 'grass' ? gOff : sOff;
         const rimEdge = L.t - L.rim * (0.5 + 0.9 * fibre);
-        // 投影：偏移处被这层（连白边）盖住的程度，边缘柔和。
-        const soft = L.grad * 4;
-        const sh = clamp01((off - (L.t - L.rim) + soft) / (2 * soft)) * 0.32;
-        r *= 1 - sh;
-        g *= 1 - sh * 1.04;
-        b *= 1 - sh * 1.1;
-        const rimA = clamp01((here - rimEdge) / L.grad + 0.5);
+        // 投影：偏移处被这层（连白边）盖住的程度，边缘柔和。没有白边的层也不落投影。
+        if (L.rim > 0) {
+          const soft = L.grad * 4;
+          const sh = clamp01((off - (L.t - L.rim) + soft) / (2 * soft)) * 0.32;
+          r *= 1 - sh;
+          g *= 1 - sh * 1.04;
+          b *= 1 - sh * 1.1;
+        }
+        const rimA = L.rim > 0 ? clamp01((here - rimEdge) / L.grad + 0.5) : 0;
         if (rimA > 0) {
           ti = texAt(pal.rim, px, py, k * 97, k * 61);
           r += (pal.rim.rgb[ti]! - r) * rimA;
           g += (pal.rim.rgb[ti + 1]! - g) * rimA;
           b += (pal.rim.rgb[ti + 2]! - b) * rimA;
         }
-        const fillA = clamp01((here - (L.t + (fine - 0.5) * L.rim * 0.3)) / L.grad + 0.5);
+        // 没有白边的灌丛层只当树冠下的阴影地面：和草地混一半，不铺满深色。
+        const fillA = clamp01((here - (L.t + (fine - 0.5) * L.rim * 0.3)) / L.grad + 0.5) * (L.rim === 0 && L.kind === 'shrub' ? 0.55 : 1);
         if (fillA > 0) {
           ti = texAt(L.tex, px, py, k * 131, k * 53);
           let fr = L.tex.rgb[ti]!;
