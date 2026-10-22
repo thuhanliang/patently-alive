@@ -1,14 +1,15 @@
-import { Application, Assets, BlurFilter, Container, Graphics, Rectangle, Sprite, Text, Texture, type Spritesheet } from 'pixi.js';
+import { Application, BlurFilter, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
-import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, unprojectGround, type Cam } from './camera';
-import { LeafKit } from './leaves';
-import { paintParallel } from './painter';
-import { fbm, hash2 } from './noise';
-import { bakeShrub, bakeTussock } from './plants';
-import { PX, SHRUB_EDGE, buildFields, imagePaper, proceduralPaper, sample, terrainWarp, type Palette, type PaperTex } from './terrain';
-import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from './tokens';
+import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, unprojectGround, type Cam } from '../../render/paper/camera';
+import { LeafKit } from '../../render/paper/leaves';
+import { paintParallel } from '../../render/paper/painter';
+import { fbm, hash2 } from '../../render/paper/noise';
+import { bakeShrub, bakeTussock } from '../../render/paper/plants';
+import { PX, SHRUB_EDGE, buildFields, sample, terrainWarp } from '../../render/paper/terrain';
+import { P7_POSES, P7_ROW, imageOf, loadPalette, loadSheet, type Sheet } from '../../render/paper/assets';
+import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from '../../render/paper/tokens';
 
 /**
  * 剪纸风格 demo（M0 · V2 的第一块）：用真实推演出来的鸟岛，按剪纸方式画地形、植被、代表单位、干预标记和界面。
@@ -28,73 +29,6 @@ const PLANTS = params.get('mode') !== 'stickers';
 const PLANT_ART = params.get('plants') === 'code' ? 'code' : 'lovart';
 const TILT = params.get('tilt') !== '0';
 
-type Sheet = { rows: number[][][]; tex: Texture[][] };
-
-/** 一张素材表打成一张图集（scripts/art/pack_atlas.py）：一个请求，同一图集里的素材能合批绘制。 */
-async function loadSheet(name: string): Promise<Sheet | null> {
-  try {
-    const sheet = await Assets.load<Spritesheet>(`proto/paper/${name}.json`);
-    const rows = (sheet.data.meta as unknown as { rows: number[][][] }).rows;
-    const tex = rows.map((row, r) => row.map((_, c) => sheet.textures[`${r}_${c}`]!));
-    return { rows, tex };
-  } catch {
-    return null;
-  }
-}
-
-type Img = CanvasImageSource & { width: number; height: number };
-const cropped = new WeakMap<Texture, HTMLCanvasElement>();
-/** 图集里的一帧单独画到一张画布上（画到 2D 画布、读像素时用）；按贴图缓存。 */
-const imageOf = (t: Texture): Img => {
-  let c = cropped.get(t);
-  if (c) return c;
-  const f = t.frame;
-  c = document.createElement('canvas');
-  c.width = f.width;
-  c.height = f.height;
-  c.getContext('2d')!.drawImage(t.source.resource as Img, f.x, f.y, f.width, f.height, 0, 0, f.width, f.height);
-  cropped.set(t, c);
-  return c;
-};
-
-/** P4 纸纹（3×3）：有就用真图，没有就用代码生成的纸。顺序见提示词：深海、中海、浅海、浪花、卵石滩、沙、草地、灌丛、牛皮纸。 */
-async function loadPalette(): Promise<Palette> {
-  const colors = [0x1f5d7a, 0x2f89b4, 0x7cc0b0, 0xefe9dc, 0x9b8a7a, 0xe5bb80, 0x9cb052, 0x5c7639, 0xc99460];
-  const p4 = await loadSheet('P4');
-  const texs: PaperTex[] = colors.map((hex, i) => {
-    const t = p4?.tex[Math.floor(i / 3)]?.[i % 3];
-    if (!t) return proceduralPaper(hex, 100 + i);
-    const size = 512;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const ctx = cv.getContext('2d')!;
-    // 四边各裁掉一点，去掉切图时残留的品红边。
-    const inset = 8;
-    ctx.drawImage(imageOf(t), inset, inset, t.width - 2 * inset, t.height - 2 * inset, 0, 0, size, size);
-    return imagePaper(ctx.getImageData(0, 0, size, size).data, size);
-  });
-  return {
-    deep: texs[0]!,
-    mid: texs[1]!,
-    shallow: texs[2]!,
-    foam: texs[3]!,
-    beach: texs[4]!,
-    grass: texs[6]!,
-    shrub: texs[7]!,
-    dry: proceduralPaper(0xc7b26c, 120),
-    rim: proceduralPaper(0xf7f2e6, 121),
-  };
-}
-
-/** P7 里每种木偶在第几行，以及代表单位可以随机用的姿势（列）。 */
-const P7_ROW: Partial<Record<PuppetKind, number>> = { 'cat-orange': 0, 'cat-piebald': 1, bird: 2, rabbit: 3, rat: 4 };
-const P7_POSES: Partial<Record<PuppetKind, number[]>> = {
-  'cat-orange': [0, 1, 2, 3, 4],
-  'cat-piebald': [0, 1, 2, 3, 4],
-  bird: [0, 3],
-  rabbit: [0, 1, 2, 3, 4],
-  rat: [0, 1, 2, 3, 4],
-};
 const si = (id: string): number => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 1000;
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
