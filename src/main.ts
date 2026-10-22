@@ -115,7 +115,7 @@ async function main(): Promise<void> {
   /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */
   let names = session.species.map((s) => s.params.name);
   const hud = new Hud(el('ribbon'), el('hud'));
-  const deaths = new DeathPanel(el('deaths'), names);
+  const deaths = new DeathPanel(el('deaths'), names, session.species.map((s) => colorOf(s.params).chart));
   const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
   const alertBanner = new AlertBanner(el('alert'), names, (at) =>
     view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
@@ -239,6 +239,7 @@ async function main(): Promise<void> {
     names = list.map((s) => s.name);
     view.setSpecies(session.species);
     deaths.names = names;
+    deaths.colors = session.species.map((s) => colorOf(s.params).chart);
     deaths.reset();
     alertBanner.names = names;
     captures.setSpecies(session.species);
