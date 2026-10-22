@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>剪纸风格 demo · 生生事务所</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #1f5d7a;
+        font-family: system-ui, sans-serif;
+      }
+      #status {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #f3ead8;
+        font-size: 20px;
+        pointer-events: none;
+      }
+      #info {
+        position: fixed;
+        left: 24px;
+        top: 96px;
+        max-width: 520px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(30, 40, 30, 0.45);
+        color: #f3ead8;
+        font-size: 12px;
+        opacity: 0.75;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">载入中……</div>
+    <div id="info"></div>
+    <script type="module" src="/src/proto/paper/main.ts"></script>
+  </body>
+</html>
