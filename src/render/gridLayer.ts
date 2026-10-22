@@ -38,7 +38,7 @@ export class GridLayer {
     width: number,
     height: number,
     terrain: Uint8Array,
-    /** 各物种密度图层的颜色；引进新物种后由 MapView.setSpecies 换掉。 */
+    /** 各物种密度图层的颜色；引进新物种后由 PaperView.setSpecies 换掉。 */
     public speciesColors: readonly number[],
   ) {
     this.canvas = document.createElement('canvas');

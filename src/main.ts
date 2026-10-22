@@ -3,7 +3,7 @@ import { RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, 
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
-import { MapView, type GameView } from './render/view';
+import type { PaperView } from './render/paper/view';
 import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
@@ -106,13 +106,10 @@ async function main(): Promise<void> {
   });
   session.onError = (message) => (status.textContent = `推演出错：${message}`);
 
-  // 剪纸画面（2026-10-22 定下的美术方向）；?art=notes 是田野笔记的旧画面，界面统一成剪纸之前留作对比。
-  const paper = new URLSearchParams(location.search).get('art') !== 'notes';
-  if (paper) status.textContent = '画剪纸地图……';
-  const view: GameView = paper
-    ? await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species)
-    : await MapView.mount(el('app'), session.sim.state, session.species);
-  if (paper) status.textContent = problem;
+  // 剪纸画面（2026-10-22 定下的美术方向）。单独打包，先让状态栏显示出来。
+  status.textContent = '画剪纸地图……';
+  const view: PaperView = await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species);
+  status.textContent = problem;
   /** 这一局现在的物种（id 和名字），按物种下标排。 */
   const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
   /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */
@@ -422,7 +419,7 @@ async function main(): Promise<void> {
     }
     // 结算单优先；它关上以后再弹个案的卡片。
     if (!cards?.isOpen) caseCards.update(session.rules.cases ?? [], session.cases);
-    view.setCases?.(
+    view.setCases(
       session.cases.filter((c) => c.phase === 'wild').map((c) => ({ ...c, massKg: session.rules.cases?.find((x) => x.id === c.id)?.massKg ?? 1 })),
     );
     session.hold((cards?.isOpen ?? false) || caseCards.isOpen || archive.isOpen || desk.isOpen);
