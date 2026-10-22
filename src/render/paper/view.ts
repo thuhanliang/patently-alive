@@ -14,6 +14,7 @@ import { PX, buildFields, type Palette } from './terrain';
 import { tokenLengthCells } from './tokens';
 import { placeVegetation } from './vegetation';
 import { AnimalLayer } from './animalLayer';
+import type { ViewAngles } from '../view';
 
 /** 剪纸像素 / 游戏世界坐标：游戏一格 CELL_PX，剪纸一格 PX。 */
 const K = PX / CELL_PX;
@@ -65,6 +66,7 @@ export class PaperView {
   private readonly vignette: Sprite;
   private readonly cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
   private readonly animals: AnimalLayer;
+  readonly angles: ViewAngles = { pitchLimit: PITCH_LIMIT, yawLimit: YAW_LIMIT, autoTilt: (zoom) => tiltFor(zoom / K) };
 
   private constructor(
     readonly app: Application,
@@ -94,7 +96,7 @@ export class PaperView {
     const deg = Math.PI / 180;
     const pitch = params.get('pitch');
     if (pitch !== null) this.camera.tilt = Math.min(PITCH_LIMIT, Math.max(0, Number(pitch) * deg)) || 0;
-    else this.camera.autoTilt = (zoom) => tiltFor(zoom / K);
+    else this.camera.autoTilt = this.angles.autoTilt;
     const turn = (r: number): void => {
       this.camera.yaw = Math.min(YAW_LIMIT, Math.max(-YAW_LIMIT, r)) || 0;
     };

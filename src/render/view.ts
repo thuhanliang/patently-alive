@@ -16,7 +16,18 @@ import { PAPER, colorOf } from './palette';
 export type GameView = Pick<
   MapView,
   'camera' | 'canvas' | 'ticker' | 'closeUp' | 'visibleCells' | 'setSpecies' | 'setLayer' | 'setAlertAt' | 'setFenceStart' | 'redraw' | 'draw' | 'deathLegendMax'
->;
+> & {
+  /** 能调俯仰、旋转的画面（剪纸）给出角度的范围和默认的"俯仰跟着缩放"；田野笔记画面没有。 */
+  readonly angles?: ViewAngles;
+};
+
+export interface ViewAngles {
+  /** 俯仰、旋转的上限（弧度）；旋转是正负这么多。 */
+  pitchLimit: number;
+  yawLimit: number;
+  /** 默认的俯仰：拉远俯视、拉近斜看。 */
+  autoTilt: (zoom: number) => number;
+}
 
 /**
  * 地图画面（田野笔记的占位画法，见 palette.ts）：只读推演状态，不改任何状态。

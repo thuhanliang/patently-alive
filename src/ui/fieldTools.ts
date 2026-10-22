@@ -20,7 +20,13 @@ export interface FieldToolsHandle {
   fenceStart(): Point | null;
   /** 引进了新物种：各处的物种表跟着换。 */
   setSpecies(species: ReadonlyArray<{ id: string; name: string }>): void;
+  /** 从下方工具栏选了一类工具：下拉框只留这一类，直接进放置模式。 */
+  choose(kind: FieldKind): void;
 }
+
+/** 工具的大类（下方工具栏一类一个图标）。 */
+export type FieldKind = 'trap' | 'cull' | 'sample' | 'necropsy' | 'fence';
+export const FIELD_KIND_NAMES: Record<FieldKind, string> = { trap: '陷阱', cull: '夜间搜捕', sample: '体检采样', necropsy: '找尸体', fence: '围栏' };
 
 interface Point {
   x: number;
@@ -39,11 +45,14 @@ export function bindFieldTools(
   title.textContent = '兽医箱';
 
   const tool = document.createElement('select');
-  for (const t of tools.traps) tool.add(new Option(t.name, `trap:${t.id}`));
-  tool.add(new Option(tools.cull.name, 'cull'));
-  tool.add(new Option(tools.sample.name, 'sample'));
-  tool.add(new Option(tools.necropsy.name, 'necropsy'));
-  for (const f of tools.fences) tool.add(new Option(f.name, `fence:${f.id}`));
+  const allTools: [string, string][] = [
+    ...tools.traps.map((t): [string, string] => [t.name, `trap:${t.id}`]),
+    [tools.cull.name, 'cull'],
+    [tools.sample.name, 'sample'],
+    [tools.necropsy.name, 'necropsy'],
+    ...tools.fences.map((f): [string, string] => [f.name, `fence:${f.id}`]),
+  ];
+  for (const [name, value] of allTools) tool.add(new Option(name, value));
 
   const nights = document.createElement('input');
   nights.type = 'number';
@@ -170,6 +179,18 @@ export function bindFieldTools(
     stop: () => setPlacing(false),
     fenceStart: () => start,
     setSpecies,
+    choose: (kind) => {
+      const keep = tool.value;
+      const list = allTools.filter(([, value]) => value.split(':')[0] === kind);
+      tool.replaceChildren(...list.map(([name, value]) => new Option(name, value)));
+      if (list.some(([, value]) => value === keep)) tool.value = keep;
+      // 只有一种的（搜捕、采样、找尸体）不用下拉框，标题就是它的名字。
+      tool.style.display = list.length > 1 ? '' : 'none';
+      title.textContent = list.length > 1 ? FIELD_KIND_NAMES[kind] : list[0]![0];
+      refresh();
+      onStart();
+      setPlacing(true);
+    },
     click: (cell, corner) => {
       if (!isFence()) return pointOp(cell.x, cell.y);
       if (!start) {

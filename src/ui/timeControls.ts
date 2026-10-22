@@ -12,9 +12,10 @@ export function bindTimeControls(
 ): () => void {
   let resumeSpeed = getSpeed() > 0 ? getSpeed() : 1;
 
-  const button = (label: string, onClick: () => void): HTMLButtonElement => {
+  const button = (label: string, title: string, onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
     b.textContent = label;
+    b.title = title;
     b.addEventListener('click', onClick);
     bar.appendChild(b);
     return b;
@@ -37,9 +38,10 @@ export function bindTimeControls(
     stepOneDay();
   };
 
-  const pauseBtn = button('暂停 [空格]', togglePause);
-  button('单步一天 [.]', step);
-  const speedBtns = SPEEDS.map((s) => [s, button(`${s}x`, () => choose(s))] as const);
+  // 圆纸片按钮：只放符号，说明在 title 里。
+  const pauseBtn = button('❚❚', '暂停 / 继续 [空格]', togglePause);
+  button('+1天', '单步一天 [.]', step).classList.add('wide');
+  const speedBtns = SPEEDS.map((s) => [s, button(`${s}×`, `${s} 倍速 [ [ ] 切换 ]`, () => choose(s))] as const);
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -56,7 +58,7 @@ export function bindTimeControls(
 
   return () => {
     const speed = getSpeed();
-    pauseBtn.textContent = speed > 0 ? '暂停 [空格]' : '继续 [空格]';
+    pauseBtn.textContent = speed > 0 ? '❚❚' : '▶';
     pauseBtn.classList.toggle('active', speed === 0);
     for (const [s, b] of speedBtns) b.classList.toggle('active', speed > 0 && speed === s);
   };
