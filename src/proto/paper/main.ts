@@ -2,7 +2,7 @@ import { Application, Assets, BlurFilter, Container, Graphics, Sprite, Text, Tex
 import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
-import { anchor, tiltFor, unprojectGround, type Cam } from './camera';
+import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, unprojectGround, type Cam } from './camera';
 import { LeafKit, applyCarpet, paveGround } from './leaves';
 import { fbm, hash2 } from './noise';
 import { bakeShrub, bakeTussock } from './plants';
@@ -175,20 +175,22 @@ async function main(): Promise<void> {
   document.body.appendChild(app.canvas);
   status.textContent = '';
 
-  // 场景：root 下面两层。ground 是地面（竖直压扁 cos t），bill 是立起来的纸片（不压扁）。
+  // 场景：root 下面两层。ground 是地面（先在 spin 里转 r，再竖直压扁 cos t），bill 是立起来的纸片（不压扁、不转）。
   const root = new Container();
   app.stage.addChild(root);
   const ground = new Container();
+  const spin = new Container();
+  ground.addChild(spin);
   const bill = new Container();
   bill.sortableChildren = true;
   root.addChild(ground, bill);
   const baseTex = Texture.from(baseCv);
-  ground.addChild(new Sprite(baseTex));
+  spin.addChild(new Sprite(baseTex));
 
   const shadows = new Container();
   shadows.filters = [new BlurFilter({ strength: 3, quality: 2 })];
   shadows.alpha = 0.32;
-  ground.addChild(shadows);
+  spin.addChild(shadows);
 
   // 立起来的东西按地面坐标登记，镜头一变就统一重排；地上的投影在地面坐标系里，不用重排。
   type Bill = { obj: Container; x: number; y: number; bias: number };
@@ -683,30 +685,43 @@ async function main(): Promise<void> {
     vig.height = SH;
   };
 
-  // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放（越近越斜）、拖动平移 ----
-  const cam: Cam = { s: 1, t: 0, ox: 0, oy: 0 };
+  // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放（越近越斜）、拖动平移；右侧三个滑块调缩放、俯仰、旋转 ----
+  const cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
   let laidT = -1;
+  let laidR = NaN;
   const layout = (): void => {
     root.position.set(cam.ox, cam.oy);
     ground.scale.set(cam.s, cam.s * Math.cos(cam.t));
+    spin.rotation = cam.r;
     bill.scale.set(cam.s);
     const k = Math.max(1, 0.95 / cam.s);
     for (const u of iconScaled) u.scale.set(k);
     for (const u of companions) u.visible = k < 1.05;
-    // 立起来的东西的位置只和倾斜角有关；没变就不用重排。
-    if (cam.t === laidT) return;
+    // 立起来的东西的位置只和倾斜角、旋转角有关；都没变就不用重排。前后按转过以后的远近排。
+    if (cam.t === laidT && cam.r === laidR) return;
     laidT = cam.t;
+    laidR = cam.r;
     const ct = Math.cos(cam.t);
     for (const b of bills) {
-      const y = b.y * ct;
-      b.obj.position.set(b.x, y);
+      const [x, ry] = rotate(cam, b.x, b.y);
+      const y = ry * ct;
+      b.obj.position.set(x, y);
       b.obj.zIndex = y + b.bias;
     }
     for (const f of relayouts) f();
   };
+  /** 手动设的俯仰角；null = 跟着缩放自动倾斜。 */
+  let manualPitch: number | null = null;
   const setTilt = (): void => {
-    cam.t = TILT ? tiltFor(cam.s) : 0;
+    cam.t = manualPitch ?? (TILT ? tiltFor(cam.s) : 0);
   };
+  const deg = Math.PI / 180;
+  const pitchParam = params.get('pitch');
+  const yawParam = params.get('yaw');
+  if (pitchParam !== null) manualPitch = Math.min(PITCH_LIMIT, Math.max(0, Number(pitchParam) * deg));
+  if (yawParam !== null) cam.r = Math.min(YAW_LIMIT, Math.max(-YAW_LIMIT, Number(yawParam) * deg));
+  const ZOOM_MIN = 0.3;
+  const ZOOM_MAX = 4;
   const views = { island: 0, region: 1.45, close: 2.6 } as const;
   const setView = (name: keyof typeof views): void => {
     const SW = app.screen.width;
@@ -717,7 +732,59 @@ async function main(): Promise<void> {
     const fy = name === 'island' ? H / 2 : (focus.y + 0.5) * PX;
     anchor(cam, fx, fy, 0, SW / 2, SH / 2);
     layout();
+    syncSliders();
   };
+
+  // 滑块：改镜头时，屏幕中心下的那块地面不动。
+  const panel = document.getElementById('cam')!;
+  const slider = (label: string, min: number, max: number, step: number): { input: HTMLInputElement; out: HTMLSpanElement } => {
+    const row = document.createElement('label');
+    const name = document.createElement('span');
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    const out = document.createElement('span');
+    out.className = 'v';
+    row.append(name, input, out);
+    panel.appendChild(row);
+    return { input, out };
+  };
+  const zoomS = slider('缩放', Math.log(ZOOM_MIN), Math.log(ZOOM_MAX), 0.01);
+  const pitchS = slider('俯仰', 0, PITCH_LIMIT / deg, 1);
+  const yawS = slider('旋转', -YAW_LIMIT / deg, YAW_LIMIT / deg, 1);
+  const reset = document.createElement('button');
+  reset.textContent = '俯仰回到自动、旋转归零';
+  panel.appendChild(reset);
+  function syncSliders(): void {
+    zoomS.input.value = String(Math.log(cam.s));
+    zoomS.out.textContent = `${cam.s.toFixed(2)}×`;
+    pitchS.input.value = String(Math.round(cam.t / deg));
+    pitchS.out.textContent = `${Math.round(cam.t / deg)}°${manualPitch === null ? ' 自动' : ''}`;
+    yawS.input.value = String(Math.round(cam.r / deg));
+    yawS.out.textContent = `${Math.round(cam.r / deg)}°`;
+  }
+  const aroundCentre = (change: () => void): void => {
+    const SW = app.screen.width;
+    const SH = app.screen.height;
+    const [gx, gy] = unprojectGround(cam, SW / 2, SH / 2);
+    change();
+    setTilt();
+    anchor(cam, gx, gy, 0, SW / 2, SH / 2);
+    layout();
+    syncSliders();
+  };
+  zoomS.input.addEventListener('input', () => aroundCentre(() => (cam.s = Math.exp(Number(zoomS.input.value)))));
+  pitchS.input.addEventListener('input', () => aroundCentre(() => (manualPitch = Number(pitchS.input.value) * deg)));
+  yawS.input.addEventListener('input', () => aroundCentre(() => (cam.r = Number(yawS.input.value) * deg)));
+  reset.addEventListener('click', () =>
+    aroundCentre(() => {
+      manualPitch = null;
+      cam.r = 0;
+    }),
+  );
   const initial = (params.get('view') ?? 'region') as keyof typeof views;
   setView(initial in views ? initial : 'region');
   layoutHud();
@@ -733,10 +800,11 @@ async function main(): Promise<void> {
       e.preventDefault();
       // 鼠标下的那块地面在缩放（和倾斜）前后不动。
       const [gx, gy] = unprojectGround(cam, e.offsetX, e.offsetY);
-      cam.s = Math.min(4, Math.max(0.3, cam.s * Math.exp(-e.deltaY * 0.0015)));
+      cam.s = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.s * Math.exp(-e.deltaY * 0.0015)));
       setTilt();
       anchor(cam, gx, gy, 0, e.offsetX, e.offsetY);
       layout();
+      syncSliders();
     },
     { passive: false },
   );
@@ -768,7 +836,7 @@ async function main(): Promise<void> {
   const flags = [!kit ? '贴纸模式' : PLANT_ART === 'lovart' && P1 && P2 ? 'P1/P2 植物' : '代码画的植物', TILT ? '倾斜镜头' : '俯视'].join('、');
   document.getElementById('info')!.textContent =
     `种子 ${SEED}，第 ${day + 1} 天；${flags}；耗时（毫秒）${timing.join('、')}；地形和植被贴图约 ${Math.round(texBytes / 1048576)} MB；` +
-    `帧间隔 ${frameMs.toFixed(1)} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放（越近越斜），拖动平移。`;
+    `帧间隔 ${frameMs.toFixed(1)} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放（越近越斜），拖动平移；右侧滑块调缩放、俯仰（0–60°）、旋转（±45°）。`;
   (window as unknown as { __ready: boolean }).__ready = true;
 }
 

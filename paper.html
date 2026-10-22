@@ -35,11 +35,53 @@
         opacity: 0.75;
         pointer-events: none;
       }
+      #cam {
+        position: fixed;
+        right: 24px;
+        top: 100px;
+        width: 250px;
+        padding: 10px 14px;
+        border-radius: 3px;
+        background: #efe2c6;
+        box-shadow: 2px 3px 0 rgba(60, 40, 20, 0.35);
+        color: #4a3a28;
+        font-size: 13px;
+        display: grid;
+        gap: 6px;
+      }
+      #cam:empty {
+        display: none;
+      }
+      #cam label {
+        display: grid;
+        grid-template-columns: 34px 1fr 64px;
+        align-items: center;
+        gap: 6px;
+      }
+      #cam input {
+        accent-color: #2f6fd0;
+        width: 100%;
+      }
+      #cam .v {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      #cam button {
+        margin-top: 2px;
+        padding: 3px 6px;
+        border: 1px solid #b49a74;
+        border-radius: 3px;
+        background: #f7efdc;
+        color: #4a3a28;
+        font: inherit;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
     <div id="status">载入中……</div>
     <div id="info"></div>
+    <div id="cam"></div>
     <script type="module" src="/src/proto/paper/main.ts"></script>
   </body>
 </html>
