@@ -3,8 +3,8 @@ import type { PlantType } from '../data/schema/plant';
 import type { ScalingLaws } from '../data/schema/scaling';
 import type { SpeciesParams } from '../data/schema/species';
 import type { ViabilityRules } from '../data/schema/viability';
-import { allocateBody, type BodyAllocation } from './body';
-import { detExp, detLog } from './detmath';
+import { allocateBody, shapeOf, type BodyAllocation } from './body';
+import { detExp, detLog, detPow } from './detmath';
 import { applyLaw, scaleTraits, trophicLevel, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
 import { gutEffects, runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
@@ -76,15 +76,24 @@ const APPETITE_HIGH = 1.35;
 const APPETITE_LOW = 0.75;
 
 /**
+ * 部件的一个效果实际乘多少：尾型部件的效果随尾长放大或缩小（形状，2026-10-22）——
+ * 尾巴长一倍，"躲得开""荒年少死""夜里省热"都按倍数次方变；一般长（倍数 1）就是部件写的数。
+ */
+function effectFactor(p: Part, factor: number, tailScale: number): number {
+  return p.slot === 'tail' && tailScale !== 1 ? detPow(factor, tailScale) : factor;
+}
+
+/**
  * 各部件的钩子合起来。能量的各项是分开列在收支上的开销（"翅膀 +15%""早成 +6%"），所以相加；
  * 其余的钩子作用在同一个量上，相乘。
  */
-function multipliersOf(parts: readonly Part[]): Record<EffectTarget, number> {
+function multipliersOf(parts: readonly Part[], tailScale = 1): Record<EffectTarget, number> {
   const m: Record<EffectTarget, number> = { energy: 1, dailyRange: 1, mortality: 1, gestation: 1, nestDays: 1, maturity: 1 };
   for (const p of parts) {
     for (const e of p.effects) {
-      if (e.target === 'energy') m.energy += e.factor - 1;
-      else m[e.target] *= e.factor;
+      const f = effectFactor(p, e.factor, tailScale);
+      if (e.target === 'energy') m.energy += f - 1;
+      else m[e.target] *= f;
     }
   }
   return m;
@@ -150,7 +159,8 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   const hasWings = all.some((p) => p.flies === true);
   const climbs = all.some((p) => p.climbs === true);
   const scaled = scaleTraits(kit.laws, { bodyMassKg: design.bodyMassKg, litterSize: design.litterSize, diet, bird, flies: hasWings });
-  const m = multipliersOf(all);
+  const shape = shapeOf(design, kit.viability);
+  const m = multipliersOf(all, shape.tailScale);
 
   // 繁殖节奏。
   const gestationDays = Math.max(1, Math.round(scaled.gestationDays * m.gestation));
@@ -179,7 +189,19 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   // 设计出来的鸻和真实的鸻要吃得一样多。鸟兽之差体现在缩放公式（寿命、繁殖）上。
   const lines: EnergyLine[] = [{ label: bird ? '日常代谢（鸟）' : '日常代谢（兽）', kjPerDay: base }];
   for (const p of all) {
-    for (const e of p.effects) if (e.target === 'energy' && e.factor !== 1) lines.push({ label: `${p.name}：${e.why}`, kjPerDay: base * (e.factor - 1) });
+    for (const e of p.effects) {
+      const f = effectFactor(p, e.factor, shape.tailScale);
+      if (e.target === 'energy' && f !== 1) lines.push({ label: `${p.name}：${e.why}`, kjPerDay: base * (f - 1) });
+    }
+  }
+  // 形状（2026-10-22）：腿长只改每天花在走路上的那一份（每走一米的能量和腿长成反比，Pontzer 2007）；尾巴长了多带一点体重。
+  const sh = kit.viability.shape;
+  if (shape.legScale !== 1) {
+    const cost = detPow(shape.legScale, -sh.costLegExp.value) - 1;
+    lines.push({ label: cost < 0 ? '腿长：每走一米省力' : '腿短：每走一米费力', kjPerDay: base * sh.locomotionShare.value * cost });
+  }
+  if (shape.tailScale !== 1) {
+    lines.push({ label: shape.tailScale > 1 ? '尾长：多带一截尾巴' : '尾短：少带一截尾巴', kjPerDay: base * sh.tailMassShare.value * (shape.tailScale - 1) });
   }
   const offspringG = design.litterSize * littersPerYear * scaled.weaningMassG;
   lines.push({ label: `育幼：一年约 ${round1(littersPerYear)} 窝，每窝 ${design.litterSize} 个`, kjPerDay: (offspringG * REPRO_KJ_PER_G) / DAYS_PER_YEAR });
@@ -252,6 +274,8 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   for (const r of viability) for (const h of r.hints) hint(h.id, h.vars);
   const bone = viability.find((r) => r.id === 'skeleton');
   if (bone && bone.grade !== 'ok') params.body = skeletonEffects(bone.evidence.safety!, kit.viability);
+  // 腿长改最高速度（动力相似：速度 ∝ 腿长^0.5）；一般长的不写，参数和以前一样。
+  if (shape.legScale !== 1) params.body = { ...params.body, speed: Math.round(detPow(shape.legScale, sh.speedLegExp.value) * 1000) / 1000 };
   const birth = viability.find((r) => r.id === 'reproduction')?.evidence;
   if (birth && birth.neonateSurvival! < 1) params.body = { ...params.body, neonateSurvival: birth.neonateSurvival! };
   if (birth && birth.dystociaPerLitter! > 0) params.body = { ...params.body, dystociaPerLitter: birth.dystociaPerLitter! };

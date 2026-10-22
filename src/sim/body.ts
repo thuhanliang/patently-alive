@@ -49,3 +49,22 @@ export function allocateBody(design: Design, bird: boolean, rules: ViabilityRule
   }
   return { base, share, relative };
 }
+
+/**
+ * 设计的形状（2026-10-22）：腿、尾"比一般长多少"（对数，夹进 viability.json 的范围），和换算成的倍数。
+ * 不写的是 0 和 1。
+ */
+export interface Shape {
+  leg: number;
+  tail: number;
+  /** 腿长、尾长的倍数：10^leg、10^tail。 */
+  legScale: number;
+  tailScale: number;
+}
+
+export function shapeOf(design: Design, rules: ViabilityRules): Shape {
+  const r = rules.shape;
+  const leg = Math.min(r.legMax.value, Math.max(r.legMin.value, design.shape?.leg ?? 0));
+  const tail = Math.min(r.tailMax.value, Math.max(r.tailMin.value, design.shape?.tail ?? 0));
+  return { leg, tail, legScale: leg === 0 ? 1 : detPow(10, leg), tailScale: tail === 0 ? 1 : detPow(10, tail) };
+}
