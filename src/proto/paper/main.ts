@@ -37,11 +37,13 @@ async function loadPalette(): Promise<Palette> {
   const texs: PaperTex[] = colors.map((hex, i) => {
     const t = p4?.tex[Math.floor(i / 3)]?.[i % 3];
     if (!t) return proceduralPaper(hex, 100 + i);
-    const size = 256;
+    const size = 512;
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
     const ctx = cv.getContext('2d')!;
-    ctx.drawImage(t.source.resource as CanvasImageSource, 0, 0, size, size);
+    // 四边各裁掉一点，去掉切图时残留的品红边。
+    const inset = 8;
+    ctx.drawImage(t.source.resource as CanvasImageSource, inset, inset, t.width - 2 * inset, t.height - 2 * inset, 0, 0, size, size);
     return imagePaper(ctx.getImageData(0, 0, size, size).data, size);
   });
   return {
