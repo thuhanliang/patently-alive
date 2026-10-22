@@ -17,6 +17,8 @@ import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema
 import partsJson from './design/parts.json';
 import hintsJson from './design/hints.json';
 import templatesJson from './design/templates.json';
+import { DentitionFileSchema, type Case } from './schema/case';
+import dentitionJson from './cases/dentition.json';
 
 export { WorldParamsSchema, type WorldParams, SpeciesSchema, type SpeciesParams, ScenarioSchema, type Scenario, GoalSchema, type Goal, ToolsSchema, type Tools };
 
@@ -101,11 +103,21 @@ export const worldLibrary: ReadonlyMap<string, WorldParams> = new Map(
   Object.entries(worldFiles).map(([path, json]) => [baseName(path), WorldParamsSchema.parse(resolvePlants(json, baseName(path)))] as const),
 );
 
+/** 牙齿能对付哪些食物（个案动物用）。 */
+export const dentitionTypes = DentitionFileSchema.parse(dentitionJson).types;
+
+/** 个案动物的牙齿换成能吃下去的比例（随规则进日志，回放不依赖数据文件）。 */
+function resolveCase(c: Case, scenario: string): Case {
+  const d = dentitionTypes[c.dentition];
+  if (!d) throw new Error(`情景「${scenario}」的个案 ${c.id} 用了不存在的牙齿类型：${c.dentition}`);
+  return { ...c, edible: d.edible };
+}
+
 /** 所有情景，按 id 索引。 */
 export const scenarioLibrary: ReadonlyMap<string, Scenario> = new Map(
   Object.values(scenarioFiles).map((json) => {
     const s = ScenarioSchema.parse(json);
-    return [s.id, s] as const;
+    return [s.id, s.cases ? { ...s, cases: s.cases.map((c) => resolveCase(c, s.id)) } : s] as const;
   }),
 );
 

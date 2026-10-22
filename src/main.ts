@@ -15,6 +15,7 @@ import { PopulationHistory } from './ui/history';
 import { Hud } from './ui/hud';
 import { DeathPanel } from './ui/deathPanel';
 import { FieldLog } from './ui/fieldLog';
+import { CaseCards } from './ui/caseCard';
 import { bindFieldTools } from './ui/fieldTools';
 import { bindLayerControls } from './ui/layerControls';
 import { readSlot, writeSlot } from './ui/saveSlot';
@@ -125,6 +126,13 @@ async function main(): Promise<void> {
   // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
   const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
   let shownQuarters = 0;
+  // 个案动物（无牙小猫等）：第一次在野外被看见时弹卡片；"带回事务所"走统一操作接口。开着时推演暂停。
+  const caseCards = new CaseCards(el('case'), el('cases'), async (id) => {
+    const r = await session.submit({ type: 'rescue', case: id });
+    status.textContent = r.ok ? '派了一支队伍去把它带回事务所' : `操作被拒绝：${r.reason}`;
+    return r.ok ? null : r.reason;
+  });
+  caseCards.reset(session.rules.cases ?? [], session.cases);
   // 自然档案馆：翻看现有技术；情景允许引种时，条目上有"引进到这里"。开着时推演暂停。
   /** 选好了要引进的物种（档案馆的真实物种，或设计台的设计）和数量、等着在地图上点地点；null 表示没在引进。 */
   let introducing: { species: SpeciesParams; design?: Design; count: number } | null = null;
@@ -221,6 +229,7 @@ async function main(): Promise<void> {
     shownQuarters = session.quarters.length;
     introducing = null;
     cards?.close();
+    caseCards.reset(session.rules.cases ?? [], session.cases);
     history.clear();
     view.redraw();
   };
@@ -328,6 +337,14 @@ async function main(): Promise<void> {
   const syncCamera = bindCameraControls(view.canvas, view.camera, viewCard.presets, (screen) => {
     const pos = view.camera.screenToWorld(screen);
     const cell = worldToCell(pos);
+    if (!introducing && !field.isPlacing() && !tools.isReleasing()) {
+      // 没在放东西时点到个案动物：打开它的卡片。
+      const id = caseCards.at(cell);
+      if (id) {
+        caseCards.show(id);
+        return;
+      }
+    }
     if (introducing) {
       // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
       const chosen = introducing;
@@ -368,7 +385,7 @@ async function main(): Promise<void> {
     () => session.speed,
     (speed) => void submit({ type: 'setSpeed', speed }),
     () => {
-      if (!cards?.isOpen && !archive.isOpen && !desk.isOpen) session.stepDay();
+      if (!cards?.isOpen && !caseCards.isOpen && !archive.isOpen && !desk.isOpen) session.stepDay();
     },
   );
 
@@ -403,7 +420,12 @@ async function main(): Promise<void> {
       shownQuarters = session.quarters.length;
       cards.quarter(session.quarters.at(-1)!, session, names);
     }
-    session.hold((cards?.isOpen ?? false) || archive.isOpen || desk.isOpen);
+    // 结算单优先；它关上以后再弹个案的卡片。
+    if (!cards?.isOpen) caseCards.update(session.rules.cases ?? [], session.cases);
+    view.setCases?.(
+      session.cases.filter((c) => c.phase === 'wild').map((c) => ({ ...c, massKg: session.rules.cases?.find((x) => x.id === c.id)?.massKg ?? 1 })),
+    );
+    session.hold((cards?.isOpen ?? false) || caseCards.isOpen || archive.isOpen || desk.isOpen);
     view.setFenceStart(field.fenceStart());
     alertBanner.update(session.sim.day, session.alerts);
     view.setAlertAt(session.alerts[0]?.at ?? null);

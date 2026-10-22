@@ -51,13 +51,24 @@ describe('推演宿主（Worker 里跑的那一层）', () => {
     expect(host.view().tick).toBe(10);
   });
 
-  it('结算一季后自己挂起，等主线程看完结算单；每天的曲线数据一天不落', () => {
+  it('个案动物被看见的那天、结算一季后自己挂起，等主线程看完卡片；每天的曲线数据一天不落', () => {
     const host = new SimHost(config, rules, { speed: 1000, held: false });
     const days: DayRecord[] = [...host.view().days];
-    for (let i = 0; i < 400; i++) {
-      host.run(1000, () => 0, Infinity);
-      days.push(...host.view().days);
-    }
+    const runFor = (): void => {
+      for (let i = 0; i < 400; i++) {
+        host.run(1000, () => 0, Infinity);
+        days.push(...host.view().days);
+      }
+    };
+    runFor();
+    // 鸟岛的无牙小猫第 appearsDay 天被看见：停在那天开始时，卡片上的日子就是那天。
+    const seen = rules.cases![0]!.appearsDay;
+    const c = host.view();
+    expect(c.held).toBe(true);
+    expect(c.tick).toBe(seen * TICKS_PER_DAY);
+    expect(c.cases[0]!.phase).toBe('wild');
+    host.handle({ t: 'hold', on: false });
+    runFor();
     const v = host.view();
     expect(v.quarters).toHaveLength(1);
     expect(v.held).toBe(true);

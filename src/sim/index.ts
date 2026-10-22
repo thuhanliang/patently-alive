@@ -24,3 +24,4 @@ export { applyLaw, errorFactor, scaleTraits, trophicLevel, type ScaledTraits, ty
 export { allocateBody, type BodyAllocation } from './body';
 export { CHECKS, CHECK_IDS, GRADES, percentText, reproductionEffects, reproductionFit, runChecks, skeletonEffects, skeletonSafety, worstGrade, type SkeletonEffects, type CheckId, type CheckResult, type EnvironmentProfile, type Grade, type ViabilityCheck } from './viability';
 export { REPRO_KJ_PER_G, calibrate, compileDesign, designDataOf, designKitFromData, makeDesignKit, partsOf, typicalLitterSize, litterFromBias, biasOfLitter, type CompiledDesign, type DesignKit, type EnergyLine } from './design';
+export { caseLocation, caseStatus, dailyDecline, lostDayOf, wildFed, type CasePhase, type CaseStatus } from './cases';

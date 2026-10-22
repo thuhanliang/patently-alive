@@ -4,6 +4,7 @@ import type { Tools } from '../data/schema/tools';
 import { GoalSchema, type Scenario } from '../data/schema/scenario';
 import { SpeciesSchema } from '../data/schema/species';
 import { DesignSchema } from '../data/schema/design';
+import { CaseSchema } from '../data/schema/case';
 import { fenceLengthCells } from './fence';
 
 /**
@@ -57,6 +58,8 @@ export const OpSchema = z.discriminatedUnion('type', [
   }),
   /** 夜间搜捕：在一处移除一种动物。占一支兽医队一天，扑杀本身降低满意度。 */
   z.object({ type: z.literal('cull'), species: z.string(), x: z.number().int(), y: z.number().int() }),
+  /** 把一只个案动物（情景的 cases）带回事务所治疗、收养（2026-10-22）。花费和工期写在个案数据里。 */
+  z.object({ type: z.literal('rescue'), case: z.string() }),
   /** 体检采样：在一处抓一种动物，检查完放生。占一支兽医队一天。 */
   z.object({ type: z.literal('sample'), species: z.string(), x: z.number().int(), y: z.number().int() }),
   /** 找尸体做尸检：在一处搜一天；species 为 null 时什么物种的都要。 */
@@ -105,6 +108,8 @@ export const RulesSchema = z.object({
   sentiment: z.record(z.string(), z.number().min(0)),
   /** 委托目标（情景的 goal）：有了它才按季度结算、评分；沙盒为 null。 */
   goal: GoalSchema.nullable().default(null),
+  /** 个案动物（情景的 cases，牙齿已换成能吃下去的比例）；不写就没有（旧日志照样能读）。 */
+  cases: z.array(CaseSchema).optional(),
 });
 export type Rules = z.infer<typeof RulesSchema>;
 
@@ -121,6 +126,7 @@ export function scenarioRules(scenario: Scenario): Rules {
     },
     sentiment: scenario.sentiment,
     goal: scenario.goal,
+    ...(scenario.cases ? { cases: scenario.cases } : {}),
   };
 }
 
@@ -187,8 +193,13 @@ export const FREE: Cost = { budget: 0, staff: 0, days: 0, satisfaction: 0 };
  * 每种操作的花费。调速、关注区、沙盒里的投放不花钱；兽医工具按工具数据定价。
  * 价格来自推演配置里的工具数据（config.tools），回放时和当时一样。围栏按长度计价，要知道一格多少米。
  */
-export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number): Cost {
+export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number, rules?: Pick<Rules, 'cases'>): Cost {
   switch (op.type) {
+    case 'rescue': {
+      // 个案的花费写在情景数据里（检查、手术、软食），占一支兽医队若干天。
+      const c = rules?.cases?.find((x) => x.id === op.case);
+      return c ? { budget: c.rescue.cost, staff: 1, days: c.rescue.days, satisfaction: 0 } : FREE;
+    }
     case 'trap': {
       const t = tools?.traps.find((x) => x.id === op.trap);
       if (!t) return FREE;

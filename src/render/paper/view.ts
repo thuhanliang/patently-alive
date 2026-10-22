@@ -257,6 +257,10 @@ export class PaperView {
     this.redraw();
   }
 
+  setCases(cases: readonly { id: string; name: string; x: number; y: number; massKg: number }[]): void {
+    this.animals.setCases(cases);
+  }
+
   setFenceStart(p: { x: number; y: number } | null): void {
     this.annotations.fenceStart = p;
   }

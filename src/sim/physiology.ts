@@ -217,6 +217,11 @@ function crowdingPerKm2(p: SpeciesParams, typicalPerKm2: number): number {
   return home !== undefined ? Math.min(byMass, TERRITORY_OVERLAP / home) : byMass;
 }
 
+/** 一点都吃不到时每天饿死的概率（小动物饿得快：按 M^−0.25）。个案动物的体况下降也用它（见 cases.ts）。 */
+export function starvationRateOf(massKg: number): number {
+  return Math.min(1, STARVATION_COEF * detPow(massKg, -0.25));
+}
+
 /**
  * world：这个世界的植物（消化检查和它比）和吃坏的规则；不给就当作什么植物都消化得够、植被不会被吃坏（只看推演规律的测试）。
  */
@@ -251,7 +256,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number, world?: Deriv
     flies: p.movement.flies === true,
     adultDailyMortality,
     juvenileDailyMortality: Math.min(1, adultDailyMortality * JUVENILE_MORTALITY_FACTOR),
-    starvationRate: Math.min(1, STARVATION_COEF * detPow(p.bodyMassKg, -0.25)),
+    starvationRate: starvationRateOf(p.bodyMassKg),
     stageDays,
     litterRate: litterRate(p.reproduction.litterIntervalDays, breedingDays),
     crowdingCapacity: crowdingPerKm2(p, typicalPerKm2) * cellKm2,
