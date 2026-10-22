@@ -3,18 +3,23 @@ import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
 import { hash2 } from './noise';
-import { PX, buildFields, imagePaper, paintTerrain, proceduralPaper, type Palette, type PaperTex } from './terrain';
+import { LeafKit, bakeShrub, bakeTussock, scatterGround } from './leaves';
+import { fbm } from './noise';
+import { PX, buildFields, imagePaper, paintTerrain, proceduralPaper, sample, type Palette, type PaperTex } from './terrain';
 import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from './tokens';
 
 /**
  * 剪纸风格 demo（M0 · V2 的第一块）：用真实推演出来的鸟岛，按剪纸方式画地形、植被、代表单位、干预标记和界面。
  * 独立页面，只读推演，不接操作。素材来自 Lovart（art/incoming/lovart/paper/），缺的部分用代码画占位。
- * 参数：?seed=1&days=40&view=region|island|close
+ * 参数：?seed=1&days=40&view=region|island|close&mode=stickers|leaves
+ * - mode=stickers（默认）：草丛、灌丛用 P1、P2 整张贴纸；
+ * - mode=leaves：草丛、灌丛由叶片在代码里拼（leaves.ts），地面再撒一层低对比的碎叶和碎石。
  */
 
 const params = new URLSearchParams(location.search);
 const SEED = Number(params.get('seed') ?? 1);
 const DAYS = Number(params.get('days') ?? 40);
+const LEAVES = params.get('mode') === 'leaves';
 
 type Sheet = { rows: number[][][]; tex: Texture[][] };
 
@@ -103,7 +108,27 @@ async function main(): Promise<void> {
   const cv = document.createElement('canvas');
   cv.width = painted.width;
   cv.height = painted.height;
-  cv.getContext('2d')!.putImageData(new ImageData(painted.data, painted.width, painted.height), 0, 0);
+  const cvCtx = cv.getContext('2d')!;
+  const paintedImg = new ImageData(painted.data, painted.width, painted.height);
+  cvCtx.putImageData(paintedImg, 0, 0);
+  if (LEAVES) {
+    // 地面碎叶和碎石：用和地形相同的低频扭曲判断这个像素落在哪层纸上，撕边附近留空。
+    scatterGround(
+      cvCtx,
+      paintedImg,
+      (px, py) => {
+        const u = (px + 0.5) / PX - 0.5;
+        const v = (py + 0.5) / PX - 0.5;
+        const warp = (fbm(px / (PX * 5), py / (PX * 5), SEED) - 0.5) * 1.6;
+        if (sample(fields.sd, w, h, u, v) + warp < 0.5) return null;
+        const g = sample(fields.grass, w, h, u, v) + warp * 0.12;
+        if (g > 0.62) return 'leaf';
+        if (g < 0.38) return 'pebble';
+        return null;
+      },
+      SEED + 50,
+    );
+  }
   const paintMs = Math.round(performance.now() - t0);
 
   const [P1, P2, P3, P5, P6, P7] = await Promise.all(['P1', 'P2', 'P3', 'P5', 'P6', 'P7'].map(loadSheet));
@@ -154,6 +179,29 @@ async function main(): Promise<void> {
     return list[Math.floor((r * 997) % 1 * list.length)] ?? list[0]!;
   };
 
+  // ---- 叶片拼出来的植被（mode=leaves）：启动时烤好若干变体，按植被量挑最近的一档 ----
+  const tBake = performance.now();
+  const kit = LEAVES ? new LeafKit(SEED) : null;
+  const LEVELS = [0.15, 0.4, 0.7, 1];
+  const DRY = [0, 0.5, 1];
+  const VAR = 3;
+  const BAKE = 72;
+  const tussocks: Texture[][][] = [];
+  const flowers: Texture[] = [];
+  const shrubs: Texture[][] = [];
+  if (kit) {
+    LEVELS.forEach((b, bi) => {
+      tussocks[bi] = DRY.map((d, di) =>
+        Array.from({ length: VAR }, (_, v) => Texture.from(bakeTussock(kit, b, d, SEED * 97 + bi * 31 + di * 7 + v, BAKE).canvas)),
+      );
+      shrubs[bi] = Array.from({ length: VAR + 1 }, (_, v) => Texture.from(bakeShrub(kit, b, SEED * 89 + bi * 13 + v, BAKE).canvas));
+    });
+    for (let v = 0; v < VAR; v++) flowers.push(Texture.from(bakeTussock(kit, 0.8, 0, SEED * 71 + v, BAKE, true).canvas));
+  }
+  const bakeMs = Math.round(performance.now() - tBake);
+  const level = (x: number): number => LEVELS.reduce((best, l, i) => (Math.abs(l - x) < Math.abs(LEVELS[best]! - x) ? i : best), 0);
+  const choose = <T,>(list: T[], r: number): T => list[Math.floor(r * list.length) % list.length]!;
+
   // ---- 植被和岩石贴纸（按格子撒，同一个种子位置固定） ----
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
@@ -164,7 +212,21 @@ async function main(): Promise<void> {
       const jx = (x + 0.15 + 0.7 * rnd(x, y, 3)) * PX;
       const jy = (y + 0.3 + 0.7 * rnd(x, y, 4)) * PX;
       const flip = rnd(x, y, 5) < 0.5;
-      if (t === TERRAIN.shrub) {
+      if (kit && t === TERRAIN.shrub) {
+        const a = shrub[i]!;
+        if (r1 < 0.26 + 0.3 * a) stick(choose(shrubs[level(a)]!, r2), jx, jy, PX * (1.3 + 1.4 * rnd(x, y, 6) ** 2), flip);
+      } else if (kit && t === TERRAIN.grass) {
+        const b = herb[i]!;
+        // 被啃得越狠，草丛越稀、越枯。
+        const dry = Math.min(1, Math.max(0, (0.65 - b) / 0.5));
+        if (r1 < 0.11) {
+          const tex = b > 0.5 && r2 < 0.1 ? choose(flowers, rnd(x, y, 7)) : choose(tussocks[level(b)]![Math.round(dry * 2)]!, rnd(x, y, 7));
+          stick(tex, jx, jy, PX * (1.4 + 1.1 * rnd(x, y, 6)), flip);
+        } else if (r1 < 0.125 && sdAt(x, y) < 6) {
+          const tex = pick(P3, [3], r2);
+          if (tex) stick(tex, jx, jy, PX * (1.2 + 0.5 * rnd(x, y, 6)), flip);
+        }
+      } else if (t === TERRAIN.shrub) {
         const a = shrub[i]!;
         if (r1 < 0.22 + 0.25 * a) {
           const rows = a > 0.55 ? [0, 1, 2] : a > 0.25 ? [4] : [5];
@@ -477,7 +539,7 @@ async function main(): Promise<void> {
   });
 
   const totals = tokenInfo.map((s) => `${s.id} ${s.tokens.reduce((a, t) => a + t.count, 0)}（${s.tokens.length} 个代表）`).join('，');
-  document.getElementById('info')!.textContent = `种子 ${SEED}，第 ${day + 1} 天；地形绘制 ${paintMs} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放，拖动平移。`;
+  document.getElementById('info')!.textContent = `种子 ${SEED}，第 ${day + 1} 天；${LEAVES ? '叶片模式' : '贴纸模式'}；地形绘制 ${paintMs} 毫秒${LEAVES ? `，烤叶片植被 ${bakeMs} 毫秒` : ''}；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放，拖动平移。`;
   (window as unknown as { __ready: boolean }).__ready = true;
 }
 
