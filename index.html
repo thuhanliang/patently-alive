@@ -35,7 +35,7 @@
         border-radius: 2px 6px 3px 5px / 5px 2px 6px 3px; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.3);
       }
       .bar button:hover, .tag:hover { background: var(--grain), var(--paper-deep); }
-      .bar button.active, .tag.active { background: var(--blueprint); border-color: var(--blueprint); color: #f7efdc; }
+      .bar button.active, .tag.active, .bar button.primary { background: var(--blueprint); border-color: var(--blueprint); color: #f7efdc; }
       .bar select, .bar input, .card select, .card input:not([type='checkbox']):not([type='range']) {
         background: var(--grain), #fbf3df; border: 1px solid rgba(74, 58, 40, 0.45); border-radius: 3px; padding: 2px 6px;
       }
@@ -96,6 +96,23 @@
       .log-row:hover { background: rgba(74, 58, 40, 0.08); }
       .log-row.active { color: var(--blueprint); font-weight: 600; }
 
+      /* 个案动物：笔记本"记录"页最上面的小纸条，和弹出的个案卡片。 */
+      #cases { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; white-space: normal; }
+      #cases .case-note { display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 10px 4px 4px; border: none; border-left: 4px solid var(--kraft); background: var(--grain), #f7efdc; box-shadow: 2px 3px 0 rgba(20, 12, 4, 0.2); cursor: pointer; }
+      #cases .case-note.wild { border-left-color: var(--vermilion); }
+      #cases .case-note.lost { opacity: 0.6; }
+      #cases .case-note span { display: flex; flex-direction: column; }
+      #cases .case-note small { color: var(--ink-soft); }
+      #cases .case-note .kitten { width: 40px; height: 30px; flex: none; }
+      .case-card .case-art { float: right; margin: 0 0 4px 10px; transform: rotate(-3deg); }
+      .case-card .case-art .kitten { width: 96px; height: 72px; }
+      .case-meter { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; clear: both; }
+      .case-meter i { flex: 1; height: 10px; background: rgba(74, 58, 40, 0.15); border-radius: 2px 5px 3px 4px; overflow: hidden; }
+      .case-meter em { display: block; height: 100%; background: var(--blueprint); }
+      .case-meter.falling em { background: var(--vermilion); }
+      .case-meter small { color: var(--ink-soft); }
+      .case-card .refused { color: var(--vermilion); }
+
       /* 检查卡、尸检报告：笔记本右边的一张卡纸，顶上一条牛皮纸边。 */
       #exam-card { position: fixed; left: 486px; top: 120px; max-width: 360px; min-width: 260px; padding: 8px 12px; font-size: 12px; z-index: 4; border-top: 6px solid var(--kraft); }
       #exam-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 0; }
@@ -110,7 +127,7 @@
       .alert-log { padding: 2px 8px; white-space: pre; font-size: 11px; color: var(--ink-soft); }
 
       /* 弹窗：委托卡、季度结算、档案馆、设计台。 */
-      #modal, #archive, #design { position: fixed; inset: 0; background: rgba(20, 14, 8, 0.35); display: flex; align-items: center; justify-content: center; z-index: 10; }
+      #modal, #case, #archive, #design { position: fixed; inset: 0; background: rgba(20, 14, 8, 0.35); display: flex; align-items: center; justify-content: center; z-index: 10; }
       #archive, #design { z-index: 8; }
       .modal-card { position: relative; max-width: 640px; max-height: calc(100vh - 48px); overflow-y: auto; margin: 16px; padding: 16px 20px; background: var(--grain), var(--paper); border-top: 8px solid var(--kraft); border-radius: 3px 7px 4px 6px / 6px 3px 7px 4px; box-shadow: 4px 7px 0 rgba(20, 12, 4, 0.32); }
       /* 卡片顶上斜贴一截撕边纸胶带。 */
@@ -208,7 +225,7 @@
     <div id="notebook">
       <div id="nb-tabs"></div>
       <div id="nb-page" class="card" hidden>
-        <div id="nb-log"><div id="captures" style="display: none"></div><div class="nb-empty">还没有记录。体检、尸检、陷阱抓到的动物都记在这里。</div></div>
+        <div id="nb-log"><div id="cases" style="display: none"></div><div id="captures" style="display: none"></div><div class="nb-empty">还没有记录。体检、尸检、陷阱抓到的动物都记在这里。</div></div>
         <div id="nb-deaths"><div id="deaths"></div></div>
         <div id="nb-chart"><canvas id="chart"></canvas><div class="note">点图切换纵轴：各自最高值 ↔ 对数</div></div>
         <div id="nb-file"><div id="hud"></div><div id="tool-bar"></div></div>
@@ -219,6 +236,7 @@
     <div id="tool-pop" class="card" hidden><div id="field-tools"></div></div>
     <div id="status" class="kraft"></div>
     <div id="modal" style="display: none"></div>
+    <div id="case" style="display: none"></div>
     <div id="archive" style="display: none"></div>
     <div id="design" style="display: none"></div>
     <script type="module" src="/src/main.ts"></script>

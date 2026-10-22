@@ -164,13 +164,17 @@ export class SimHost {
     }
   }
 
-  /** 推进 n 个 tick；刚结算了一季就停下并挂起（等主线程看完结算单）。返回是否还能继续。 */
+  /**
+   * 推进 n 个 tick；刚结算了一季、或个案动物刚被看见，就停下并挂起（等主线程看完结算单、个案卡片；
+   * 不然高倍速下主线程的"停"到得晚，卡片上的日子已经过去好几天了）。返回是否还能继续。
+   */
   private advance(n: number): boolean {
     for (let i = 0; i < n; i++) {
       const settled = this.session.quarters.length;
       this.session.advance(1);
-      if (this.session.sim.tick % TICKS_PER_DAY === 0) this.recordDay();
-      if (this.session.quarters.length > settled) {
+      const dayStart = this.session.sim.tick % TICKS_PER_DAY === 0;
+      if (dayStart) this.recordDay();
+      if (this.session.quarters.length > settled || (dayStart && this.session.rules.cases?.some((c) => c.appearsDay === this.session.sim.day))) {
         this.held = true;
         this.clock.reset();
         return false;

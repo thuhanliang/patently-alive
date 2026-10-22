@@ -80,12 +80,17 @@ export const GROUP_OFFSETS: [number, number][] = [
 
 /** 数量签：挂在代表单位第一只的右上方（原点是第一只的脚底），和它一起缩放。 */
 export function makeCountTag(P6: Sheet | null, count: number, len: number): Container {
+  return makeTag(P6, `×${count.toLocaleString('zh-CN')}`, len);
+}
+
+/** 纸签（数量签、个案动物的名字签）：同一张牛皮纸签，挂在剪纸的右上方。 */
+export function makeTag(P6: Sheet | null, text: string, len: number): Container {
   const tagTex = P6?.tex[4]?.[3] ?? null;
   const tagBox = new Container();
   const tag = new Container();
   tagBox.addChild(tag);
   const label = new Text({
-    text: `×${count.toLocaleString('zh-CN')}`,
+    text,
     style: { fontFamily: 'Georgia, "Songti SC", "Noto Serif SC", serif', fontSize: 30, fill: 0x4a3a28, fontWeight: '600' },
     resolution: 2,
   });

@@ -19,6 +19,8 @@ export type GameView = Pick<
 > & {
   /** 能调俯仰、旋转的画面（剪纸）给出角度的范围和默认的"俯仰跟着缩放"；田野笔记画面没有。 */
   readonly angles?: ViewAngles;
+  /** 在野外的个案动物（剪纸画面画一只小猫；田野笔记画面不画）。 */
+  setCases?(cases: readonly { id: string; name: string; x: number; y: number; massKg: number }[]): void;
 };
 
 export interface ViewAngles {

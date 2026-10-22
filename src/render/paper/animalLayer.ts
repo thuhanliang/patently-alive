@@ -1,14 +1,14 @@
 import { Container, Graphics, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { TICKS_PER_DAY, countAt, isJuvenileAt, type DerivedSpecies, type SimState } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
-import { GROUP_OFFSETS, groupSize, makeAnimal, makeCountTag, puppetKindOf, speciesTokens } from './animals';
+import { GROUP_OFFSETS, groupSize, makeAnimal, makeCountTag, makeTag, puppetKindOf, speciesTokens } from './animals';
 import { P7_POSES, P7_ROW, type Sheet } from './assets';
 import { rotate, type Cam } from './camera';
 import { hash2 } from './noise';
 import type { PaperScene } from './scene';
 import { PX } from './terrain';
 import { sizeInCells } from '../individualLayer';
-import { drawPuppet, type PuppetKind } from './tokens';
+import { drawPuppet, tokenLengthCells, type PuppetKind } from './tokens';
 
 /** 幼体的剪纸缩小到这个比例（和田野笔记画面一样）。 */
 const JUVENILE_SCALE = 0.65;
@@ -56,6 +56,9 @@ export class AnimalLayer {
   private readonly pool: { box: Container; body: Sprite; shadow: Sprite }[] = [];
   private shadowTex: Texture | null = null;
   private readonly people: Mover[] = [];
+  /** 个案动物（不在推演的数量里）：一只小剪纸，拉远拉近都画。 */
+  private cases: (Mover & { near: number })[] = [];
+  private casesKey = '';
   private used = 0;
   private lastTick = -1;
   private looks: Look[] = [];
@@ -90,7 +93,7 @@ export class AnimalLayer {
   attach(scene: PaperScene): void {
     this.scene = scene;
     scene.spin.addChild(this.shadows);
-    for (const m of [...this.tokens, ...this.people]) scene.bill.addChild(m.obj);
+    for (const m of [...this.tokens, ...this.people, ...this.cases]) scene.bill.addChild(m.obj);
   }
 
   private lookOf(sp: DerivedSpecies): Look {
@@ -109,6 +112,24 @@ export class AnimalLayer {
     const tex = this.renderer.generateTexture({ target: pup, resolution: 2 });
     pup.destroy({ children: true });
     return { tex: [tex], scale: 1, anchorX: -b.minX / b.width, anchorY: -b.minY / b.height, len };
+  }
+
+  /** 在野外的个案动物：每只一张黑白花小猫剪纸（体型按小猫，比代表单位小）。 */
+  setCases(list: readonly { id: string; name: string; x: number; y: number; massKg: number }[]): void {
+    const key = list.map((c) => `${c.id}:${c.x},${c.y},${c.massKg}`).join('|');
+    if (key === this.casesKey) return;
+    this.casesKey = key;
+    for (const m of this.cases) m.obj.destroy({ children: true });
+    this.cases = [];
+    for (const c of list) {
+      // 拉远时和代表单位一样是地图图标（按体重压缩的大小）；近景时换成和近景个体一样的比例。
+      const len = tokenLengthCells(c.massKg) * PX * 0.8;
+      const obj = makeAnimal(this.P7, 'cat-piebald', len, 0, true);
+      // 名字签代替数量签：它不是哪一群的代表，就是这一只。
+      obj.addChild(makeTag(this.P6, c.name, len));
+      this.cases.push({ obj, x: (c.x + 0.5) * PX, y: (c.y + 0.5) * PX, bias: 0.5, near: (sizeInCells(c.massKg) * INDIVIDUAL_SCALE * PX) / len });
+      this.scene?.bill.addChild(obj);
+    }
   }
 
   update(state: Readonly<SimState>, closeUp: boolean): void {
@@ -238,9 +259,10 @@ export class AnimalLayer {
   layout(cam: Cam): void {
     const k = Math.max(1, 0.95 / cam.s);
     for (const u of this.icons) u.scale.set(k);
+    for (const m of this.cases) m.obj.scale.set(this.closeUp ? m.near : k);
     for (const u of this.companions) u.visible = !this.closeUp && k < 1.05;
     const ct = Math.cos(cam.t);
-    const list = this.closeUp ? this.people.slice(0, this.used) : this.tokens;
+    const list = [...(this.closeUp ? this.people.slice(0, this.used) : this.tokens), ...this.cases];
     for (const m of list) {
       const [x, ry] = rotate(cam, m.x, m.y);
       const y = ry * ct;
