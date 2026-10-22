@@ -7,10 +7,11 @@ import { LeafKit } from '../../render/paper/leaves';
 import { paintParallel } from '../../render/paper/painter';
 import { hash2 } from '../../render/paper/noise';
 import { PX, buildFields } from '../../render/paper/terrain';
-import { P7_POSES, P7_ROW, imageOf, loadPalette, loadSheet, type Sheet } from '../../render/paper/assets';
+import { P7_POSES, imageOf, loadPalette, loadSheet, type Sheet } from '../../render/paper/assets';
 import { PaperScene } from '../../render/paper/scene';
 import { placeVegetation } from '../../render/paper/vegetation';
-import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from '../../render/paper/tokens';
+import { GROUP_OFFSETS, groupSize, makeAnimal, makeCountTag, speciesTokens } from '../../render/paper/animals';
+import { tokenLengthCells, type PuppetKind, type Token } from '../../render/paper/tokens';
 
 /**
  * 剪纸风格 demo（M0 · V2 的第一块）：用真实推演出来的鸟岛，按剪纸方式画地形、植被、代表单位、干预标记和界面。
@@ -185,63 +186,21 @@ async function main(): Promise<void> {
 
   // ---- 代表单位 ----
   const isLand = (i: number): boolean => grid.terrain[i] !== TERRAIN.water;
-  const tokenInfo: { id: string; kind: PuppetKind; tokens: Token[]; len: number }[] = [];
-  sim.species.forEach((sp, spI) => {
-    const pop = st.populations[spI]!;
-    const counts = new Int32Array(w * h);
-    for (let i = 0; i < w * h; i++) counts[i] = countAt(pop, i);
-    const id = sp.params.id;
-    const kind: PuppetKind = id === 'cat' ? 'cat-orange' : id === 'dotterel' ? 'bird' : id === 'rabbit' ? 'rabbit' : id === 'rat' ? 'rat' : 'generic';
-    tokenInfo.push({ id, kind, tokens: clusterTokens(counts, w, h, isLand), len: tokenLengthCells(sp.params.bodyMassKg) * PX });
-  });
-  // 不同物种的代表挨得太近时往外推一点，免得叠在一起。
-  const all = tokenInfo.flatMap((s) => s.tokens);
-  for (let it = 0; it < 40; it++)
-    for (const a of all)
-      for (const b of all) {
-        if (a === b) continue;
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        const d = Math.hypot(dx, dy);
-        if (d < 7 && d > 0) {
-          a.x += (dx / d) * 0.3;
-          a.y += (dy / d) * 0.3;
-        } else if (d === 0) a.x += 0.5;
-      }
+  const tokenInfo = speciesTokens(
+    sim.species.map((sp, spI) => {
+      const pop = st.populations[spI]!;
+      const counts = new Int32Array(w * h);
+      for (let i = 0; i < w * h; i++) counts[i] = countAt(pop, i);
+      return { id: sp.params.id, bodyMassKg: sp.params.bodyMassKg, counts };
+    }),
+    w,
+    h,
+    isLand,
+  );
 
   /** 从这里开始登记的立牌（代表单位、巢、标记、警报）是游戏信息：后面摆植物时，挡在它们前面的植物不摆。 */
   const firstInfo = bills.length;
-  const tagTex = P6?.tex[4]?.[3] ?? null;
   const nestTex = P6?.tex[0] ?? null;
-  /** 一只剪纸动物（P7，缺了用代码画的木偶），脚底中点在原点。 */
-  const animal = (k: PuppetKind, len: number, pose: number, flip: boolean): Container => {
-    const c = new Container();
-    // P7 整只剪纸：每个物种一行五个姿势；同一物种按站姿（第 0 个）统一缩放，换姿势大小不变。
-    // 按剪纸面积的平方根缩放，而不是按宽度：长尾巴、长耳朵不会让一个物种显得更小或更大。
-    const rowI = P7_ROW[k] ?? -1;
-    const row = P7?.tex[rowI];
-    if (row) {
-      const area = P7!.rows[rowI]![0]![2] ?? (row[0]!.width / 1.65) ** 2;
-      const kk = (len * 0.79) / Math.sqrt(area);
-      const spr = new Sprite(row[pose]!);
-      spr.anchor.set(0.5, 1);
-      spr.scale.set(flip ? -kk : kk, kk);
-      c.addChild(spr);
-    } else {
-      const pup = drawPuppet(k, len);
-      if (flip) pup.scale.x = -1;
-      c.addChild(pup);
-    }
-    return c;
-  };
-  /** 一个代表单位放几只：和示意图一样，数量多的一群放三四只（数量签上的数才是真数）。 */
-  const groupSize = (count: number): number => (count < 3 ? 1 : count < 40 ? 2 : count < 1000 ? 3 : 4);
-  const GROUP_OFFSETS: [number, number][] = [
-    [0, 0],
-    [-0.95, 0.42],
-    [0.85, 0.62],
-    [-0.2, -0.6],
-  ];
   tokenInfo.forEach(({ id, kind, tokens, len }) => {
     tokens.forEach((tk, j) => {
       const cx = (tk.x + 0.5) * PX;
@@ -257,33 +216,14 @@ async function main(): Promise<void> {
         // 鸟：多数趴在巢里（P7 自带巢），少数站在巢边。
         const pose = id === 'dotterel' ? ((j + m) % 3 === 2 ? 0 : 3) : poses[Math.floor(rnd(j * 7 + m, si(id), 9) * poses.length)]!;
         if (id === 'dotterel' && (pose !== 3 || !P7) && nestTex) stick(nestTex[1 + ((j + m) % 2)]!, x - len * 0.45, y + len * 0.05, len * 0.8, false, -len * 0.05 - 1);
-        const unit = animal(k, len, pose, flip);
+        const unit = makeAnimal(P7 ?? null, k, len, pose, flip);
         place(unit, x, y, 0.5);
         iconScaled.push(unit);
         if (m > 0) companions.push(unit);
         shadowAt(new Graphics().ellipse(0, 0, len * 0.42, len * 0.1).fill(0x241a10), x + len * 0.06, y + 1);
       }
       // 数量签挂在第一只的右上方，和它一起缩放；单独立一块、永远画在最上面，不被别的动物和植物挡住。
-      const tagBox = new Container();
-      const tag = new Container();
-      tagBox.addChild(tag);
-      const label = new Text({
-        text: `×${tk.count.toLocaleString('zh-CN')}`,
-        style: { fontFamily: 'Georgia, "Songti SC", "Noto Serif SC", serif', fontSize: 30, fill: 0x4a3a28, fontWeight: '600' },
-        resolution: 2,
-      });
-      label.anchor.set(0.5);
-      const tw = label.width + 34;
-      if (tagTex) {
-        const bg = new Sprite(tagTex);
-        bg.anchor.set(0.5);
-        bg.width = tw;
-        bg.height = 50;
-        tag.addChild(bg);
-      } else tag.addChild(new Graphics().roundRect(-tw / 2, -25, tw, 50, 6).fill(0xf0e2c4));
-      tag.addChild(label);
-      tag.scale.set((PX * 1.3) / 50);
-      tag.position.set(len * 0.45 + (tw * tag.scale.x) / 2, -len * 0.8);
+      const tagBox = makeCountTag(P6 ?? null, tk.count, len);
       place(tagBox, cx, cy, 1e5);
       iconScaled.push(tagBox);
     });

@@ -6,7 +6,7 @@ import { BLUEPRINT } from './palette';
 /** 占位画法：每个物种一个主色的圆点，按体重给大小（格的比例）。幼体小一圈。 */
 const JUVENILE_SCALE = 0.65;
 
-function sizeInCells(massKg: number): number {
+export function sizeInCells(massKg: number): number {
   // 30 克 ≈ 0.2 格，250 克 ≈ 0.27 格，1.6 千克 ≈ 0.37 格；越重越大，但不超过半格。
   return Math.min(0.5, 0.14 + 0.2 * Math.cbrt(massKg));
 }

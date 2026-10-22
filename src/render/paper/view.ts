@@ -13,6 +13,7 @@ import { PaperScene } from './scene';
 import { PX, buildFields, type Palette } from './terrain';
 import { tokenLengthCells } from './tokens';
 import { placeVegetation } from './vegetation';
+import { AnimalLayer } from './animalLayer';
 
 /** 剪纸像素 / 游戏世界坐标：游戏一格 CELL_PX，剪纸一格 PX。 */
 const K = PX / CELL_PX;
@@ -53,6 +54,7 @@ export class PaperView {
   private building = false;
   private readonly vignette: Sprite;
   private readonly cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
+  private readonly animals: AnimalLayer;
 
   private constructor(
     readonly app: Application,
@@ -70,6 +72,7 @@ export class PaperView {
     this.overlay.scale.set(K);
     this.overlay.addChild(this.grid.container, this.focusOutline, this.annotations.container);
     this.labelBox.addChild(this.annotations.labels);
+    this.animals = new AnimalLayer(assets.P6, assets.P7, app.renderer, state.config.seed, species);
     this.setSpecies(species);
 
     this.vignette = new Sprite(Texture.from(vignetteCanvas()));
@@ -168,6 +171,9 @@ export class PaperView {
       baseTex.source.update();
     }
     scene.bakeShadows(this.app.renderer, img.width, img.height);
+    this.animals.seed = seed;
+    this.animals.redraw();
+    this.animals.attach(scene);
     scene.topSpin.addChild(this.overlay);
     scene.root.addChild(this.labelBox);
     const old = this.scene;
@@ -179,6 +185,8 @@ export class PaperView {
 
   setSpecies(species: readonly DerivedSpecies[]): void {
     this.grid.speciesColors = species.map((sp) => colorOf(sp.params).chart);
+    // 构造时 animals 还没建好（它自己在构造时就拿到了物种）。
+    this.animals?.setSpecies(species);
     this.redraw();
   }
 
@@ -234,6 +242,7 @@ export class PaperView {
 
   redraw(): void {
     this.lastDay = -1;
+    this.animals?.redraw();
   }
 
   draw(state: Readonly<SimState>): void {
@@ -254,6 +263,7 @@ export class PaperView {
     this.annotations.alertRing.visible = cellPx < CLOSE_UP_CELL_PX;
     this.annotations.draw(state);
     this.drawFocus(state);
+    this.animals.update(state, this.closeUp);
     this.layout();
   }
 
@@ -280,6 +290,7 @@ export class PaperView {
     cam.r = this.camera.yaw;
     anchor(cam, this.camera.center.x * K, this.camera.center.y * K, 0, SW / 2, SH / 2);
     scene.layout(cam);
+    this.animals.layout(cam);
     this.labelBox.scale.set(cam.s);
     // 批注文字：从地面上的位置立起来，和田野笔记画面一样随缩放变大变小。
     const ct = Math.cos(cam.t);
