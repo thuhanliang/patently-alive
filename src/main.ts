@@ -102,9 +102,12 @@ async function main(): Promise<void> {
   });
   session.onError = (message) => (status.textContent = `推演出错：${message}`);
 
-  // ?art=paper：剪纸画面（M0 定下的美术方向，还在接入中）；默认仍是田野笔记的占位画面。
-  const paper = new URLSearchParams(location.search).get('art') === 'paper';
-  if (paper) status.textContent = '画剪纸地图……';
+  // 剪纸画面（2026-10-22 定下的美术方向）；?art=notes 是田野笔记的旧画面，界面统一成剪纸之前留作对比。
+  const paper = new URLSearchParams(location.search).get('art') !== 'notes';
+  if (paper) {
+    document.body.classList.add('paper');
+    status.textContent = '画剪纸地图……';
+  }
   const view: GameView = paper
     ? await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species)
     : await MapView.mount(el('app'), session.sim.state, session.species);
