@@ -295,6 +295,7 @@ export class Sim {
         this.rng,
         this.day,
         (this.s.tick % TICKS_PER_DAY) / TICKS_PER_DAY,
+        this.s.fedLast,
       );
       this.s.rng = this.rng.state();
     }
@@ -405,6 +406,7 @@ export class Sim {
         this.rng,
         this.day,
         hoursDone / TICKS_PER_DAY,
+        this.s.fedLast,
       );
       this.s.focus = this.s.requestedFocus ? { ...this.s.requestedFocus } : null;
     }
@@ -526,7 +528,7 @@ export class Sim {
     });
     // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
     this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
-    absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng, day);
+    absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng, day, this.s.fedLast);
     // 夜里兽医队的活（陷阱、搜捕）：在当天的计数都并回来之后做，哪些动物在格子里、哪些展开成个体都抓得到。
     if (this.s.jobs.length > 0) this.runJobs();
 

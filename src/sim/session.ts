@@ -12,6 +12,7 @@ import { isLand } from './terrain';
 import { baselineOf, QUARTER_DAYS, QUARTERS_PER_YEAR, satisfactionChange, score, type ScoreBaseline, type ScoreDetail, type ScoreGoal, type Scores } from './score';
 import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
 import { caseLocation, caseStatus, type CaseStatus } from './cases';
+import { MAX_SPECIES } from './individuals';
 
 /** 一次季度结算。 */
 export interface Quarter {
@@ -410,8 +411,10 @@ export class Session {
         const max = this.config.tools.introduction.maxAnimals;
         if (op.count > max) return `一次最多引进 ${max} 只`;
         // 同一个 id 已经在这一局里了：只能是同一种（性状完全一样），否则是另一个物种，得换个 id。
-        const known = speciesOf(this.simulation.state).find((s) => s.id === op.species.id);
+        const present = speciesOf(this.simulation.state);
+        const known = present.find((s) => s.id === op.species.id);
         if (known && checksum(known) !== checksum(op.species)) return `这一局已经有「${op.species.id}」了，但性状不一样`;
+        if (!known && present.length >= MAX_SPECIES) return `一局最多 ${MAX_SPECIES} 个物种，已经满了`;
         return this.landProblem(op.x, op.y);
       }
       case 'setFocus': {

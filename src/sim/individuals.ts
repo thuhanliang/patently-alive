@@ -66,6 +66,9 @@ export function createIndividuals(capacity = 256): Individuals {
   };
 }
 
+/** 一局最多多少个物种：个体的物种下标存成 Uint8Array（引种超过时由统一操作接口拒绝）。 */
+export const MAX_SPECIES = 256;
+
 const FIELDS = ['species', 'x', 'y', 'vx', 'vy', 'born', 'female', 'reserve', 'fed', 'meat', 'lost'] as const;
 
 function ensureCapacity(ind: Individuals, n: number): void {
@@ -142,7 +145,17 @@ export function compact(ind: Individuals, removed: Uint8Array): void {
 // ---------------------------------------------------------------- 展开与收拢
 
 /**
+ * 展开时给的体内储备：那一格昨天吃够了的给储备上限的一半；吃不够的给 0。
+ * 格子模型没有储备，吃不够当天就按缺口挨饿；储备给 0，个体当天结算后的缺口正好等于格子模型的缺口，
+ * 放大镜头看一眼不会让挨饿的动物多撑一两天（2026-10-22 审查）。不知道那一格吃得怎样时（fedLast 为 null）给一半。
+ */
+export function expandedReserve(sp: DerivedSpecies, fed: number | undefined): number {
+  return fed === undefined || fed >= FED_SUFFICIENT ? sp.maxReserveDays / 2 : 0;
+}
+
+/**
  * 把一格里某物种的计数全部展开成个体，计数清零。
+ * 储备按那一格昨天吃饱的程度给（见 expandedReserve）。
  * dayElapsed 是当天已经过去的比例：一天中途展开的个体，当作已经按时吃过这么多
  * （否则晚上结算时会按"一整天没吃"挨饿，镜头放大的时间点就会影响死亡数）。
  * 出生日按传送带反推：第 k 段的幼体出生在"传送带最近第 k 次挪段"那一段时间里，
@@ -158,6 +171,7 @@ export function expandCell(
   rng: Rng,
   day: number,
   dayElapsed = 0,
+  fedLast: readonly Float64Array[] | null = null,
 ): void {
   const cx = c % width;
   const cy = Math.floor(c / width);
@@ -166,6 +180,7 @@ export function expandCell(
     const pop = populations[s]!;
     const na = pop.adults[c]!;
     if (countAt(pop, c) === 0) continue;
+    const reserve = expandedReserve(sp, fedLast?.[s]?.[c]);
     const sd = sp.stageDays;
     const fd = Math.floor(day / sd);
     for (let k = 0; k < sp.juvenileStages; k++) {
@@ -175,7 +190,7 @@ export function expandCell(
       const bHi = Math.min(day, (fd - k + 1) * sd - 1);
       for (let j = 0; j < n; j++) {
         const born = bLo + rng.nextInt(bHi - bLo + 1);
-        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed, sp.params.diet.vertebrate);
+        push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, reserve, dayElapsed, sp.params.diet.vertebrate);
       }
       pop.juveniles[k]![c] = 0;
     }
@@ -185,7 +200,7 @@ export function expandCell(
     const adultSpan = Math.max(1, Math.min(Math.round(2 / sp.adultDailyMortality), sp.maxAgeDays - minAdultAge));
     for (let k = 0; k < na; k++) {
       const born = latestAdultBirth - rng.nextInt(adultSpan);
-      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, sp.maxReserveDays / 2, dayElapsed, sp.params.diet.vertebrate);
+      push(ind, rng, s, cx + rng.nextFloat(), cy + rng.nextFloat(), born, reserve, dayElapsed, sp.params.diet.vertebrate);
     }
     pop.adults[c] = 0;
   }
@@ -233,6 +248,7 @@ export function applyFocus(
   rng: Rng,
   day: number,
   dayElapsed = 0,
+  fedLast: readonly Float64Array[] | null = null,
 ): void {
   const removed = new Uint8Array(ind.count);
   for (let i = 0; i < ind.count; i++) {
@@ -245,7 +261,7 @@ export function applyFocus(
   if (!to) return;
   for (let y = to.y0; y < to.y1; y++) {
     for (let x = to.x0; x < to.x1; x++) {
-      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng, day, dayElapsed);
+      if (!inFocus(from, x, y)) expandCell(ind, species, populations, grid.width, y * grid.width + x, rng, day, dayElapsed, fedLast);
     }
   }
 }
@@ -259,6 +275,7 @@ export function absorbImmigrants(
   focus: FocusRect | null,
   rng: Rng,
   day: number,
+  fedLast: readonly Float64Array[] | null = null,
 ): void {
   if (!focus) return;
   for (let y = focus.y0; y < focus.y1; y++) {
@@ -266,7 +283,7 @@ export function absorbImmigrants(
       const c = y * grid.width + x;
       let has = false;
       for (const p of populations) if (countAt(p, c) > 0) has = true;
-      if (has) expandCell(ind, species, populations, grid.width, c, rng, day);
+      if (has) expandCell(ind, species, populations, grid.width, c, rng, day, 0, fedLast);
     }
   }
 }
@@ -444,13 +461,21 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
   }
   const fw = focus.x1 - focus.x0;
   const fh = focus.y1 - focus.y0;
+  // 每格两条链：找得到的全部（活动中的和窝里的），和只有窝里的。只掏窝的捕食者（鼠）只走第二条，
+  // 不用把一格里成百只活动中的鼠、兔逐个看一遍再跳过；两条链里的先后顺序相同，抽随机数的顺序不变。
   const head = new Int32Array(fw * fh).fill(-1);
   const next = new Int32Array(ind.count).fill(-1);
+  const headNest = new Int32Array(fw * fh).fill(-1);
+  const nextNest = new Int32Array(ind.count).fill(-1);
   for (let i = ind.count - 1; i >= 0; i--) {
     if (removed[i] || (!active[ind.species[i]!] && !nested[i])) continue;
     const lc = (Math.floor(ind.y[i]!) - focus.y0) * fw + (Math.floor(ind.x[i]!) - focus.x0);
     next[i] = head[lc]!;
     head[lc] = i;
+    if (nested[i]) {
+      nextNest[i] = headNest[lc]!;
+      headNest[lc] = i;
+    }
   }
 
   const r2 = CATCH_RADIUS_CELLS * CATCH_RADIUS_CELLS;
@@ -465,12 +490,13 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
     const py = ind.y[p]!;
     const lx = Math.floor(px) - focus.x0;
     const ly = Math.floor(py) - focus.y0;
+    const [heads, links] = pred.carnivore ? [head, next] : [headNest, nextNest];
     for (let dy = -1; dy <= 1 && hungry(p); dy++) {
       for (let dx = -1; dx <= 1 && hungry(p); dx++) {
         const gx = lx + dx;
         const gy = ly + dy;
         if (gx < 0 || gy < 0 || gx >= fw || gy >= fh) continue;
-        for (let q = head[gy * fw + gx]!; q !== -1 && hungry(p); q = next[q]!) {
+        for (let q = heads[gy * fw + gx]!; q !== -1 && hungry(p); q = links[q]!) {
           if (q === p || removed[q]) continue;
           const qs = ind.species[q]!;
           if (qs === ps) continue;
@@ -484,7 +510,6 @@ function hunt(ind: Individuals, ctx: HourlyContext, removed: Uint8Array, active:
           if (nested[q]) {
             chance *= NEST_DISCOVERY * (prey.nest === 'burrow' ? BURROW_EXPOSURE : nestExposure(grid.cover[qc]!));
           } else {
-            if (!pred.carnivore) continue;
             if (prey.flies) chance *= FLIGHT_ESCAPE;
             chance = Math.min(1, chance * chaseFactor(pred, prey));
           }
