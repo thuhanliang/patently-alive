@@ -4,7 +4,7 @@ import type { ViewAngles } from '../render/view';
 /**
  * 右上角的视角卡：三档缩放的纸签（按钮由 cameraControls 放进 presets 这一行），下面三根滑块——缩放、俯仰、旋转。
  * 俯仰默认跟着缩放（拉远俯视、拉近斜看）；拖了俯仰滑块就固定下来，勾回"自动"恢复。旋转也可以按 Q / E。
- * 只影响画面，不进操作日志。没有 angles 的画面（田野笔记）只显示缩放。
+ * 只影响画面，不进操作日志。
  */
 export function bindViewCard(card: HTMLElement, camera: Camera, angles: ViewAngles | undefined): { presets: HTMLElement; sync: () => void } {
   const presets = document.createElement('div');

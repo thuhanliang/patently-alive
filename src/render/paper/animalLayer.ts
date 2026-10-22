@@ -7,13 +7,17 @@ import { rotate, type Cam } from './camera';
 import { hash2 } from './noise';
 import type { PaperScene } from './scene';
 import { PX } from './terrain';
-import { sizeInCells } from '../individualLayer';
 import { drawPuppet, tokenLengthCells, type PuppetKind } from './tokens';
 
-/** 幼体的剪纸缩小到这个比例（和田野笔记画面一样）。 */
+/** 幼体的剪纸缩小到这个比例。 */
 const JUVENILE_SCALE = 0.65;
+
+/** 近景个体按体重的基础身长（格）：30 克 ≈ 0.2 格，250 克 ≈ 0.27 格，1.6 千克 ≈ 0.37 格；越重越大，但不超过半格。 */
+export function sizeInCells(massKg: number): number {
+  return Math.min(0.5, 0.14 + 0.2 * Math.cbrt(massKg));
+}
 /**
- * 近景个体的身长：田野笔记画面的大小（sizeInCells，按体重、不超过半格）再放大一点，剪纸才看得出形状。
+ * 近景个体的身长：sizeInCells（按体重、不超过半格）再放大一点，剪纸才看得出形状。
  * 比代表单位小得多：代表单位是地图图标，个体要和格子、和别的个体比得出疏密。
  */
 const INDIVIDUAL_SCALE = 2.4;

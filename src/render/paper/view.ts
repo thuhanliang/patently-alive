@@ -38,7 +38,7 @@ interface Assets {
 }
 
 /**
- * 剪纸画面（默认；?art=notes 换回田野笔记的旧画面）：和 MapView 同一套接口，main.ts 不用改。只读推演状态，不改任何状态。
+ * 剪纸画面（游戏唯一的地图画面）：只读推演状态，不改任何状态。
  * - 地形逐像素画成纸雕（Worker 里并行，见 painter.ts），植被立起来、正对镜头（vegetation.ts、scene.ts）；
  * - 镜头可以倾斜、旋转（camera.ts 的 tilt、yaw），拉远俯视、拉近斜看；点击换算走同一个 Camera，点哪儿是哪儿；
  * - 玩家的批注、关注区边框、警报圈、数据图层都画在地面上，跟着地面压扁、旋转；批注的文字立起来。
@@ -230,7 +230,7 @@ export class PaperView {
     };
   }
 
-  /** 镜头是否放大到了能看清个体的程度（和田野笔记画面同一个门槛）。 */
+  /** 镜头是否放大到了能看清个体的程度（CLOSE_UP_CELL_PX）。 */
   get closeUp(): boolean {
     return this.camera.zoom * CELL_PX >= CLOSE_UP_CELL_PX;
   }
@@ -321,7 +321,7 @@ export class PaperView {
     scene.layout(cam);
     this.animals.layout(cam);
     this.labelBox.scale.set(cam.s);
-    // 批注文字：从地面上的位置立起来，和田野笔记画面一样随缩放变大变小。
+    // 批注文字：从地面上的位置立起来，随缩放变大变小。
     const ct = Math.cos(cam.t);
     for (const child of this.annotations.labels.children) {
       const t = child as Text;

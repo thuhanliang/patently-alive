@@ -12,7 +12,7 @@ import { CELL_PX } from './projection';
 export class AnnotationLayer {
   readonly container = new Container();
   private readonly marks = new Graphics();
-  /** 警报圈单独一层：放大到地块档时它比屏幕还大，由 MapView 藏起来。 */
+  /** 警报圈单独一层：放大到地块档时它比屏幕还大，由画面藏起来。 */
   readonly alertRing = new Graphics();
   /** 工作旁边的文字（剪纸画面把它们立起来、正对镜头，见 render/paper/view.ts）。 */
   readonly labels = new Container();
