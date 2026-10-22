@@ -49,6 +49,7 @@ const pow10 = (y: number): number => detExp(y * LN10);
 /** 代入一条公式。公式里有、vars 里没给的自变量直接报错（数据改了名，不能悄悄当 0 算）。 */
 export function applyLaw(law: Law, vars: Readonly<Record<string, number>>): number {
   let y = law.intercept;
+  // 键是自变量的名字（不是数字），按 laws.json 里写的顺序走：随数据打包，顺序固定，求和的结果是确定的。
   for (const [k, b] of Object.entries(law.terms)) {
     const v = vars[k];
     if (v === undefined) throw new Error(`公式「${law.name}」要自变量 ${k}，推导时没有给`);
