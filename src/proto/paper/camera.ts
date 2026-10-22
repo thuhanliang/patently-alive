@@ -18,8 +18,8 @@ export interface Cam {
 
 export const TILT_MAX = (50 * Math.PI) / 180;
 /** 缩放在 TILT_FROM 以下完全俯视，到 TILT_TO 倾到最大。 */
-const TILT_FROM = 0.7;
-const TILT_TO = 2.6;
+const TILT_FROM = 0.5;
+const TILT_TO = 2.2;
 
 export function tiltFor(s: number): number {
   const x = Math.min(1, Math.max(0, (s - TILT_FROM) / (TILT_TO - TILT_FROM)));
