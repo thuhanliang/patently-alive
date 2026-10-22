@@ -12,6 +12,12 @@ import { PAPER, colorOf } from './palette';
 
 /** 格线在一格放大到多少屏幕像素以上时出现。 */
 
+/** main.ts 用到的画面接口：田野笔记的 MapView 和剪纸的 PaperView（render/paper/view.ts）都提供。 */
+export type GameView = Pick<
+  MapView,
+  'camera' | 'canvas' | 'ticker' | 'closeUp' | 'visibleCells' | 'setSpecies' | 'setLayer' | 'setAlertAt' | 'setFenceStart' | 'redraw' | 'draw' | 'deathLegendMax'
+>;
+
 /**
  * 地图画面（田野笔记的占位画法，见 palette.ts）：只读推演状态，不改任何状态。
  * 世界容器跟着镜头平移缩放；界面元素不在这里。

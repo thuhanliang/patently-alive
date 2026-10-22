@@ -3,7 +3,7 @@ import { RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, 
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
-import { MapView } from './render/view';
+import { MapView, type GameView } from './render/view';
 import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
@@ -102,7 +102,13 @@ async function main(): Promise<void> {
   });
   session.onError = (message) => (status.textContent = `推演出错：${message}`);
 
-  const view = await MapView.mount(el('app'), session.sim.state, session.species);
+  // ?art=paper：剪纸画面（M0 定下的美术方向，还在接入中）；默认仍是田野笔记的占位画面。
+  const paper = new URLSearchParams(location.search).get('art') === 'paper';
+  if (paper) status.textContent = '画剪纸地图……';
+  const view: GameView = paper
+    ? await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species)
+    : await MapView.mount(el('app'), session.sim.state, session.species);
+  if (paper) status.textContent = problem;
   /** 这一局现在的物种（id 和名字），按物种下标排。 */
   const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
   /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */

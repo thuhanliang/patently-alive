@@ -84,7 +84,7 @@ export class GridLayer {
       px[o] = Math.min(255, ((color >> 16) & 0xff) * k);
       px[o + 1] = Math.min(255, ((color >> 8) & 0xff) * k);
       px[o + 2] = Math.min(255, (color & 0xff) * k);
-      px[o + 3] = 255;
+      px[o + 3] = this.hideWater && terrain[i] === TERRAIN.water ? 0 : 255;
     };
     const water = (i: number): number => lerpColor(T.shallowWater, T.deepWater, depth[i]!);
 
@@ -136,6 +136,13 @@ export class GridLayer {
 
   /** 最近一次画死亡热力图时最深那一片的数值（图例用）。 */
   lastMax = 0;
+  /** 水格画成透明（剪纸画面把数据图层叠在地形上，海水用地形自己的）。 */
+  hideWater = false;
+
+  /** 放大时平滑过渡，而不是一格一格的方块（剪纸画面叠在纸上用）。 */
+  setSmooth(smooth: boolean): void {
+    this.texture.source.scaleMode = smooth ? 'linear' : 'nearest';
+  }
   private blockCache: { width: number; blockOf: Int32Array } | null = null;
 
   /** 每格属于哪个区块（和死因账本同一套，见 crowdingBlocks）。 */

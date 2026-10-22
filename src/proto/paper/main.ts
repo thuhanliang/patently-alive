@@ -1,14 +1,15 @@
-import { Application, BlurFilter, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
-import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, unprojectGround, type Cam } from '../../render/paper/camera';
+import { PITCH_LIMIT, YAW_LIMIT, anchor, tiltFor, unprojectGround, type Cam } from '../../render/paper/camera';
 import { LeafKit } from '../../render/paper/leaves';
 import { paintParallel } from '../../render/paper/painter';
-import { fbm, hash2 } from '../../render/paper/noise';
-import { bakeShrub, bakeTussock } from '../../render/paper/plants';
-import { PX, SHRUB_EDGE, buildFields, sample, terrainWarp } from '../../render/paper/terrain';
+import { hash2 } from '../../render/paper/noise';
+import { PX, buildFields } from '../../render/paper/terrain';
 import { P7_POSES, P7_ROW, imageOf, loadPalette, loadSheet, type Sheet } from '../../render/paper/assets';
+import { PaperScene } from '../../render/paper/scene';
+import { placeVegetation } from '../../render/paper/vegetation';
 import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from '../../render/paper/tokens';
 
 /**
@@ -113,66 +114,20 @@ async function main(): Promise<void> {
     });
   };
 
-  // 场景：root 下面两层。ground 是地面（先在 spin 里转 r，再竖直压扁 cos t），bill 是立起来的纸片（不压扁、不转）。
-  const root = new Container();
-  app.stage.addChild(root);
-  const ground = new Container();
-  const spin = new Container();
-  ground.addChild(spin);
-  const bill = new Container();
-  bill.sortableChildren = true;
-  root.addChild(ground, bill);
+  // 场景骨架（scene.ts）：地面压扁、旋转，立起来的纸片正对镜头。
+  const scene = new PaperScene();
+  app.stage.addChild(scene.root);
   const baseTex = Texture.from(baseCv);
-  spin.addChild(new Sprite(baseTex));
-
-  // 投影层：里面一层模糊（摆好以后烤成贴图），外面一层管透明度。
-  const shadows = new Container();
-  shadows.filters = [new BlurFilter({ strength: 3, quality: 2 })];
-  const shadowLayer = new Container();
-  shadowLayer.alpha = 0.32;
-  shadowLayer.addChild(shadows);
-  spin.addChild(shadowLayer);
-
-  // 立起来的东西按地面坐标登记，镜头一变就统一重排；地上的投影在地面坐标系里，不用重排。
-  type Bill = { obj: Container; x: number; y: number; bias: number };
-  const bills: Bill[] = [];
-  const relayouts: (() => void)[] = [];
-  const place = (obj: Container, x: number, y: number, bias = 0): Bill => {
-    const b = { obj, x, y, bias };
-    bills.push(b);
-    bill.addChild(obj);
-    return b;
-  };
-  const shadowAt = (obj: Container, x: number, y: number): void => {
-    obj.position.set(x, y);
-    shadows.addChild(obj);
-  };
-  /** 代表单位和数量签：拉远时反向放大，像地图图标一样保持能看清的大小。 */
-  const iconScaled: Container[] = [];
+  scene.setBase(baseTex);
+  const { bills, relayouts, iconScaled, companions } = scene;
+  type Bill = (typeof bills)[number];
+  const place = scene.place.bind(scene);
+  const shadowAt = scene.shadowAt.bind(scene);
+  const stick = scene.stick.bind(scene);
 
   const rnd = (x: number, y: number, k: number): number => hash2(x * 7 + k, y * 13 - k, SEED + 1000);
   const sdAt = (x: number, y: number): number => fields.sd[y * w + x]!;
 
-  /** 贴一张立起来的纸片：底边中点在 (cx, cy) 像素处，宽 widthPx。投影是同一张图压扁、倒向右下，贴在地上。 */
-  const stick = (tex: Texture, cx: number, cy: number, widthPx: number, flip = false, bias = 0, shade = 1): Sprite => {
-    const s = new Sprite(tex);
-    s.anchor.set(0.5, 1);
-    if (shade !== 1) {
-      const g = Math.round(Math.min(1, shade) * 255);
-      s.tint = (g << 16) | (g << 8) | Math.round(g * 0.97);
-    }
-    const k = widthPx / tex.width;
-    s.scale.set(flip ? -k : k, k);
-    place(s, cx, cy, bias);
-    // 光从左上来：影子从脚下往右下方倒在地上（同一张图上下翻过来、压扁、往右斜）。
-    const sh = new Sprite(tex);
-    sh.anchor.set(0.5, 1);
-    sh.tint = 0x241a10;
-    sh.scale.set(flip ? -k : k, -k * 0.42);
-    sh.skew.x = 0.75;
-    shadowAt(sh, cx, cy - 1);
-    return s;
-  };
   const pick = (sheet: Sheet | null | undefined, rows: number[], r: number): Texture | null => {
     if (!sheet) return null;
     const row = rows[Math.floor(r * rows.length) % rows.length]!;
@@ -258,8 +213,6 @@ async function main(): Promise<void> {
   const firstInfo = bills.length;
   const tagTex = P6?.tex[4]?.[3] ?? null;
   const nestTex = P6?.tex[0] ?? null;
-  /** 代表单位里除第一只以外的同伴：拉远成地图图标时藏起来，只留一只。 */
-  const companions: Container[] = [];
   /** 一只剪纸动物（P7，缺了用代码画的木偶），脚底中点在原点。 */
   const animal = (k: PuppetKind, len: number, pose: number, flip: boolean): Container => {
     const c = new Container();
@@ -378,7 +331,7 @@ async function main(): Promise<void> {
       posts.push(bills[bills.length - 1]!);
     }
     const rope = new Graphics();
-    bill.addChild(rope);
+    scene.bill.addChild(rope);
     relayouts.push(() => {
       rope.clear();
       for (let k = 0; k < posts.length - 1; k++) {
@@ -413,48 +366,10 @@ async function main(): Promise<void> {
     place(bangBox, cx, cy, 1e6);
   }
 
-  // ---- 植物模式：草丛、灌丛、地面贴片、海岸的石头和海草 ----
+  // ---- 植物模式：草丛、灌丛、地面贴片、海岸的石头和海草（vegetation.ts） ----
   if (kit)
     timed('植物', () => {
-      // 大小按兔子身长定（量自示意图：一丛草约和兔子一样长、比站着的兔子高一些；一团灌丛约是兔子的 1.2–1.8 倍）。
       const rabbit = sim.species.find((sp) => sp.params.id === 'rabbit');
-      const rabbitLen = tokenLengthCells(rabbit?.params.bodyMassKg ?? 1.6) * PX;
-      const choose = <T,>(list: T[], r: number): T => list[Math.floor(r * list.length) % list.length]!;
-      const fromCanvas = (c: HTMLCanvasElement): Texture => {
-        texBytes += c.width * c.height * 4;
-        return Texture.from(c);
-      };
-      // 植物的样子：默认用 Lovart 的 P1 草丛、P2 灌丛（和示意图同一套画）；?plants=code 换成代码画的（plants.ts）。
-      const LV = [0.15, 0.4, 0.7, 1];
-      const level = (x: number): number => LV.reduce((best, l, i) => (Math.abs(l - x) < Math.abs(LV[best]! - x) ? i : best), 0);
-      const lovart = PLANT_ART === 'lovart' && P1 && P2;
-      const code = lovart
-        ? null
-        : {
-            tussocks: LV.map((b, bi) => [0, 0.5, 1].map((d, di) => Array.from({ length: 3 }, (_, v) => fromCanvas(bakeTussock(b, d, SEED * 97 + bi * 31 + di * 7 + v, 160))))),
-            flowers: Array.from({ length: 3 }, (_, v) => fromCanvas(bakeTussock(0.8, 0, SEED * 71 + v, 160, kit, true))),
-            shrubs: LV.map((a, ai) => Array.from({ length: 4 }, (_, v) => fromCanvas(bakeShrub(kit, a, SEED * 89 + ai * 13 + v, 200)))),
-          };
-      /** 草丛：植被量高用 P1 前两行，中等混进偏黄的几株，低的用被啃过的第 5 行。 */
-      const tussockTex = (b: number, dry: number, r: number): Texture =>
-        code
-          ? choose(code.tussocks[level(b)]![Math.round(dry * 2)]!, r)
-          : b > 0.5
-            ? choose([...P1!.tex[0]!.slice(0, 5), ...P1!.tex[1]!.slice(0, 4), P1!.tex[1]![5]!], r)
-            : b > 0.25
-              ? choose([P1!.tex[0]![5]!, P1!.tex[1]![4]!, P1!.tex[0]![3]!, P1!.tex[1]![1]!], r)
-              : choose(P1!.tex[4]!, r);
-      const flowerTex = (r: number): Texture => (code ? choose(code.flowers, r) : choose(P1!.tex[3]!, r));
-      /** 灌丛：茂盛的只用 P2 前三行里圆而密的那些（示意图里是一团团深绿），稀疏的用第 5 行，枯的用第 6 行。 */
-      const lushShrubs = P2 ? ([[0, 0], [0, 1], [0, 3], [0, 4], [0, 5], [1, 0], [1, 2], [1, 4], [2, 0], [2, 2], [2, 3], [2, 5]] as const).map(([r, c]) => P2.tex[r]![c]!) : [];
-      const shrubTex = (a: number, r: number): Texture =>
-        code ? choose(code.shrubs[level(a)]!, r) : a > 0.45 ? choose(lushShrubs, r) : a > 0.2 ? choose(P2!.tex[4]!, r) : choose(P2!.tex[5]!, r);
-      const aspect = (t: Texture): number => t.height / t.width;
-
-      // 同一张灌丛场（和地形绘制同样的扭曲）同时决定树冠下的暗地面和灌丛摆在哪：轮廓只有一套。
-      const field = (f: Float32Array, px: number, py: number): number =>
-        sample(f, w, h, (px + 0.5) / PX - 0.5, (py + 0.5) / PX - 0.5) + terrainWarp(px, py, SEED) * (f === fields.sd ? 1 : 0.12);
-      const cellOf = (px: number, py: number): number => Math.min(h - 1, Math.max(0, Math.floor(py / PX))) * w + Math.min(w - 1, Math.max(0, Math.floor(px / PX)));
       // 挡住游戏信息的不摆：植物在立牌前面（脚更靠下），而且从俯视到最斜的任一角度下顶部高过立牌的脚。
       const info = bills.slice(firstInfo).map((b) => {
         const lb = b.obj.getLocalBounds();
@@ -462,91 +377,22 @@ async function main(): Promise<void> {
         const xs = [b.x + lb.minX * sx, b.x + lb.maxX * sx];
         return { x0: Math.min(...xs), x1: Math.max(...xs), y: b.y };
       });
-      const blocked = (x: number, y: number, pw: number, ph: number): boolean =>
-        info.some((r) => x + pw * 0.4 > r.x0 && x - pw * 0.4 < r.x1 && y > r.y && [1, 0.64].some((c) => y * c - ph * 0.9 < r.y * c));
-      const rr = (gx: number, gy: number, k: number): number => hash2(gx * 5 + k, gy * 3 - k, SEED + 2000);
-      /** 在网格加抖动的点上摆东西：f 返回 null 表示这里不摆。 */
-      const scatter = (stepCells: number, k: number, f: (x: number, y: number, gx: number, gy: number) => void): void => {
-        const st = PX * stepCells;
-        for (let gy = 0; gy * st < H; gy++)
-          for (let gx = 0; gx * st < W; gx++) f((gx + rr(gx, gy, k)) * st, (gy + rr(gx, gy, k + 1)) * st, gx, gy);
-      };
-
-      // 地面贴片：P1 第 3 行的草皮平铺在草地上、P3 第 3 行的卵石堆铺在海滩上，直接画进地形图（平躺，跟着地面压扁）。
-      if (lovart && P3) {
-        const g = baseCv.getContext('2d')!;
-        scatter(2.2, 40, (x, y, gx, gy) => {
-          const sd = field(fields.sd, x, y);
-          if (sd < 0.3) return;
-          const gr = field(fields.grass, x, y);
-          const t = gr > 0.6 ? choose(P1!.tex[2]!, rr(gx, gy, 42)) : gr < 0.4 && rr(gx, gy, 43) < 0.45 ? choose(P3.tex[2]!, rr(gx, gy, 42)) : null;
-          if (!t || rr(gx, gy, 44) > (gr > 0.6 ? 0.5 : 1)) return;
-          const size = rabbitLen * (gr > 0.6 ? 0.55 + 0.35 * rr(gx, gy, 45) : 0.3 + 0.15 * rr(gx, gy, 45));
-          const under = field(fields.shrubLand, x, y) > SHRUB_EDGE;
-          g.save();
-          g.globalAlpha = 0.75;
-          if (under) g.filter = 'brightness(0.72)';
-          g.drawImage(imageOf(t), x - size / 2, y - (size * aspect(t)) / 2, size, size * aspect(t));
-          g.restore();
-        });
-        baseTex.source.update();
-      }
-
-      // 灌丛：树冠的视觉中心（脚往上约 0.4 个高度）落在灌丛场里才摆，密密地叠成一整片。
-      /** 灌丛植被量：取树冠中心附近 3×3 格里灌丛格的最大值（脚可能落在灌丛外的草地格上）。 */
-      const shrubAt = (px: number, py: number): number => {
-        let m = 0;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) m = Math.max(m, shrub[cellOf(px + dx * PX, py + dy * PX)]!);
-        return m;
-      };
-      scatter(lovart ? 1.3 : 1.6, 1, (x, y, gx, gy) => {
-        const size = rabbitLen * (lovart ? 1.1 + 0.6 * rr(gx, gy, 3) : 1.3 + 0.7 * rr(gx, gy, 3));
-        const yc = y - size * 0.3;
-        if (field(fields.shrubLand, x, yc) < SHRUB_EDGE) return;
-        const t = shrubTex(shrubAt(x, yc), rr(gx, gy, 4));
-        const ph = size * aspect(t);
-        if (blocked(x, y, size, ph)) return;
-        // Lovart 的灌丛压暗一些，叠成示意图里那种深绿的一团；每丛明暗略有不同。
-        stick(t, x, y, size, rr(gx, gy, 5) < 0.5, 0, (lovart ? 0.64 : 0.88) + 0.14 * rr(gx, gy, 6));
+      texBytes += placeVegetation(scene, {
+        fields,
+        herb,
+        shrub,
+        seed: SEED,
+        rabbitLen: tokenLengthCells(rabbit?.params.bodyMassKg ?? 1.6) * PX,
+        kit,
+        P1: P1 ?? null,
+        P2: P2 ?? null,
+        P3: P3 ?? null,
+        art: PLANT_ART,
+        base: baseCv.getContext('2d')!,
+        blocked: (x, y, pw, ph) =>
+          info.some((r) => x + pw * 0.4 > r.x0 && x - pw * 0.4 < r.x1 && y > r.y && [1, 0.64].some((c) => y * c - ph * 0.9 < r.y * c)),
       });
-      // 草丛：成片长（低频噪声），离灌丛留一点空。
-      scatter(2.2, 11, (x, y, gx, gy) => {
-        const size = rabbitLen * (0.95 + 0.45 * rr(gx, gy, 13));
-        const yc = y - size * 0.45;
-        if (field(fields.grass, x, yc) < 0.62 || field(fields.shrubLand, x, yc) > SHRUB_EDGE - 0.12) return;
-        const b = herb[cellOf(x, yc)]!;
-        const clump = Math.min(1, Math.max(0, (fbm(x / (PX * 7), y / (PX * 7), SEED + 77) - 0.4) / 0.25));
-        if (rr(gx, gy, 14) > clump * 0.6 * (0.3 + 0.7 * b)) return;
-        const flower = b > 0.5 && rr(gx, gy, 15) < 0.1;
-        const t = flower ? flowerTex(rr(gx, gy, 16)) : tussockTex(b, Math.min(1, Math.max(0, (0.65 - b) / 0.5)), rr(gx, gy, 16));
-        const sz = flower ? size * 0.75 : size;
-        if (blocked(x, y, sz, sz * aspect(t))) return;
-        stick(t, x, y, sz, rr(gx, gy, 17) < 0.5, 0, 0.92 + 0.08 * rr(gx, gy, 18));
-      });
-
-      // 海岸：岩石成堆地长在水边（低频噪声决定哪里是岩岸），浅水里半没的石头，深一点的水里金色的海草，沙滩上零星的漂木和贝壳。
-      if (P3)
-        scatter(1.3, 21, (x, y, gx, gy) => {
-          const sd = field(fields.sd, x, y);
-          const r = rr(gx, gy, 23);
-          const outcrop = fbm(x / (PX * 6), y / (PX * 6), SEED + 303);
-          let t: Texture | null = null;
-          let size = 0;
-          let shade = 1;
-          if (sd > -0.6 && sd < 1.2 && outcrop > 0.46 && r < 0.75) {
-            t = choose(field(fields.grass, x, y) > 0.5 && r < 0.3 ? P3.tex[3]! : [...P3.tex[0]!, ...P3.tex[1]!], rr(gx, gy, 24));
-            size = rabbitLen * (0.8 + 0.9 * rr(gx, gy, 25));
-          } else if (sd > -8 && sd < -3 && r < 0.02) {
-            t = choose([P3.tex[5]![5]!, P3.tex[4]![1]!, P3.tex[4]![4]!], rr(gx, gy, 24));
-            size = rabbitLen * (0.7 + 0.5 * rr(gx, gy, 25));
-            shade = 0.95;
-          } else if (sd > 0.1 && sd < 0.9 && field(fields.grass, x, y) < 0.4 && r < 0.02) {
-            t = choose([P3.tex[4]![0]!, P3.tex[4]![2]!, P3.tex[4]![3]!, P3.tex[4]![5]!], rr(gx, gy, 24));
-            size = rabbitLen * 0.45;
-          }
-          if (!t || blocked(x, y, size, size * aspect(t))) return;
-          stick(t, x, y, size, rr(gx, gy, 26) < 0.5, 0, shade);
-        });
+      baseTex.source.update();
     });
 
   // ---- 整体调子：暗角 ----
@@ -627,43 +473,14 @@ async function main(): Promise<void> {
     requestRender();
   };
 
-  // 地上的投影摆好以后不再变：模糊一次、烤成一张贴图，不用每帧重新模糊整张地图。
-  // 只烤到一张贴图里，不用每帧重新模糊整张地图（cacheAsTexture 在这里会把投影弄丢，所以手动烤）。
-  {
-    const pad = 48;
-    const baked = timed('烤投影', () => app.renderer.generateTexture({ target: shadows, frame: new Rectangle(-pad, -pad, W + 2 * pad, H + 2 * pad), resolution: 0.5 }));
-    shadows.destroy({ children: true });
-    const s = new Sprite(baked);
-    s.position.set(-pad, -pad);
-    shadowLayer.addChild(s);
-    texBytes += baked.source.pixelWidth * baked.source.pixelHeight * 4;
-  }
+  // 地上的投影摆好以后不再变：模糊一次、烤成一张贴图（scene.ts）。
+  texBytes += timed('烤投影', () => scene.bakeShadows(app.renderer, W, H));
 
   // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放（越近越斜）、拖动平移；右侧三个滑块调缩放、俯仰、旋转 ----
   const cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
-  let laidT = -1;
-  let laidR = NaN;
   const layout = (): void => {
     requestRender();
-    root.position.set(cam.ox, cam.oy);
-    ground.scale.set(cam.s, cam.s * Math.cos(cam.t));
-    spin.rotation = cam.r;
-    bill.scale.set(cam.s);
-    const k = Math.max(1, 0.95 / cam.s);
-    for (const u of iconScaled) u.scale.set(k);
-    for (const u of companions) u.visible = k < 1.05;
-    // 立起来的东西的位置只和倾斜角、旋转角有关；都没变就不用重排。前后按转过以后的远近排。
-    if (cam.t === laidT && cam.r === laidR) return;
-    laidT = cam.t;
-    laidR = cam.r;
-    const ct = Math.cos(cam.t);
-    for (const b of bills) {
-      const [x, ry] = rotate(cam, b.x, b.y);
-      const y = ry * ct;
-      b.obj.position.set(x, y);
-      b.obj.zIndex = y + b.bias;
-    }
-    for (const f of relayouts) f();
+    scene.layout(cam);
   };
   /** 手动设的俯仰角；null = 跟着缩放自动倾斜。 */
   let manualPitch: number | null = null;
