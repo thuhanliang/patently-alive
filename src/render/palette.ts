@@ -1,11 +1,12 @@
 /**
- * 田野笔记的配色表（CLAUDE.md「美术」、GDD「色彩与材质」）。画面、界面、图表都从这里取色，不在别处写死颜色。
+ * 配色表（CLAUDE.md「美术」）。画面、界面、图表都从这里取色，不在别处写死颜色。
+ * 纸和墨是剪纸界面的奶油色卡纸和深褐（2026-10-22，和 index.html 的 --paper、--ink 一致）；其余沿用田野笔记的定色。
  * 只是画法，不进推演。
  */
 
 /** 纸、墨、蓝图蓝（玩家的批注）、朱红（警报、印章）。 */
-export const PAPER = 0xf3ede0;
-export const INK = 0x1f1d1a;
+export const PAPER = 0xf2e6c9;
+export const INK = 0x4a3a28;
 export const BLUEPRINT = 0x2f5d8a;
 export const VERMILION = 0xd2462e;
 
