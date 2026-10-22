@@ -14,7 +14,7 @@ export { SAVE_FORMAT, SAVE_VERSION, SaveSchema, type SaveFile } from './save';
 export { Session, type SubmitResult, type Resources, type Quarter } from './session';
 export { QUARTER_DAYS, QUARTERS_PER_YEAR, SCORE_KEYS, type ScoreKey, type Scores, type ScoreDetail } from './score';
 export { type Capture, type Job, type Carcass, type NecropsySearch } from './jobs';
-export { CAUSE, causeName, deathsByBlock, RECENT_HALF_LIFE_DAYS, recentByCause, type DeathFilter, type DeathLedger } from './ledger';
+export { CAUSE, causeName, decodeCause, deathsByBlock, RECENT_HALF_LIFE_DAYS, recentByCause, type DeathFilter, type DeathLedger } from './ledger';
 export { ageClass, EMPTY_STOMACH, type AgeClass, type Exam, type Stomach } from './exam';
 export { summarize, wilson, meanCi, THIN_BCS, GOOD_BCS, type SampleSummary, type Proportion, type MeanEstimate } from './inference';
 export { necropsyFindings, biteSizeMm, type NecropsyFindings, type Bite, type Decomposition } from './necropsy';

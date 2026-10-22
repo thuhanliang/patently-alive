@@ -89,6 +89,18 @@
       #nb-page[hidden] { display: none; }
       #nb-page > div { white-space: pre-wrap; font-size: 12px; }
       #hud { font-variant-numeric: tabular-nums; white-space: pre; }
+      /* 死因页：每个物种一张纸条，一根按死因分段的纸条。 */
+      #deaths { white-space: normal; display: flex; flex-direction: column; gap: 8px; }
+      #deaths .dp-head { color: var(--ink-soft); }
+      #deaths .dp-row { padding: 5px 8px 6px; background: var(--grain), #f7efdc; border-left: 4px solid var(--kraft); box-shadow: 2px 3px 0 rgba(20, 12, 4, 0.18); }
+      #deaths .dp-name { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 4px; }
+      #deaths .dp-name i, #deaths .dp-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px 4px 3px 2px; border: 1px solid rgba(74, 58, 40, 0.5); }
+      #deaths .dp-bar { display: flex; height: 12px; border-radius: 2px 5px 3px 4px; overflow: hidden; border: 1px solid rgba(74, 58, 40, 0.45); background: rgba(74, 58, 40, 0.08); }
+      #deaths .dp-bar b { display: block; min-width: 2px; border-right: 1px solid rgba(242, 230, 201, 0.8); }
+      #deaths .dp-bar b:last-child { border-right: none; }
+      #deaths .dp-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; color: var(--ink-soft); }
+      #deaths .dp-legend span { display: inline-flex; align-items: center; gap: 4px; }
+      #deaths .dp-none { color: var(--ink-soft); }
       #chart { cursor: pointer; display: block; width: 100%; height: 220px; }
       .nb-empty { color: var(--ink-soft); font-size: 12px; }
       #captures:not([style*='none']) + .nb-empty { display: none; }
