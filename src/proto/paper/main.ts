@@ -2,24 +2,29 @@ import { Application, Assets, BlurFilter, Container, Graphics, Sprite, Text, Tex
 import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
-import { hash2 } from './noise';
-import { LeafKit, bakeShrub, bakeTussock, scatterGround } from './leaves';
-import { fbm } from './noise';
+import { anchor, tiltFor, unprojectGround, type Cam } from './camera';
+import { LeafKit, applyCarpet, bakeShrub, bakeTussock, paveGround } from './leaves';
+import { fbm, hash2 } from './noise';
+import { LEVELS, LEVEL_H, Terraces } from './terraces';
 import { PX, buildFields, imagePaper, paintTerrain, proceduralPaper, sample, type Palette, type PaperTex } from './terrain';
 import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from './tokens';
 
 /**
  * 剪纸风格 demo（M0 · V2 的第一块）：用真实推演出来的鸟岛，按剪纸方式画地形、植被、代表单位、干预标记和界面。
  * 独立页面，只读推演，不接操作。素材来自 Lovart（art/incoming/lovart/paper/），缺的部分用代码画占位。
- * 参数：?seed=1&days=40&view=region|island|close&mode=stickers|leaves
- * - mode=stickers（默认）：草丛、灌丛用 P1、P2 整张贴纸；
- * - mode=leaves：草丛、灌丛由叶片在代码里拼（leaves.ts），地面再撒一层低对比的碎叶和碎石。
+ * 参数：?seed=1&days=40&view=region|island|close&mode=leaves|stickers&terraces=1|0&tilt=1|0
+ * - mode=leaves（默认）：草丛、灌丛、地面碎叶都由 P8 叶片在代码里拼（leaves.ts）；
+ *   mode=stickers：草丛、灌丛用 P1、P2 整张贴纸（第一版，留作对照）；
+ * - terraces：装饰性的地形台阶（terraces.ts），推演里没有高程；
+ * - tilt：随缩放变化的倾斜镜头（camera.ts），拉远俯视、拉近斜看。
  */
 
 const params = new URLSearchParams(location.search);
 const SEED = Number(params.get('seed') ?? 1);
 const DAYS = Number(params.get('days') ?? 40);
-const LEAVES = params.get('mode') === 'leaves';
+const LEAVES = params.get('mode') !== 'stickers';
+const TERRACES = params.get('terraces') !== '0';
+const TILT = params.get('tilt') !== '0';
 
 type Sheet = { rows: number[][][]; tex: Texture[][] };
 
@@ -35,6 +40,9 @@ async function loadSheet(name: string): Promise<Sheet | null> {
   }
 }
 
+type Img = CanvasImageSource & { width: number; height: number };
+const imageOf = (t: Texture): Img => t.source.resource as Img;
+
 /** P4 纸纹（3×3）：有就用真图，没有就用代码生成的纸。顺序见提示词：深海、中海、浅海、浪花、卵石滩、沙、草地、灌丛、牛皮纸。 */
 async function loadPalette(): Promise<Palette> {
   const colors = [0x1f5d7a, 0x2f89b4, 0x7cc0b0, 0xefe9dc, 0x9b8a7a, 0xe5bb80, 0x9cb052, 0x5c7639, 0xc99460];
@@ -48,7 +56,7 @@ async function loadPalette(): Promise<Palette> {
     const ctx = cv.getContext('2d')!;
     // 四边各裁掉一点，去掉切图时残留的品红边。
     const inset = 8;
-    ctx.drawImage(t.source.resource as CanvasImageSource, inset, inset, t.width - 2 * inset, t.height - 2 * inset, 0, 0, size, size);
+    ctx.drawImage(imageOf(t), inset, inset, t.width - 2 * inset, t.height - 2 * inset, 0, 0, size, size);
     return imagePaper(ctx.getImageData(0, 0, size, size).data, size);
   });
   return {
@@ -74,11 +82,32 @@ const P7_POSES: Partial<Record<PuppetKind, number[]>> = {
   rat: [0, 1, 2, 3, 4],
 };
 const si = (id: string): number => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 1000;
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+/** 屏幕四角压暗一点、偏暖：把整张图收成一个画面，而不是一块块素材。 */
+function vignette(): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(128, 118, 70, 128, 128, 190);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(1, 'rgba(120,88,56,0.55)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return c;
+}
 
 async function main(): Promise<void> {
   const status = document.getElementById('status')!;
   status.textContent = `推演 ${DAYS} 天……`;
-  await new Promise((r) => setTimeout(r, 0));
+  await tick();
+  const timing: string[] = [];
+  const timed = <T,>(label: string, f: () => T): T => {
+    const t0 = performance.now();
+    const v = f();
+    timing.push(`${label} ${Math.round(performance.now() - t0)}`);
+    return v;
+  };
 
   // ---- 推演（只读用） ----
   const scenario = scenarioLibrary.get('bird-island')!;
@@ -98,78 +127,131 @@ async function main(): Promise<void> {
     if (woodyI >= 0) shrub[i] = Math.min(1, grid.plants[woodyI]![i]! / world.plants[woodyI]!.maxBiomass);
   }
 
-  // ---- 地形 ----
-  status.textContent = '画地形……';
-  await new Promise((r) => setTimeout(r, 0));
-  const t0 = performance.now();
-  const fields = buildFields({ width: w, height: h, terrain: grid.terrain, herb, shrub });
+  // ---- 素材 ----
+  status.textContent = '载入素材……';
+  const [P1, P2, P3, P6, P7, P8] = await Promise.all(['P1', 'P2', 'P3', 'P6', 'P7', 'P8'].map(loadSheet));
   const pal = await loadPalette();
-  const painted = paintTerrain(fields, pal, SEED);
-  const cv = document.createElement('canvas');
-  cv.width = painted.width;
-  cv.height = painted.height;
-  const cvCtx = cv.getContext('2d')!;
-  const paintedImg = new ImageData(painted.data, painted.width, painted.height);
-  cvCtx.putImageData(paintedImg, 0, 0);
-  if (LEAVES) {
-    // 地面碎叶和碎石：用和地形相同的低频扭曲判断这个像素落在哪层纸上，撕边附近留空。
-    scatterGround(
-      cvCtx,
-      paintedImg,
-      (px, py) => {
-        const u = (px + 0.5) / PX - 0.5;
-        const v = (py + 0.5) / PX - 0.5;
-        const warp = (fbm(px / (PX * 5), py / (PX * 5), SEED) - 0.5) * 1.6;
-        if (sample(fields.sd, w, h, u, v) + warp < 0.5) return null;
-        const g = sample(fields.grass, w, h, u, v) + warp * 0.12;
-        if (g > 0.62) return 'leaf';
-        if (g < 0.38) return 'pebble';
-        return null;
-      },
-      SEED + 50,
-    );
-  }
-  const paintMs = Math.round(performance.now() - t0);
+  const kit = LEAVES && P8 ? new LeafKit(P8.tex.map((row) => row.map(imageOf))) : null;
 
-  const [P1, P2, P3, P5, P6, P7] = await Promise.all(['P1', 'P2', 'P3', 'P5', 'P6', 'P7'].map(loadSheet));
-  void P5;
+  // ---- 地形：纸层 → 地面铺叶 → 台阶 ----
+  status.textContent = '画地形……';
+  await tick();
+  const fields = buildFields({ width: w, height: h, terrain: grid.terrain, herb, shrub });
+  const painted = timed('地形', () => paintTerrain(fields, pal, SEED));
+  const W = painted.width;
+  const H = painted.height;
+  const img = new ImageData(painted.data, W, H);
+  if (kit) {
+    // 和地形绘制用同一个低频扭曲判断这个像素落在哪层纸上，撕边附近留空。
+    const carpet = timed('铺叶', () =>
+      paveGround(
+        kit,
+        W,
+        H,
+        (px, py) => {
+          const u = (px + 0.5) / PX - 0.5;
+          const v = (py + 0.5) / PX - 0.5;
+          const warp = (fbm(px / (PX * 5), py / (PX * 5), SEED) - 0.5) * 1.6;
+          if (sample(fields.sd, w, h, u, v) + warp < 0.5) return null;
+          const g = sample(fields.grass, w, h, u, v) + warp * 0.12;
+          if (g > 0.62) return sample(fields.shrubLand, w, h, u, v) + warp * 0.12 > 0.5 ? 'shrub' : 'grass';
+          if (g < 0.38) return 'pebble';
+          return null;
+        },
+        SEED + 50,
+      ),
+    );
+    applyCarpet(img, carpet);
+  }
+  const terr = TERRACES ? new Terraces(fields, SEED, W, H) : null;
+  const layers = terr ? timed('台阶', () => terr.split(img, pal.beach)) : null;
+  const baseCv = document.createElement('canvas');
+  baseCv.width = W;
+  baseCv.height = H;
+  baseCv.getContext('2d')!.putImageData(img, 0, 0);
+  let texBytes = W * H * 4;
 
   const app = new Application();
   await app.init({ resizeTo: window, background: 0x1f5d7a, antialias: true });
   document.body.appendChild(app.canvas);
   status.textContent = '';
 
-  const worldLayer = new Container();
-  app.stage.addChild(worldLayer);
-  worldLayer.addChild(new Sprite(Texture.from(cv)));
+  // 场景：root 下面两层。ground 是地面（竖直压扁 cos t），bill 是立起来的纸片（不压扁）。
+  const root = new Container();
+  app.stage.addChild(root);
+  const ground = new Container();
+  const bill = new Container();
+  bill.sortableChildren = true;
+  root.addChild(ground, bill);
+  ground.addChild(new Sprite(Texture.from(baseCv)));
+
+  /** 台阶：每层一张顶面、SIDE_COPIES 张侧面（同一个剪影往下叠，越往下越暗；每隔几张亮一点，像一层层纸板的边）。 */
+  const SIDE_COPIES = 12;
+  const levelNodes: { top: Sprite; sides: Sprite[]; y: number; k: number }[] = [];
+  layers?.tops.forEach((top, k) => {
+    const side = layers.sides[k]!;
+    const sideTex = Texture.from(side.canvas);
+    const sides = Array.from({ length: SIDE_COPIES }, (_, j) => {
+      const s = new Sprite(sideTex);
+      s.x = side.x;
+      const f = j / (SIDE_COPIES - 1);
+      const g = Math.min(1, 0.46 + 0.42 * f + (j % 4 === 3 ? 0.1 : 0));
+      s.tint = (Math.round(g * 255) << 16) | (Math.round(g * 0.96 * 255) << 8) | Math.round(g * 0.9 * 255);
+      ground.addChild(s);
+      return s;
+    });
+    const t = new Sprite(Texture.from(top.canvas));
+    t.x = top.x;
+    ground.addChild(t);
+    levelNodes.push({ top: t, sides, y: top.y, k });
+    texBytes += (top.canvas.width * top.canvas.height + side.canvas.width * side.canvas.height) * 4;
+  });
+
   const shadows = new Container();
   shadows.filters = [new BlurFilter({ strength: 3, quality: 2 })];
   shadows.alpha = 0.32;
-  const props = new Container();
-  props.sortableChildren = true;
-  worldLayer.addChild(shadows, props);
+  ground.addChild(shadows);
+
+  // 立起来的东西和地上的投影都按地面坐标登记，镜头一变就统一重排。
+  const zAt = (x: number, y: number): number => (terr ? terr.levelAt(x, y) * LEVEL_H : 0);
+  type Bill = { obj: Container; x: number; y: number; z: number; bias: number };
+  const bills: Bill[] = [];
+  const shads: { obj: Container; y: number; z: number }[] = [];
+  const relayouts: (() => void)[] = [];
+  const place = (obj: Container, x: number, y: number, bias = 0): Bill => {
+    const b = { obj, x, y, z: zAt(x, y), bias };
+    bills.push(b);
+    bill.addChild(obj);
+    return b;
+  };
+  const shadowAt = (obj: Container, x: number, y: number, z: number): void => {
+    obj.x = x;
+    shads.push({ obj, y, z });
+    shadows.addChild(obj);
+  };
   /** 代表单位和数量签：拉远时反向放大，像地图图标一样保持能看清的大小。 */
   const iconScaled: Container[] = [];
 
   const rnd = (x: number, y: number, k: number): number => hash2(x * 7 + k, y * 13 - k, SEED + 1000);
   const sdAt = (x: number, y: number): number => fields.sd[y * w + x]!;
 
-  /** 贴一张贴纸：底边中点在 (cx, cy) 像素处，宽 widthPx。阴影是同一张图压扁、往右下偏。 */
-  const stick = (tex: Texture, cx: number, cy: number, widthPx: number, flip = false, z = cy): Sprite => {
+  /** 贴一张立起来的纸片：底边中点在 (cx, cy) 像素处，宽 widthPx。投影是同一张图压扁、往右下偏，贴在地上。 */
+  const stick = (tex: Texture, cx: number, cy: number, widthPx: number, flip = false, bias = 0, shade = 1): Sprite => {
     const s = new Sprite(tex);
     s.anchor.set(0.5, 1);
+    if (shade !== 1) {
+      const g = Math.round(Math.min(1, shade) * 255);
+      s.tint = (g << 16) | (g << 8) | Math.round(g * 0.97);
+    }
     const k = widthPx / tex.width;
     s.scale.set(flip ? -k : k, k);
-    s.position.set(cx, cy);
-    s.zIndex = z;
-    props.addChild(s);
+    const b = place(s, cx, cy, bias);
     const sh = new Sprite(tex);
     sh.anchor.set(0.5, 1);
     sh.tint = 0x241a10;
     sh.scale.set(flip ? -k : k, k * 0.55);
     sh.skew.x = -0.6;
-    sh.position.set(cx + widthPx * 0.08, cy + 2);
-    shadows.addChild(sh);
+    shadowAt(sh, cx + widthPx * 0.08, cy + 2, b.z);
     return s;
   };
   const pick = (sheet: Sheet | null | undefined, rows: number[], r: number): Texture | null => {
@@ -179,30 +261,30 @@ async function main(): Promise<void> {
     return list[Math.floor((r * 997) % 1 * list.length)] ?? list[0]!;
   };
 
-  // ---- 叶片拼出来的植被（mode=leaves）：启动时烤好若干变体，按植被量挑最近的一档 ----
-  const tBake = performance.now();
-  const kit = LEAVES ? new LeafKit(SEED) : null;
-  const LEVELS = [0.15, 0.4, 0.7, 1];
+  // ---- 叶片拼出来的植被：启动时烤好若干变体，按植被量挑最近的一档 ----
+  const LV = [0.15, 0.4, 0.7, 1];
   const DRY = [0, 0.5, 1];
   const VAR = 3;
-  const BAKE = 72;
+  const BAKE = 96;
   const tussocks: Texture[][][] = [];
   const flowers: Texture[] = [];
   const shrubs: Texture[][] = [];
-  if (kit) {
-    LEVELS.forEach((b, bi) => {
-      tussocks[bi] = DRY.map((d, di) =>
-        Array.from({ length: VAR }, (_, v) => Texture.from(bakeTussock(kit, b, d, SEED * 97 + bi * 31 + di * 7 + v, BAKE).canvas)),
-      );
-      shrubs[bi] = Array.from({ length: VAR + 1 }, (_, v) => Texture.from(bakeShrub(kit, b, SEED * 89 + bi * 13 + v, BAKE).canvas));
+  const fromCanvas = (c: HTMLCanvasElement): Texture => {
+    texBytes += c.width * c.height * 4;
+    return Texture.from(c);
+  };
+  if (kit)
+    timed('烤植被', () => {
+      LV.forEach((b, bi) => {
+        tussocks[bi] = DRY.map((d, di) => Array.from({ length: VAR }, (_, v) => fromCanvas(bakeTussock(kit, b, d, SEED * 97 + bi * 31 + di * 7 + v, BAKE))));
+        shrubs[bi] = Array.from({ length: VAR + 1 }, (_, v) => fromCanvas(bakeShrub(kit, b, SEED * 89 + bi * 13 + v, BAKE)));
+      });
+      for (let v = 0; v < VAR; v++) flowers.push(fromCanvas(bakeTussock(kit, 0.8, 0, SEED * 71 + v, BAKE, true)));
     });
-    for (let v = 0; v < VAR; v++) flowers.push(Texture.from(bakeTussock(kit, 0.8, 0, SEED * 71 + v, BAKE, true).canvas));
-  }
-  const bakeMs = Math.round(performance.now() - tBake);
-  const level = (x: number): number => LEVELS.reduce((best, l, i) => (Math.abs(l - x) < Math.abs(LEVELS[best]! - x) ? i : best), 0);
+  const level = (x: number): number => LV.reduce((best, l, i) => (Math.abs(l - x) < Math.abs(LV[best]! - x) ? i : best), 0);
   const choose = <T,>(list: T[], r: number): T => list[Math.floor(r * list.length) % list.length]!;
 
-  // ---- 植被和岩石贴纸（按格子撒，同一个种子位置固定） ----
+  // ---- 植被和岩石（按格子撒，同一个种子位置固定） ----
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -214,15 +296,17 @@ async function main(): Promise<void> {
       const flip = rnd(x, y, 5) < 0.5;
       if (kit && t === TERRAIN.shrub) {
         const a = shrub[i]!;
-        if (r1 < 0.26 + 0.3 * a) stick(choose(shrubs[level(a)]!, r2), jx, jy, PX * (1.3 + 1.4 * rnd(x, y, 6) ** 2), flip);
+        // 每丛明暗略有不同，免得一片灌丛像同一个图章盖出来的。
+        if (r1 < 0.26 + 0.3 * a) stick(choose(shrubs[level(a)]!, r2), jx, jy, PX * (1.3 + 1.4 * rnd(x, y, 6) ** 2), flip, 0, 0.84 + 0.16 * rnd(x, y, 8));
       } else if (kit && t === TERRAIN.grass) {
         const b = herb[i]!;
-        // 被啃得越狠，草丛越稀、越枯。
+        // 被啃得越狠，草丛越稀、越枯；草丛成片长（低频噪声），不是均匀撒。
         const dry = Math.min(1, Math.max(0, (0.65 - b) / 0.5));
-        if (r1 < 0.11) {
+        const clump = Math.min(1, Math.max(0, (fbm(x / 7, y / 7, SEED + 77) - 0.42) / 0.25));
+        if (r1 < (0.03 + 0.2 * clump) * (0.4 + 0.6 * b)) {
           const tex = b > 0.5 && r2 < 0.1 ? choose(flowers, rnd(x, y, 7)) : choose(tussocks[level(b)]![Math.round(dry * 2)]!, rnd(x, y, 7));
-          stick(tex, jx, jy, PX * (1.4 + 1.1 * rnd(x, y, 6)), flip);
-        } else if (r1 < 0.125 && sdAt(x, y) < 6) {
+          stick(tex, jx, jy, PX * (1.8 + 1.4 * rnd(x, y, 6)), flip, 0, 0.88 + 0.12 * rnd(x, y, 8));
+        } else if (r1 > 0.985 && sdAt(x, y) < 6) {
           const tex = pick(P3, [3], r2);
           if (tex) stick(tex, jx, jy, PX * (1.2 + 0.5 * rnd(x, y, 6)), flip);
         }
@@ -266,8 +350,8 @@ async function main(): Promise<void> {
   // ---- 代表单位 ----
   const isLand = (i: number): boolean => grid.terrain[i] !== TERRAIN.water;
   const tokenInfo: { id: string; kind: PuppetKind; tokens: Token[]; len: number }[] = [];
-  sim.species.forEach((sp, si) => {
-    const pop = st.populations[si]!;
+  sim.species.forEach((sp, spI) => {
+    const pop = st.populations[spI]!;
     const counts = new Int32Array(w * h);
     for (let i = 0; i < w * h; i++) counts[i] = countAt(pop, i);
     const id = sp.params.id;
@@ -297,8 +381,6 @@ async function main(): Promise<void> {
       const cy = (tk.y + 0.5) * PX;
       const k: PuppetKind = id === 'cat' && j % 2 === 1 ? 'cat-piebald' : kind;
       const unit = new Container();
-      unit.position.set(cx, cy);
-      unit.zIndex = cy + 0.5;
       const flip = j % 3 === 2 && id !== 'dotterel';
       // P7 整只剪纸：每个物种一行五个姿势；同一物种按站姿（第 0 个）统一缩放，换姿势大小不变。
       // 按剪纸面积的平方根缩放，而不是按宽度：长尾巴、长耳朵不会让一个物种显得更小或更大。
@@ -308,7 +390,7 @@ async function main(): Promise<void> {
         const poses = P7_POSES[k]!;
         // 鸟：偶数个代表趴在巢里（P7 自带巢），其余站在巢边。
         const pose = id === 'dotterel' ? (j % 2 === 0 ? 3 : 0) : poses[Math.floor(rnd(j, si(id), 9) * poses.length)]!;
-        if (id === 'dotterel' && pose !== 3 && nestTex) stick(nestTex[1 + (j % 3 === 1 ? 1 : 0)]!, cx - len * 0.45, cy + len * 0.05, len * 0.8, false, cy - 1);
+        if (id === 'dotterel' && pose !== 3 && nestTex) stick(nestTex[1 + (j % 3 === 1 ? 1 : 0)]!, cx - len * 0.45, cy + len * 0.05, len * 0.8, false, -len * 0.05 - 1);
         const area = P7!.rows[rowI]![0]![2] ?? (row[0]!.width / 1.65) ** 2;
         const kk = (len * 0.79) / Math.sqrt(area);
         const spr = new Sprite(row[pose]!);
@@ -316,15 +398,14 @@ async function main(): Promise<void> {
         spr.scale.set(flip ? -kk : kk, kk);
         unit.addChild(spr);
       } else {
-        if (id === 'dotterel' && nestTex) stick(nestTex[1 + (j % 2)]!, cx - len * 0.05, cy + len * 0.15, len * 0.95, false, cy - 1);
+        if (id === 'dotterel' && nestTex) stick(nestTex[1 + (j % 2)]!, cx - len * 0.05, cy + len * 0.15, len * 0.95, false, -len * 0.15 - 1);
         const pup = drawPuppet(k, len);
         if (flip) pup.scale.x = -1;
         unit.addChild(pup);
       }
-      props.addChild(unit);
+      const b = place(unit, cx, cy, 0.5);
       iconScaled.push(unit);
-      const sh = new Graphics().ellipse(cx + len * 0.06, cy + 1, len * 0.42, len * 0.1).fill(0x241a10);
-      shadows.addChild(sh);
+      shadowAt(new Graphics().ellipse(0, 0, len * 0.42, len * 0.1).fill(0x241a10), cx + len * 0.06, cy + 1, b.z);
       // 数量签
       const tag = new Container();
       const label = new Text({
@@ -383,20 +464,25 @@ async function main(): Promise<void> {
   const nearBirds = tokensOf('dotterel');
   const bird = nearBirds[0];
   if (bird && blue) {
-    // 围栏：5 根木桩，蓝绳在桩顶之间微微下垂。
-    const posts: [number, number][] = [];
-    for (let k = 0; k < 5; k++) posts.push([(bird.x + 4 + k * 2.2) * PX, (bird.y - 3 + k * 1.1) * PX]);
+    // 围栏：5 根木桩，蓝绳在桩顶之间微微下垂；镜头倾斜时按桩的新位置重画。
+    const posts: Bill[] = [];
     const postH = PX * 1.5;
-    const rope = new Graphics();
-    for (let k = 0; k < posts.length - 1; k++) {
-      const [x1, y1] = posts[k]!;
-      const [x2, y2] = posts[k + 1]!;
-      rope.moveTo(x1, y1 - postH * 0.85).quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 - postH * 0.55, x2, y2 - postH * 0.85);
+    for (let k = 0; k < 5; k++) {
+      stick(blue[3]!, (bird.x + 4 + k * 2.2) * PX, (bird.y - 3 + k * 1.1) * PX, PX * 0.45);
+      posts.push(bills[bills.length - 1]!);
     }
-    rope.stroke({ width: 3, color: 0x2f6fd0 });
-    rope.zIndex = (bird.y - 3 + 4.4) * PX;
-    props.addChild(rope);
-    for (const [px2, py2] of posts) stick(blue[3]!, px2, py2, PX * 0.45);
+    const rope = new Graphics();
+    bill.addChild(rope);
+    relayouts.push(() => {
+      rope.clear();
+      for (let k = 0; k < posts.length - 1; k++) {
+        const a = posts[k]!.obj;
+        const b = posts[k + 1]!.obj;
+        rope.moveTo(a.x, a.y - postH * 0.85).quadraticCurveTo((a.x + b.x) / 2, (a.y + b.y) / 2 - postH * 0.55, b.x, b.y - postH * 0.85);
+      }
+      rope.stroke({ width: 3, color: 0x2f6fd0 });
+      rope.zIndex = posts[2]!.obj.y + 0.1;
+    });
   }
   const victim = nearBirds[0];
   if (victim && red && nestTex) {
@@ -404,20 +490,27 @@ async function main(): Promise<void> {
     const [ax, ay] = landNear(victim.x - 5, victim.y + 6, 1, 0);
     const cx = (ax + 0.5) * PX;
     const cy = (ay + 0.5) * PX;
+    const burstBox = new Container();
     const burst = new Sprite(red[0]!);
     burst.anchor.set(0.5);
     burst.width = burst.height = PX * 4.2;
-    burst.position.set(cx, cy - PX * 0.5);
-    burst.zIndex = cy - 2;
-    props.addChild(burst);
+    burst.y = -PX * 0.5;
+    burstBox.addChild(burst);
+    place(burstBox, cx, cy, -2);
     stick(nestTex[4]!, cx, cy + PX * 0.3, PX * 1.9);
+    const bangBox = new Container();
     const bang = new Sprite(red[3]!);
     bang.anchor.set(0.5, 1);
     bang.scale.set((PX * 2.6) / bang.height);
-    bang.position.set(cx, cy - PX * 2.9);
-    bang.zIndex = 1e6 + 1;
-    props.addChild(bang);
+    bang.y = -PX * 2.9;
+    bangBox.addChild(bang);
+    place(bangBox, cx, cy, 1e6);
   }
+
+  // ---- 整体调子：暗角 ----
+  const vig = new Sprite(Texture.from(vignette()));
+  vig.blendMode = 'multiply';
+  app.stage.addChild(vig);
 
   // ---- 界面（贴在屏幕边缘的纸签） ----
   const hud = new Container();
@@ -482,29 +575,58 @@ async function main(): Promise<void> {
   hud.addChild(bar);
 
   const layoutHud = (): void => {
-    const W = app.screen.width;
-    const H = app.screen.height;
+    const SW = app.screen.width;
+    const SH = app.screen.height;
     dateBox.position.set(20, 18);
-    speedBox.position.set(W - 320, 18);
-    bar.position.set((W - bar.width) / 2, H - 124);
+    speedBox.position.set(SW - 320, 18);
+    bar.position.set((SW - bar.width) / 2, SH - 124);
+    vig.width = SW;
+    vig.height = SH;
   };
 
-  // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放、拖动平移 ----
-  const views = { island: 0, region: 1.45, close: 2.6 } as const;
-  let scale = 1;
-  const rescaleIcons = (): void => {
-    const k = Math.max(1, 0.95 / scale);
+  // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放（越近越斜）、拖动平移 ----
+  const cam: Cam = { s: 1, t: 0, ox: 0, oy: 0 };
+  let laidT = -1;
+  const layout = (): void => {
+    root.position.set(cam.ox, cam.oy);
+    ground.scale.set(cam.s, cam.s * Math.cos(cam.t));
+    bill.scale.set(cam.s);
+    const k = Math.max(1, 0.95 / cam.s);
     for (const u of iconScaled) u.scale.set(k);
+    if (cam.t === laidT) return;
+    laidT = cam.t;
+    const ct = Math.cos(cam.t);
+    const sn = Math.sin(cam.t);
+    const tn = Math.tan(cam.t);
+    // 地面坐标系已经压扁了 cos t，所以抬高 z 在里面要写成往上挪 z·tan t。
+    for (const L of levelNodes) {
+      L.top.y = L.y - (L.k + 1) * LEVEL_H * tn;
+      L.sides.forEach((s, j) => {
+        s.visible = cam.t > 0.01;
+        s.y = L.y - (L.k + j / SIDE_COPIES) * LEVEL_H * tn;
+      });
+    }
+    for (const s of shads) s.obj.y = s.y - s.z * tn;
+    for (const b of bills) {
+      const y = b.y * ct - b.z * sn;
+      b.obj.position.set(b.x, y);
+      b.obj.zIndex = y + b.bias;
+    }
+    for (const f of relayouts) f();
   };
+  const setTilt = (): void => {
+    cam.t = TILT ? tiltFor(cam.s) : 0;
+  };
+  const views = { island: 0, region: 1.45, close: 2.6 } as const;
   const setView = (name: keyof typeof views): void => {
-    const W = app.screen.width;
-    const H = app.screen.height;
-    scale = views[name] || Math.min(W / (w * PX), H / (h * PX));
-    const cx = name === 'island' ? (w * PX) / 2 : (focus.x + 0.5) * PX;
-    const cy = name === 'island' ? (h * PX) / 2 : (focus.y + 0.5) * PX;
-    worldLayer.scale.set(scale);
-    worldLayer.position.set(W / 2 - cx * scale, H / 2 - cy * scale);
-    rescaleIcons();
+    const SW = app.screen.width;
+    const SH = app.screen.height;
+    cam.s = views[name] || Math.min(SW / W, SH / H);
+    setTilt();
+    const fx = name === 'island' ? W / 2 : (focus.x + 0.5) * PX;
+    const fy = name === 'island' ? H / 2 : (focus.y + 0.5) * PX;
+    anchor(cam, fx, fy, name === 'island' ? 0 : zAt(fx, fy), SW / 2, SH / 2);
+    layout();
   };
   const initial = (params.get('view') ?? 'region') as keyof typeof views;
   setView(initial in views ? initial : 'region');
@@ -519,27 +641,44 @@ async function main(): Promise<void> {
     'wheel',
     (e) => {
       e.preventDefault();
-      const k = Math.exp(-e.deltaY * 0.0015);
-      const mx = e.offsetX;
-      const my = e.offsetY;
-      const wx = (mx - worldLayer.x) / scale;
-      const wy = (my - worldLayer.y) / scale;
-      scale = Math.min(4, Math.max(0.3, scale * k));
-      worldLayer.scale.set(scale);
-      worldLayer.position.set(mx - wx * scale, my - wy * scale);
-      rescaleIcons();
+      // 鼠标下的那块地面在缩放（和倾斜）前后不动。
+      const [gx, gy] = unprojectGround(cam, e.offsetX, e.offsetY);
+      cam.s = Math.min(4, Math.max(0.3, cam.s * Math.exp(-e.deltaY * 0.0015)));
+      setTilt();
+      anchor(cam, gx, gy, 0, e.offsetX, e.offsetY);
+      layout();
     },
     { passive: false },
   );
-  let drag: { x: number; y: number } | null = null;
-  app.canvas.addEventListener('pointerdown', (e) => (drag = { x: e.clientX - worldLayer.x, y: e.clientY - worldLayer.y }));
+  let drag: { x: number; y: number; ox: number; oy: number } | null = null;
+  app.canvas.addEventListener('pointerdown', (e) => (drag = { x: e.clientX, y: e.clientY, ox: cam.ox, oy: cam.oy }));
   window.addEventListener('pointerup', () => (drag = null));
   window.addEventListener('pointermove', (e) => {
-    if (drag) worldLayer.position.set(e.clientX - drag.x, e.clientY - drag.y);
+    if (!drag) return;
+    cam.ox = drag.ox + e.clientX - drag.x;
+    cam.oy = drag.oy + e.clientY - drag.y;
+    layout();
   });
 
+  // 帧间隔：静止画面上量 60 帧（无头浏览器是软件渲染，这个数只在真机上有意义）。
+  const frames: number[] = [];
+  await new Promise<void>((done) => {
+    let last = performance.now();
+    const f = (now: number): void => {
+      frames.push(now - last);
+      last = now;
+      if (frames.length < 60) requestAnimationFrame(f);
+      else done();
+    };
+    requestAnimationFrame(f);
+  });
+  const frameMs = frames.slice(5).reduce((a, b) => a + b, 0) / (frames.length - 5);
+
   const totals = tokenInfo.map((s) => `${s.id} ${s.tokens.reduce((a, t) => a + t.count, 0)}（${s.tokens.length} 个代表）`).join('，');
-  document.getElementById('info')!.textContent = `种子 ${SEED}，第 ${day + 1} 天；${LEAVES ? '叶片模式' : '贴纸模式'}；地形绘制 ${paintMs} 毫秒${LEAVES ? `，烤叶片植被 ${bakeMs} 毫秒` : ''}；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放，拖动平移。`;
+  const flags = [kit ? '叶片' : '贴纸', terr ? `台阶 ${LEVELS} 层` : '无台阶', TILT ? '倾斜镜头' : '俯视'].join('、');
+  document.getElementById('info')!.textContent =
+    `种子 ${SEED}，第 ${day + 1} 天；${flags}；耗时（毫秒）${timing.join('、')}；地形和植被贴图约 ${Math.round(texBytes / 1048576)} MB；` +
+    `帧间隔 ${frameMs.toFixed(1)} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放（越近越斜），拖动平移。`;
   (window as unknown as { __ready: boolean }).__ready = true;
 }
 
