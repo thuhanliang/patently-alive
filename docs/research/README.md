@@ -6,6 +6,7 @@
 | --- | --- |
 | [`HDT.md`](HDT.md) | 《天地创造设计部》逐集整理：每个动物、每次失败、失败原因的分类 |
 | [`VIABILITY.md`](VIABILITY.md) | 身体本身的可行性：骨骼、飞行、体温、消化、循环、繁殖、速度的缩放规律；育种的真实失败；"自由塑形"的两条路 |
+| [`creature-rig.md`](creature-rig.md) | 2026-10-22：纸偶生物的拆分、骨骼、动作、零件库、交互，以及形状和能力怎么挂钩（M0 · V3） |
 | [`PRACTICE.md`](PRACTICE.md) | 植被怎么才能被吃坏；生物防治的审批和成功率；WHO 分阶段试验；岛屿恢复的可行性标准和生态替代；映射到阶段 3 第 5–9 步 |
 
 和 `docs/research-ecology-tools` 分支的 `docs/RESEARCH.md` 是互补关系：那份写过的（Madingley、狼–羊–草、ODD、
