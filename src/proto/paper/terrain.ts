@@ -1,0 +1,324 @@
+import { TERRAIN } from '../../sim/terrain';
+import { fbm, valueNoise } from './noise';
+
+/**
+ * 剪纸地形：从推演的格子算出几张连续的场（离岸距离、草地、灌丛、植被量），
+ * 再逐像素画成一层层带白色撕边和投影的纸片。只读推演数据，只用于画面。
+ */
+
+/** 每格多少像素。 */
+export const PX = 16;
+
+export interface TerrainInput {
+  width: number;
+  height: number;
+  terrain: Uint8Array;
+  /** 每格草本生物量占上限的比例（0–1）。 */
+  herb: Float32Array;
+  /** 每格灌丛生物量占上限的比例（0–1），非灌丛格为 0。 */
+  shrub: Float32Array;
+}
+
+export interface Fields {
+  width: number;
+  height: number;
+  /** 离海岸线的有符号距离（格）：陆地为正，水为负。 */
+  sd: Float32Array;
+  /** 草地（含灌丛）指示场，平滑过，0–1。 */
+  grass: Float32Array;
+  /** 灌丛指示场，平滑过，0–1。 */
+  shrubLand: Float32Array;
+  herb: Float32Array;
+  shrub: Float32Array;
+}
+
+/** 一张可以平铺的纸：RGB，宽高相同。 */
+export interface PaperTex {
+  size: number;
+  rgb: Float32Array;
+}
+
+export interface Palette {
+  deep: PaperTex;
+  mid: PaperTex;
+  shallow: PaperTex;
+  foam: PaperTex;
+  beach: PaperTex;
+  grass: PaperTex;
+  dry: PaperTex;
+  shrub: PaperTex;
+  rim: PaperTex;
+}
+
+export function buildFields(input: TerrainInput): Fields {
+  const { width: w, height: h, terrain } = input;
+  const n = w * h;
+  const land = new Uint8Array(n);
+  for (let i = 0; i < n; i++) land[i] = terrain[i] === TERRAIN.water ? 0 : 1;
+  // 到最近的"另一边"格子的距离（两遍倒角距离），陆地和水各算一次。
+  const toWater = chamfer(land, w, h, 1);
+  const toLand = chamfer(land, w, h, 0);
+  const sd = new Float32Array(n);
+  for (let i = 0; i < n; i++) sd[i] = land[i] ? toWater[i]! - 0.5 : -(toLand[i]! - 0.5);
+  const grass = new Float32Array(n);
+  const shrubLand = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    grass[i] = terrain[i] === TERRAIN.grass || terrain[i] === TERRAIN.shrub ? 1 : 0;
+    shrubLand[i] = terrain[i] === TERRAIN.shrub ? 1 : 0;
+  }
+  return {
+    width: w,
+    height: h,
+    sd,
+    grass: blur(grass, w, h, 2),
+    shrubLand: blur(shrubLand, w, h, 2),
+    herb: blur(Float32Array.from(input.herb), w, h, 2),
+    shrub: blur(Float32Array.from(input.shrub), w, h, 2),
+  };
+}
+
+/** land[i] === source 的格到最近的另一类格的距离（格）；另一类格本身为 0。 */
+function chamfer(land: Uint8Array, w: number, h: number, source: number): Float32Array {
+  const INF = 1e9;
+  const d = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i++) d[i] = land[i] === source ? INF : 0;
+  const D = Math.SQRT2;
+  const relax = (i: number, j: number, cost: number): void => {
+    const v = d[j]! + cost;
+    if (v < d[i]!) d[i] = v;
+  };
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (x > 0) relax(i, i - 1, 1);
+      if (y > 0) {
+        relax(i, i - w, 1);
+        if (x > 0) relax(i, i - w - 1, D);
+        if (x < w - 1) relax(i, i - w + 1, D);
+      }
+    }
+  for (let y = h - 1; y >= 0; y--)
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      if (x < w - 1) relax(i, i + 1, 1);
+      if (y < h - 1) {
+        relax(i, i + w, 1);
+        if (x < w - 1) relax(i, i + w + 1, D);
+        if (x > 0) relax(i, i + w - 1, D);
+      }
+    }
+  // 地图边上全是水，INF 只会出现在全图都是同一种格子时。
+  for (let i = 0; i < d.length; i++) if (d[i]! >= INF) d[i] = w + h;
+  return d;
+}
+
+/** 3×3 均值模糊若干遍。 */
+function blur(src: Float32Array, w: number, h: number, passes: number): Float32Array {
+  let a = src;
+  for (let p = 0; p < passes; p++) {
+    const b = new Float32Array(a.length);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let s = 0;
+        let k = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx;
+            const yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+            s += a[yy * w + xx]!;
+            k++;
+          }
+        b[y * w + x] = s / k;
+      }
+    a = b;
+  }
+  return a;
+}
+
+/** 双线性取样（格坐标，格中心在整数处）。 */
+export function sample(f: Float32Array, w: number, h: number, u: number, v: number): number {
+  const x = Math.min(Math.max(u, 0), w - 1.001);
+  const y = Math.min(Math.max(v, 0), h - 1.001);
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const i = iy * w + ix;
+  const a = f[i]!;
+  const b = f[i + 1]!;
+  const c = f[i + w]!;
+  const d = f[i + w + 1]!;
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+
+/** 用代码生成的一张纸：底色乘上大小两层纤维噪声。P4 的纸纹素材到了以后换成真图。 */
+export function proceduralPaper(hex: number, seed: number, size = 256): PaperTex {
+  const rgb = new Float32Array(size * size * 3);
+  const r = ((hex >> 16) & 255) / 255;
+  const g = ((hex >> 8) & 255) / 255;
+  const b = (hex & 255) / 255;
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      // 周期边界：取样坐标绕一圈，平铺时不露缝。
+      const k =
+        1 +
+        0.1 * (periodic(x, y, size, 18, seed) - 0.5) +
+        0.07 * (periodic(x, y, size, 2.2, seed + 7) - 0.5) +
+        (hashFibre(x, y, seed) ? -0.06 : 0);
+      const i = (y * size + x) * 3;
+      rgb[i] = r * k;
+      rgb[i + 1] = g * k;
+      rgb[i + 2] = b * k;
+    }
+  return { size, rgb };
+}
+
+/** 从一张图（如 P4 里切出来的纸纹）做平铺纸。 */
+export function imagePaper(data: Uint8ClampedArray, size: number): PaperTex {
+  const rgb = new Float32Array(size * size * 3);
+  for (let i = 0, j = 0; i < size * size; i++, j += 4) {
+    rgb[i * 3] = data[j]! / 255;
+    rgb[i * 3 + 1] = data[j + 1]! / 255;
+    rgb[i * 3 + 2] = data[j + 2]! / 255;
+  }
+  return { size, rgb };
+}
+
+function periodic(x: number, y: number, size: number, scale: number, seed: number): number {
+  // 在周期为 size 的网格上取值噪声：把整数格点按周期取模。
+  const period = Math.max(1, Math.round(size / scale));
+  const fx = (x / size) * period;
+  const fy = (y / size) * period;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const tx = fx - ix;
+  const ty = fy - iy;
+  const sx = tx * tx * (3 - 2 * tx);
+  const sy = ty * ty * (3 - 2 * ty);
+  const at = (a: number, b: number): number => valueNoise((a % period) + 0.0, (b % period) + 0.0, seed);
+  const a = at(ix, iy);
+  const b = at(ix + 1, iy);
+  const c = at(ix, iy + 1);
+  const d = at(ix + 1, iy + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+/** 零星的短纤维：纸里偶尔一道深色细丝。 */
+function hashFibre(x: number, y: number, seed: number): boolean {
+  const n = valueNoise(x / 1.3 + y / 9, y / 1.3 - x / 11, seed + 99);
+  return n > 0.985;
+}
+
+function texAt(t: PaperTex, x: number, y: number, ox: number, oy: number): number {
+  // 镜像平铺，减少重复感；每层纸用不同的偏移。
+  const s = t.size;
+  let u = (x + ox) % (2 * s);
+  let v = (y + oy) % (2 * s);
+  if (u >= s) u = 2 * s - 1 - u;
+  if (v >= s) v = 2 * s - 1 - v;
+  return (v * s + u) * 3;
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+interface Layer {
+  kind: 'sd' | 'grass' | 'shrub';
+  t: number;
+  /** 白边宽度（场的单位）。 */
+  rim: number;
+  /** 场每像素大约变化多少（抗锯齿用）。 */
+  grad: number;
+  tex: PaperTex;
+  /** 植被量低时混进去的枯色纸。 */
+  dry?: PaperTex;
+}
+
+/**
+ * 逐像素画地形。返回 RGBA，宽高 = 格数 × PX。
+ * 每层纸：先在下面一层上落投影（往右下偏），再画白色撕边，最后铺这层的纸。
+ */
+export function paintTerrain(f: Fields, pal: Palette, seed: number): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
+  const W = f.width * PX;
+  const H = f.height * PX;
+  const out = new Uint8ClampedArray(W * H * 4);
+  const sdGrad = 1 / PX;
+  const indGrad = 0.3 / PX;
+  const layers: Layer[] = [
+    { kind: 'sd', t: -6, rim: 0.22, grad: sdGrad, tex: pal.mid },
+    { kind: 'sd', t: -2.6, rim: 0.22, grad: sdGrad, tex: pal.shallow },
+    { kind: 'sd', t: -0.75, rim: 0.3, grad: sdGrad, tex: pal.foam },
+    { kind: 'sd', t: 0, rim: 0.22, grad: sdGrad, tex: pal.beach },
+    { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
+    { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
+  ];
+  // 投影往右下偏的距离（格）。
+  const SHX = 5 / PX;
+  const SHY = 6 / PX;
+  const { width: w, height: h } = f;
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const u = (px + 0.5) / PX - 0.5;
+      const v = (py + 0.5) / PX - 0.5;
+      // 低频扭曲让海岸线不跟着格子走；高频纤维决定白边的毛刺。
+      const warp = (fbm(px / (PX * 5), py / (PX * 5), seed) - 0.5) * 1.6;
+      const fibre = valueNoise(px / 2.4, py / 2.4, seed + 5);
+      const fine = valueNoise(px / 7, py / 7, seed + 9);
+      const sdHere = sample(f.sd, w, h, u, v) + warp;
+      const sdOff = sample(f.sd, w, h, u - SHX, v - SHY) + warp;
+      const indWarp = warp * 0.12;
+      const gHere = sample(f.grass, w, h, u, v) + indWarp;
+      const gOff = sample(f.grass, w, h, u - SHX, v - SHY) + indWarp;
+      const sHere = sample(f.shrubLand, w, h, u, v) + indWarp;
+      const sOff = sample(f.shrubLand, w, h, u - SHX, v - SHY) + indWarp;
+      let ti = texAt(pal.deep, px, py, 0, 0);
+      let r = pal.deep.rgb[ti]!;
+      let g = pal.deep.rgb[ti + 1]!;
+      let b = pal.deep.rgb[ti + 2]!;
+      for (let k = 0; k < layers.length; k++) {
+        const L = layers[k]!;
+        const here = L.kind === 'sd' ? sdHere : L.kind === 'grass' ? gHere : sHere;
+        const off = L.kind === 'sd' ? sdOff : L.kind === 'grass' ? gOff : sOff;
+        const rimEdge = L.t - L.rim * (0.5 + 0.9 * fibre);
+        // 投影：偏移处被这层（连白边）盖住的程度，边缘柔和。
+        const soft = L.grad * 4;
+        const sh = clamp01((off - (L.t - L.rim) + soft) / (2 * soft)) * 0.32;
+        r *= 1 - sh;
+        g *= 1 - sh * 1.04;
+        b *= 1 - sh * 1.1;
+        const rimA = clamp01((here - rimEdge) / L.grad + 0.5);
+        if (rimA > 0) {
+          ti = texAt(pal.rim, px, py, k * 97, k * 61);
+          r += (pal.rim.rgb[ti]! - r) * rimA;
+          g += (pal.rim.rgb[ti + 1]! - g) * rimA;
+          b += (pal.rim.rgb[ti + 2]! - b) * rimA;
+        }
+        const fillA = clamp01((here - (L.t + (fine - 0.5) * L.rim * 0.3)) / L.grad + 0.5);
+        if (fillA > 0) {
+          ti = texAt(L.tex, px, py, k * 131, k * 53);
+          let fr = L.tex.rgb[ti]!;
+          let fg = L.tex.rgb[ti + 1]!;
+          let fb = L.tex.rgb[ti + 2]!;
+          if (L.dry) {
+            const amt = L.kind === 'grass' ? sample(f.herb, w, h, u, v) : sample(f.shrub, w, h, u, v);
+            // 植被量低于约 0.6 开始泛黄，被吃光时接近枯色纸。
+            const dryA = clamp01((0.6 - amt) / 0.5) * 0.85;
+            const di = texAt(L.dry, px, py, k * 71, k * 29);
+            fr += (L.dry.rgb[di]! - fr) * dryA;
+            fg += (L.dry.rgb[di + 1]! - fg) * dryA;
+            fb += (L.dry.rgb[di + 2]! - fb) * dryA;
+          }
+          r += (fr - r) * fillA;
+          g += (fg - g) * fillA;
+          b += (fb - b) * fillA;
+        }
+      }
+      const o = (py * W + px) * 4;
+      out[o] = r * 255;
+      out[o + 1] = g * 255;
+      out[o + 2] = b * 255;
+      out[o + 3] = 255;
+    }
+  }
+  return { data: out, width: W, height: H };
+}
