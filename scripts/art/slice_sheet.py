@@ -1,9 +1,9 @@
 """
 把 Lovart 生成的品红底素材表切成单个透明 PNG（剪纸 demo 用）。
 
-用法：python3 -I scripts/art/slice_sheet.py <素材表> <输出目录> [最大边长]
+用法：python3 -I scripts/art/slice_sheet.py <素材表> <输出目录> [最大边长] [合并间隙像素]
 做法：按"品红程度" min(R,B) - G 抠背景并去溢色；再按行、列的投影找出空隙，把每个素材裁出来。
-输出 <输出目录>/<行>_<列>.png 和 manifest.json（每行几个、每个的尺寸）。
+输出 <输出目录>/<行>_<列>.png 和 manifest.json（每行每个素材的 [宽, 高, 不透明像素数]）。
 """
 import json
 import os
@@ -49,7 +49,8 @@ def main() -> None:
     rgba = key_magenta(np.asarray(Image.open(src).convert('RGB')))
     fg = rgba[..., 3] > 128
     os.makedirs(out_dir, exist_ok=True)
-    gap = max(8, fg.shape[0] // 60)
+    # 间隙不超过这么多像素的内容算同一个素材（碎片、尾巴尖）；素材挨得近的表要调小。
+    gap = int(sys.argv[4]) if len(sys.argv) > 4 else max(8, fg.shape[0] // 60)
     manifest = []
     for r, (y0, y1) in enumerate(runs(fg.sum(axis=1), 3, gap)):
         band = fg[y0:y1]
@@ -62,7 +63,8 @@ def main() -> None:
             if scale < 1.0:
                 img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
             img.save(os.path.join(out_dir, f'{r}_{c}.png'), optimize=True)
-            row.append([img.width, img.height])
+            area = int((np.asarray(img)[..., 3] > 128).sum())
+            row.append([img.width, img.height, area])
         manifest.append(row)
     with open(os.path.join(out_dir, 'manifest.json'), 'w') as f:
         json.dump(manifest, f)
