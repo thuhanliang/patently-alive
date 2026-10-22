@@ -2,7 +2,7 @@ import type { Design, HintId, Part, Slot } from '../data/schema/design';
 import type { ScalingLaws } from '../data/schema/scaling';
 import type { PlantType } from '../data/schema/plant';
 import type { ViabilityRules } from '../data/schema/viability';
-import type { BodyAllocation } from './body';
+import { shapeOf, type BodyAllocation } from './body';
 import { detExp, detLog, detPow } from './detmath';
 
 /**
@@ -72,12 +72,15 @@ const round2 = (x: number): number => Math.round(x * 100) / 100;
  * 骨骼：骨的安全系数（断裂应力 ÷ 奔跑时的峰值应力）。
  * 默认份额下，0.1–300 千克的动物靠站姿变直维持在 2–4（Biewener）；再重就按平方–立方定律 M^(-1/3) 下降。
  * 骨头多给一倍，截面积大约也多一倍，安全系数跟着翻倍；腿型的站姿再乘上去。
+ * 腿比一般长（形状，2026-10-22）：力臂长，同样的骨头受的弯曲应力大，安全系数按 腿长倍数^-boneLegExp 下降。
  */
 export function skeletonSafety(ctx: Pick<ViabilityContext, 'design' | 'parts' | 'body' | 'rules'>): number {
   const r = ctx.rules.skeleton;
   const m = ctx.design.bodyMassKg;
   const heavy = m > r.postureLimitKg.value ? detPow(m / r.postureLimitKg.value, -r.stressExp.value) : 1;
-  return r.safetyAtRef.value * ctx.body.relative.skeleton * (ctx.parts.limbs.posture ?? 1) * heavy;
+  const { legScale } = shapeOf(ctx.design, ctx.rules);
+  const leg = legScale === 1 ? 1 : detPow(legScale, -ctx.rules.shape.boneLegExp.value);
+  return r.safetyAtRef.value * ctx.body.relative.skeleton * (ctx.parts.limbs.posture ?? 1) * heavy * leg;
 }
 
 /** 骨骼撑不住时推演里的后果，写进物种参数的 body（见 SpeciesSchema）。 */

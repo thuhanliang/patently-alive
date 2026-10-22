@@ -38,12 +38,15 @@ export function drawBlueprint(canvas: HTMLCanvasElement, design: Design, bird: b
   const aspect = bird ? 0.72 : 0.5;
   // 身体上方要留出头和翅膀，下方留出腿和尺寸标注；放不下就整体缩小。
   const above = design.parts.limbs === 'wings' ? 1.9 : 1.25;
-  const below = 0.8 + legLength(design.parts.limbs);
+  // 形状（腿长、尾长"比一般长多少"）：线稿跟着拉长、缩短。
+  const legK = 10 ** (design.shape?.leg ?? 0);
+  const tailK = 10 ** (design.shape?.tail ?? 0);
+  const below = 0.8 + legLength(design.parts.limbs) * legK;
   let rx = (40 + 55 * t) * (Math.min(w, h * 1.6) / 400);
   const fit = (h - 24 - 34) / (rx * aspect * (above + below));
   if (fit < 1) rx *= fit;
   const ry = rx * aspect;
-  const legLen = legLength(design.parts.limbs) * ry;
+  const legLen = legLength(design.parts.limbs) * legK * ry;
   const cx = w * 0.47;
   const cy = 24 + ry * above;
   const ground = cy + ry * 0.8 + legLen;
@@ -56,7 +59,12 @@ export function drawBlueprint(canvas: HTMLCanvasElement, design: Design, bird: b
 
   ctx.lineWidth = 2;
   drawLimbs(ctx, design.parts.limbs, cx, cy, rx, ry, ground, bird);
+  ctx.save();
+  ctx.translate(cx - rx, cy);
+  ctx.scale(tailK, 1);
+  ctx.translate(-(cx - rx), -cy);
   drawTail(ctx, design.parts.tail, cx - rx, cy, ry);
+  ctx.restore();
   // 身体。
   ctx.fillStyle = css(PAPER);
   ctx.beginPath();

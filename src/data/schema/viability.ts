@@ -86,5 +86,21 @@ export const ViabilityRulesSchema = z.strictObject({
     insectivoreMaxKg: ThresholdSchema,
     carnivoreMaxKg: ThresholdSchema,
   }),
+  /**
+   * 形状（2026-10-22，腿长、尾长进推演）：设计的 shape 写"比一般长多少"（以 10 为底的对数），范围在这里。
+   * 腿长 L 改三样：每走一米的能量 ∝ L^-costLegExp（只改 locomotionShare 那一份）、最高速度 ∝ L^speedLegExp（追捕）、
+   * 骨安全系数 ∝ L^-boneLegExp。尾长 T 改两样：尾型部件自己的效果按 T 次方放大或缩小、多带 tailMassShare × (T − 1) 的体重。
+   */
+  shape: z.strictObject({
+    legMin: ThresholdSchema,
+    legMax: ThresholdSchema,
+    tailMin: ThresholdSchema,
+    tailMax: ThresholdSchema,
+    locomotionShare: ThresholdSchema,
+    costLegExp: ThresholdSchema,
+    speedLegExp: ThresholdSchema,
+    boneLegExp: ThresholdSchema,
+    tailMassShare: ThresholdSchema,
+  }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;

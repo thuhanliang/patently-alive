@@ -118,6 +118,11 @@ export const DesignSchema = z.object({
    * 不写或不写某个系统就是 1：老设计不受影响，id 也不变。
    */
   allocation: z.strictObject(Object.fromEntries(BODY_SYSTEMS.map((s) => [s, z.number().positive()])) as Record<BodySystem, z.ZodNumber>).partial().optional(),
+  /**
+   * 形状（2026-10-22）：腿、尾比"同体重、同部件的一般长度"长多少，以 10 为底的对数（0 = 一般，0.1 ≈ 长 26%）。
+   * 范围见 viability.json 的 shape（编译时夹进范围）。不写就是 0：老设计不受影响，id 也不变。
+   */
+  shape: z.strictObject({ leg: z.number().finite(), tail: z.number().finite() }).partial().optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;

@@ -90,6 +90,11 @@ export const SpeciesSchema = z
         walkFactor: z.number().gt(0).max(1).optional(),
         /** 每天承重骨折的概率。 */
         fractureDaily: z.number().min(0).max(1).optional(),
+        /**
+         * 最高速度相对同体重、同部件的一般值（2026-10-22，腿长）：追捕时捕获率乘 捕食者的 ÷ 猎物的（会飞的猎物不看）。
+         * 真实物种不写（= 1）。
+         */
+        speed: z.number().positive().optional(),
         /** 生下来（孵出来）的幼体活下来的比例（0–1）。 */
         neonateSurvival: z.number().gt(0).lt(1).optional(),
         /** 每生一窝母亲难产死亡的概率。 */

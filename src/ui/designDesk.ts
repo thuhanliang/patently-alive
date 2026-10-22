@@ -256,8 +256,40 @@ export class DesignDesk {
       const label = slot.visible ? slot.name : `${slot.name}（看不见）`;
       const r = row(label, pick);
       box.append(r, blurb);
+      // 腿长、尾长（2026-10-22 进推演）：比同体重、同部件的一般长多少。
+      if (slot.id === 'limbs') box.append(this.shapeRow('leg', '腿长'));
+      if (slot.id === 'tail') box.append(this.shapeRow('tail', '尾长'));
     }
     return box;
+  }
+
+  /** 腿长或尾长的滑杆：记的是"比一般长多少"（对数），0 就不写进设计（老设计、id 不变）。 */
+  private shapeRow(key: 'leg' | 'tail', label: string): HTMLElement {
+    const r = this.kit.viability.shape;
+    const [lo, hi] = key === 'leg' ? [r.legMin.value, r.legMax.value] : [r.tailMin.value, r.tailMax.value];
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(lo);
+    input.max = String(hi);
+    input.step = '0.01';
+    input.value = String(this.design.shape?.[key] ?? 0);
+    const note = textEl('span', shapeText(Number(input.value)), 'note');
+    input.title = key === 'leg' ? '腿长：走一米的能量、最高速度、骨头受的力' : '尾长：尾巴本身的作用放大或缩小，多带或少带一点体重';
+    input.addEventListener('input', () => {
+      // 靠近 0 时吸到 0（一般长）。
+      const v = Math.abs(Number(input.value)) < 0.015 ? 0 : Math.round(Number(input.value) * 100) / 100;
+      note.textContent = shapeText(v);
+      const { [key]: _, ...rest } = this.design.shape ?? {};
+      const shape = v === 0 ? rest : { ...rest, [key]: v };
+      const { shape: __, ...design } = this.design;
+      this.design = Object.keys(shape).length > 0 ? { ...design, shape } : design;
+      this.set({});
+    });
+    input.addEventListener('dblclick', () => {
+      input.value = '0';
+      input.dispatchEvent(new Event('input'));
+    });
+    return row(label, input, note);
   }
 
   private set(patch: Partial<Design>): void {
@@ -354,6 +386,7 @@ export class DesignDesk {
       ['生养', paceText(c)],
       ['一辈子', `${days(r.ageAtMaturityDays)}后成年，最多活 ${p.maxLifespanYears} 年；成年后一年活下来 ${Math.round(p.survival.adultAnnual * 100)}%`],
       ['每天活动', `${p.movement.dailyRangeM} 米`],
+      ...(p.body?.speed !== undefined ? [['最高速度', `一般的 ${p.body.speed.toFixed(2)} 倍（追捕、逃跑）`] as [string, string]] : []),
       ['家域', `${p.movement.homeRangeKm2} 平方公里`],
       ['移动', move || '—'],
       ...c.viability.map((r): [string, string] => [CHECK_NAMES[r.id], viabilityText(r)]),
@@ -513,6 +546,13 @@ function numberInput(min: number, max: number, value: number, onChange: (v: numb
     onChange(n);
   });
   return i;
+}
+
+/** 腿长、尾长滑杆旁的一句话。 */
+function shapeText(bias: number): string {
+  if (bias === 0) return '一般';
+  const k = 10 ** bias;
+  return k > 1 ? `长 ${Math.round((k - 1) * 100)}%` : `短 ${Math.round((1 - k) * 100)}%`;
 }
 
 /** 体重取两位有效数字（滑杆上的值不必那么精确）。 */

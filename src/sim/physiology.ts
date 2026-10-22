@@ -151,6 +151,8 @@ export interface DerivedSpecies {
   readonly territorial: boolean;
   /** 奔跑能力（阶段 3.5，骨骼撑不住的设计小于 1）：见 chaseFactor。 */
   readonly runFactor: number;
+  /** 最高速度相对一般值（2026-10-22，腿长；真实物种是 1）：见 chaseFactor。 */
+  readonly speed: number;
   /** 每天承重骨折的概率（阶段 3.5）。 */
   readonly fractureDaily: number;
   /** 生下来（孵出来）的幼体活下来的比例（阶段 3.5，繁殖撑不住的设计小于 1）。 */
@@ -190,11 +192,12 @@ export function litterRate(intervalDays: number, breedingDays: number): number {
 
 /**
  * 追捕会跑的猎物时，奔跑能力对捕获率的影响（阶段 3.5）：捕食者跑不动就少抓到，猎物跑不动就多被抓（被抓的概率乘 2 − 奔跑能力）。
- * 会飞的猎物靠飞逃（FLIGHT_ESCAPE），腿骨不影响它逃不逃得掉。
- * 两边都能跑时正好是 1，真实物种的结果不变。只用于会跑的猎物，窝里的不算。
+ * 腿长（2026-10-22）：再乘 捕食者的速度 ÷ 猎物的速度——长腿的追得上、逃得掉，短腿的反过来。
+ * 会飞的猎物靠飞逃（FLIGHT_ESCAPE），腿骨、腿长都不影响它逃不逃得掉。
+ * 两边都能跑、腿都一般长时正好是 1，真实物种的结果不变。只用于会跑的猎物，窝里的不算。
  */
 export function chaseFactor(pred: DerivedSpecies, prey: DerivedSpecies): number {
-  return pred.runFactor * (prey.flies ? 1 : 2 - prey.runFactor);
+  return pred.runFactor * (prey.flies ? 1 : (2 - prey.runFactor) * (pred.speed / prey.speed));
 }
 
 /**
@@ -254,6 +257,7 @@ export function deriveSpecies(p: SpeciesParams, cellSizeM: number, world?: Deriv
     maxAgeDays: Math.round(p.maxLifespanYears * DAYS_PER_YEAR),
     territorial: p.movement.territorial === true && p.movement.homeRangeKm2 !== undefined,
     runFactor: p.body?.runFactor ?? 1,
+    speed: p.body?.speed ?? 1,
     fractureDaily: p.body?.fractureDaily ?? 0,
     neonateSurvival: p.body?.neonateSurvival ?? 1,
     dystociaPerLitter: p.body?.dystociaPerLitter ?? 0,

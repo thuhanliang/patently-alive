@@ -76,5 +76,16 @@
     "fatalFed": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "不到三成算\"致命\"：多数会在几周到几个月里因营养不良死去" },
     "insectivoreMaxKg": { "value": 21.5, "basis": "law", "confidence": "checked", "source": "Carbone, Mace, Roberts & Macdonald 1999 Nature 402:286：靠吃虫子（小猎物）能养活的最大体重约 21.5 千克。只出提醒，不设上限（2026-10-15 定）" },
     "carnivoreMaxKg": { "value": 1000, "basis": "law", "confidence": "checked", "source": "Carbone, Teacher & Rowcliffe 2007 PLoS Biol. 5:e22：哺乳类食肉动物的体重上限约 1 吨。只出提醒，吃不饱是推演里自然发生的事（2026-10-15 定）" }
+  },
+  "shape": {
+    "legMin": { "value": -0.2, "basis": "assumption", "confidence": "unverified", "source": "腿长最多比同体重、同腿型的一般短到 10^-0.2 ≈ 0.63 倍：鼬、獾这类短腿兽和一般兽的差距大致在这个范围" },
+    "legMax": { "value": 0.2, "basis": "assumption", "confidence": "unverified", "source": "最多长到 10^0.2 ≈ 1.6 倍：猎豹、长腿的有蹄类和同体重一般兽的差距大致在这个范围（Kilbourne & Hoffman 2013 PLoS ONE：腿长 ∝ M^0.40，同体重的物种之间仍有不小的离散）" },
+    "tailMin": { "value": -0.3, "basis": "assumption", "confidence": "unverified", "source": "尾长最多缩到所选尾型的 10^-0.3 ≈ 0.5 倍" },
+    "tailMax": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "最多长到所选尾型的 10^0.3 ≈ 2 倍" },
+    "locomotionShare": { "value": 0.15, "basis": "assumption", "confidence": "unverified", "source": "一般陆生兽一天的能量里花在走路上的比例：野外代谢率里移动只占一小部分（多为一成上下），取 0.15；腿长只改这一份" },
+    "costLegExp": { "value": 1, "basis": "law", "confidence": "1", "source": "Pontzer 2007 J Exp Biol 210:1752：陆生动物每走一米的能量和有效腿长成反比（腿长解释 98% 的差异，体重没有独立作用）；指数取 LiMb 模型的 1（Pontzer 2005 J Exp Biol 208:1513），原文的拟合指数未核对" },
+    "speedLegExp": { "value": 0.5, "basis": "law", "confidence": "2+", "source": "动力相似（Alexander & Jayes 1983 J Zool 201:135）：弗劳德数相同时步态相似，速度 ∝ 腿长^0.5；Garland & Janis 1993 J Zool：按体型校正后的后腿长能预测最高速度" },
+    "boneLegExp": { "value": 1, "basis": "law", "confidence": "1", "source": "Biewener 1989/1990：骨的弯曲应力随力臂（腿长）上升；同样粗细的腿长一倍，安全系数约减半" },
+    "tailMassShare": { "value": 0.02, "basis": "data", "confidence": "1", "source": "猎豹的尾巴约占体重的 2%（Patel 等 2018 引用的测量）；尾长加一倍按多带这么多体重算" }
   }
 }
