@@ -1,12 +1,13 @@
-import { Application, Assets, BlurFilter, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Assets, BlurFilter, Container, Graphics, Rectangle, Sprite, Text, Texture, type Spritesheet } from 'pixi.js';
 import { scenarioLibrary, speciesFor, worldFor } from '../../data';
 import { Sim, TICKS_PER_DAY, countAt, herbIndex, woodyIndex } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
 import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, unprojectGround, type Cam } from './camera';
-import { LeafKit, applyCarpet, paveGround } from './leaves';
+import { LeafKit } from './leaves';
+import { paintParallel } from './painter';
 import { fbm, hash2 } from './noise';
 import { bakeShrub, bakeTussock } from './plants';
-import { PX, SHRUB_EDGE, buildFields, imagePaper, paintTerrain, proceduralPaper, sample, terrainWarp, type Palette, type PaperTex } from './terrain';
+import { PX, SHRUB_EDGE, buildFields, imagePaper, proceduralPaper, sample, terrainWarp, type Palette, type PaperTex } from './terrain';
 import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from './tokens';
 
 /**
@@ -29,12 +30,12 @@ const TILT = params.get('tilt') !== '0';
 
 type Sheet = { rows: number[][][]; tex: Texture[][] };
 
+/** 一张素材表打成一张图集（scripts/art/pack_atlas.py）：一个请求，同一图集里的素材能合批绘制。 */
 async function loadSheet(name: string): Promise<Sheet | null> {
   try {
-    const res = await fetch(`proto/paper/${name}/manifest.json`);
-    if (!res.ok) return null;
-    const rows = (await res.json()) as number[][][];
-    const tex = await Promise.all(rows.map((row, r) => Promise.all(row.map((_, c) => Assets.load<Texture>(`proto/paper/${name}/${r}_${c}.png`)))));
+    const sheet = await Assets.load<Spritesheet>(`proto/paper/${name}.json`);
+    const rows = (sheet.data.meta as unknown as { rows: number[][][] }).rows;
+    const tex = rows.map((row, r) => row.map((_, c) => sheet.textures[`${r}_${c}`]!));
     return { rows, tex };
   } catch {
     return null;
@@ -42,7 +43,19 @@ async function loadSheet(name: string): Promise<Sheet | null> {
 }
 
 type Img = CanvasImageSource & { width: number; height: number };
-const imageOf = (t: Texture): Img => t.source.resource as Img;
+const cropped = new WeakMap<Texture, HTMLCanvasElement>();
+/** 图集里的一帧单独画到一张画布上（画到 2D 画布、读像素时用）；按贴图缓存。 */
+const imageOf = (t: Texture): Img => {
+  let c = cropped.get(t);
+  if (c) return c;
+  const f = t.frame;
+  c = document.createElement('canvas');
+  c.width = f.width;
+  c.height = f.height;
+  c.getContext('2d')!.drawImage(t.source.resource as Img, f.x, f.y, f.width, f.height, 0, 0, f.width, f.height);
+  cropped.set(t, c);
+  return c;
+};
 
 /** P4 纸纹（3×3）：有就用真图，没有就用代码生成的纸。顺序见提示词：深海、中海、浅海、浪花、卵石滩、沙、草地、灌丛、牛皮纸。 */
 async function loadPalette(): Promise<Palette> {
@@ -138,32 +151,12 @@ async function main(): Promise<void> {
   status.textContent = '画地形……';
   await tick();
   const fields = buildFields({ width: w, height: h, terrain: grid.terrain, herb, shrub });
-  const painted = timed('地形', () => paintTerrain(fields, pal, SEED, { softVegetation: !!kit, sculpt: !!kit }));
-  const W = painted.width;
-  const H = painted.height;
-  const img = new ImageData(painted.data, W, H);
-  if (kit) {
-    // 和地形绘制用同一个低频扭曲判断这个像素落在哪层纸上，撕边附近留空。
-    const carpet = timed('铺叶', () =>
-      paveGround(
-        kit,
-        W,
-        H,
-        (px, py) => {
-          const u = (px + 0.5) / PX - 0.5;
-          const v = (py + 0.5) / PX - 0.5;
-          const warp = terrainWarp(px, py, SEED);
-          if (sample(fields.sd, w, h, u, v) + warp < 0.5) return null;
-          const g = sample(fields.grass, w, h, u, v) + warp * 0.12;
-          if (g > 0.62) return sample(fields.shrubLand, w, h, u, v) + warp * 0.12 > SHRUB_EDGE ? 'shrub' : 'grass';
-          if (g < 0.38) return 'pebble';
-          return null;
-        },
-        SEED + 50,
-      ),
-    );
-    applyCarpet(img, carpet);
-  }
+  // 地形和铺叶分条交给几个 Worker 同时画（painter.ts），结果和单线程逐像素相同。
+  const t0 = performance.now();
+  const img = await paintParallel(fields, pal, SEED, { softVegetation: !!kit, sculpt: !!kit }, kit ? P8!.tex.map((row) => row.map(imageOf)) : null);
+  timing.push(`地形+铺叶 ${Math.round(performance.now() - t0)}`);
+  const W = img.width;
+  const H = img.height;
   const baseCv = document.createElement('canvas');
   baseCv.width = W;
   baseCv.height = H;
@@ -174,6 +167,17 @@ async function main(): Promise<void> {
   await app.init({ resizeTo: window, background: kit ? 0x143268 : 0x1f5d7a, antialias: true });
   document.body.appendChild(app.canvas);
   status.textContent = '';
+  // 画面是静止的：不每帧重画，只在镜头或窗口变了的时候画一帧（省电，笔记本风扇不转）。
+  app.ticker.stop();
+  let renderQueued = false;
+  const requestRender = (): void => {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      app.render();
+    });
+  };
 
   // 场景：root 下面两层。ground 是地面（先在 spin 里转 r，再竖直压扁 cos t），bill 是立起来的纸片（不压扁、不转）。
   const root = new Container();
@@ -187,10 +191,13 @@ async function main(): Promise<void> {
   const baseTex = Texture.from(baseCv);
   spin.addChild(new Sprite(baseTex));
 
+  // 投影层：里面一层模糊（摆好以后烤成贴图），外面一层管透明度。
   const shadows = new Container();
   shadows.filters = [new BlurFilter({ strength: 3, quality: 2 })];
-  shadows.alpha = 0.32;
-  spin.addChild(shadows);
+  const shadowLayer = new Container();
+  shadowLayer.alpha = 0.32;
+  shadowLayer.addChild(shadows);
+  spin.addChild(shadowLayer);
 
   // 立起来的东西按地面坐标登记，镜头一变就统一重排；地上的投影在地面坐标系里，不用重排。
   type Bill = { obj: Container; x: number; y: number; bias: number };
@@ -683,13 +690,27 @@ async function main(): Promise<void> {
     bar.position.set((SW - bar.width) / 2, SH - 124);
     vig.width = SW;
     vig.height = SH;
+    requestRender();
   };
+
+  // 地上的投影摆好以后不再变：模糊一次、烤成一张贴图，不用每帧重新模糊整张地图。
+  // 只烤到一张贴图里，不用每帧重新模糊整张地图（cacheAsTexture 在这里会把投影弄丢，所以手动烤）。
+  {
+    const pad = 48;
+    const baked = timed('烤投影', () => app.renderer.generateTexture({ target: shadows, frame: new Rectangle(-pad, -pad, W + 2 * pad, H + 2 * pad), resolution: 0.5 }));
+    shadows.destroy({ children: true });
+    const s = new Sprite(baked);
+    s.position.set(-pad, -pad);
+    shadowLayer.addChild(s);
+    texBytes += baked.source.pixelWidth * baked.source.pixelHeight * 4;
+  }
 
   // ---- 镜头：1 全岛、2 区域、3 近景；滚轮缩放（越近越斜）、拖动平移；右侧三个滑块调缩放、俯仰、旋转 ----
   const cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
   let laidT = -1;
   let laidR = NaN;
   const layout = (): void => {
+    requestRender();
     root.position.set(cam.ox, cam.oy);
     ground.scale.set(cam.s, cam.s * Math.cos(cam.t));
     spin.rotation = cam.r;
@@ -818,25 +839,23 @@ async function main(): Promise<void> {
     layout();
   });
 
-  // 帧间隔：静止画面上量 60 帧（无头浏览器是软件渲染，这个数只在真机上有意义）。
-  const frames: number[] = [];
-  await new Promise<void>((done) => {
-    let last = performance.now();
-    const f = (now: number): void => {
-      frames.push(now - last);
-      last = now;
-      if (frames.length < 60) requestAnimationFrame(f);
-      else done();
-    };
-    requestAnimationFrame(f);
-  });
-  const frameMs = frames.slice(5).reduce((a, b) => a + b, 0) / (frames.length - 5);
+  // 等第一帧真的画到屏幕上，记下从打开页面到看见画面的时间。
+  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  timing.push(`看见画面 ${Math.round(performance.now())}`);
+  // 一帧的绘制时间：连画 5 帧取平均（等 GPU 画完再计时；无头浏览器是软件渲染，这个数只在真机上有意义）。
+  const gl = (app.renderer as unknown as { gl?: WebGLRenderingContext }).gl;
+  const r0 = performance.now();
+  for (let i = 0; i < 5; i++) {
+    app.render();
+    gl?.finish();
+  }
+  const frameMs = (performance.now() - r0) / 5;
 
   const totals = tokenInfo.map((s) => `${s.id} ${s.tokens.reduce((a, t) => a + t.count, 0)}（${s.tokens.length} 个代表）`).join('，');
   const flags = [!kit ? '贴纸模式' : PLANT_ART === 'lovart' && P1 && P2 ? 'P1/P2 植物' : '代码画的植物', TILT ? '倾斜镜头' : '俯视'].join('、');
   document.getElementById('info')!.textContent =
     `种子 ${SEED}，第 ${day + 1} 天；${flags}；耗时（毫秒）${timing.join('、')}；地形和植被贴图约 ${Math.round(texBytes / 1048576)} MB；` +
-    `帧间隔 ${frameMs.toFixed(1)} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放（越近越斜），拖动平移；右侧滑块调缩放、俯仰（0–60°）、旋转（±45°）。`;
+    `一帧 ${frameMs.toFixed(1)} 毫秒；${totals}。按 1 / 2 / 3 切换全岛 / 区域 / 近景，滚轮缩放（越近越斜），拖动平移；右侧滑块调缩放、俯仰（0–60°）、旋转（±45°）。`;
   (window as unknown as { __ready: boolean }).__ready = true;
 }
 
