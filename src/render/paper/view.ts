@@ -8,7 +8,7 @@ import { CELL_PX, mapWorldSize } from '../projection';
 import { imageOf, loadPalette, loadSheet, type Sheet } from './assets';
 import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, type Cam } from './camera';
 import { LeafKit } from './leaves';
-import { paintParallel } from './painter';
+import { PaintPool } from './painter';
 import { PaperScene } from './scene';
 import { PX, buildFields, type Palette } from './terrain';
 import { tokenLengthCells } from './tokens';
@@ -17,6 +17,12 @@ import { AnimalLayer } from './animalLayer';
 
 /** 剪纸像素 / 游戏世界坐标：游戏一格 CELL_PX，剪纸一格 PX。 */
 const K = PX / CELL_PX;
+/**
+ * 植被变了以后重画剪纸地图：推演里至少过了这么多天，而且离上次画完至少这么多毫秒（高倍速时不至于一直在画）。
+ * 重画时草丛、灌丛跟着植被量换样子（被啃的泛黄、稀疏），地面颜色也跟着变。
+ */
+const REPAINT_DAYS = 10;
+const REPAINT_MS = 5000;
 
 interface Assets {
   P1: Sheet | null;
@@ -26,7 +32,8 @@ interface Assets {
   P7: Sheet | null;
   pal: Palette;
   kit: LeafKit | null;
-  leaves: CanvasImageSource[][] | null;
+  /** 常驻的绘制 Worker（纸纹、叶片只送一次）。 */
+  pool: PaintPool;
 }
 
 /**
@@ -52,6 +59,9 @@ export class PaperView {
   private lastDay = -1;
   private terrain: Uint8Array;
   private building = false;
+  /** 现在这张剪纸地图是按哪一天的植被画的、什么时候画完的。 */
+  private builtDay = 0;
+  private builtAt = 0;
   private readonly vignette: Sprite;
   private readonly cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
   private readonly animals: AnimalLayer;
@@ -121,7 +131,7 @@ export class PaperView {
       P7: P7 ?? null,
       pal,
       kit: leaves ? new LeafKit(leaves) : null,
-      leaves,
+      pool: await PaintPool.create(pal, leaves),
     };
     const view = new PaperView(app, state, species, assets);
     await view.build(state);
@@ -131,6 +141,16 @@ export class PaperView {
   /** 按推演的地形和植被画一张剪纸地图（换一局、读档后地形变了也走这里）。画好以前旧的那张留着。 */
   private async build(state: Readonly<SimState>): Promise<void> {
     this.building = true;
+    try {
+      await this.buildScene(state);
+    } finally {
+      this.building = false;
+      this.builtAt = performance.now();
+    }
+  }
+
+  private async buildScene(state: Readonly<SimState>): Promise<void> {
+    this.builtDay = Math.floor(state.tick / TICKS_PER_DAY);
     const { width: w, height: h, terrain } = state.grid;
     const world = state.config.world;
     const herbI = herbIndex(world);
@@ -142,9 +162,9 @@ export class PaperView {
       if (woodyI >= 0) shrub[i] = Math.min(1, state.grid.plants[woodyI]![i]! / world.plants[woodyI]!.maxBiomass);
     }
     const seed = state.config.seed;
-    const { kit, pal, leaves } = this.assets;
+    const { kit, pool } = this.assets;
     const fields = buildFields({ width: w, height: h, terrain, herb, shrub });
-    const img = await paintParallel(fields, pal, seed, { softVegetation: !!kit, sculpt: !!kit }, leaves);
+    const img = await pool.paint(fields, seed, { softVegetation: !!kit, sculpt: !!kit });
     const base = document.createElement('canvas');
     base.width = img.width;
     base.height = img.height;
@@ -180,7 +200,6 @@ export class PaperView {
     this.scene = scene;
     this.app.stage.addChildAt(scene.root, 0);
     old?.dispose();
-    this.building = false;
   }
 
   setSpecies(species: readonly DerivedSpecies[]): void {
@@ -246,12 +265,16 @@ export class PaperView {
   }
 
   draw(state: Readonly<SimState>): void {
-    if (state.grid.terrain !== this.terrain && !this.building) {
-      // 换了一局：地形变了，重画整张剪纸地图。
-      this.terrain = state.grid.terrain;
-      void this.build(state);
-    }
     const day = Math.floor(state.tick / TICKS_PER_DAY);
+    if (!this.building) {
+      if (state.grid.terrain !== this.terrain) {
+        // 换了一局：地形变了，重画整张剪纸地图。
+        this.terrain = state.grid.terrain;
+        void this.build(state);
+      } else if (Math.abs(day - this.builtDay) >= REPAINT_DAYS && performance.now() - this.builtAt > REPAINT_MS) {
+        void this.build(state);
+      }
+    }
     const overlayOn = this.layer.kind !== 'vegetation';
     this.grid.container.visible = overlayOn;
     if (day !== this.lastDay) {
