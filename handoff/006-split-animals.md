@@ -18,8 +18,9 @@
    需要的话改提示词，再做另外四张。
 4. 产出放在 `art/incoming/lovart/paper/raw/`，文件名 `P9-cat-tabby.png`、`P9-cat-tuxedo.png`、`P9-rabbit.png`、`P9-rat.png`、`P9-dotterel.png`
    （尽量 PNG 原图，不要聊天截图）。鸟的展开翅膀如果放不下，另出一张 `P9-dotterel-wings.png`。
-5. 推到 `human/006-split-animals`，告诉我"完成了 006（猫）"。切图由我做：
-   `python3 -I scripts/art/slice_sheet.py <原图> public/proto/paper/P9/<名字> 1024 --parts`。
+5. 推到 `human/006-split-animals`，告诉我"完成了 006（猫）"。切图、打图集由我做：
+   `python3 -I scripts/art/slice_sheet.py <原图> <临时目录>/<名字> 1024 --parts`，
+   再 `python3 -I scripts/art/pack_atlas.py <临时目录>/<名字> public/proto/paper/P9-<名字>`。
 
 ## 通用要求（每次都发）
 

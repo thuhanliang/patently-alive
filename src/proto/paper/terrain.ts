@@ -353,16 +353,18 @@ function sculptLayers(pal: Palette, soft: boolean): Layer[] {
  * softVegetation：草地、灌丛两层不要白边，边缘柔和过渡（植被的轮廓交给立起来的植物），
  * 灌丛层往里收一点，当作树冠下的暗地面。
  * sculpt：纸雕式的多层（见 sculptLayers）；不开时是第一版的四层水。
+ * band：只画第 y0 到 y1 行（返回的 height 是条高）。每个像素只看自己的坐标，所以分条画、拼起来和整张画逐像素相同。
  */
 export function paintTerrain(
   f: Fields,
   pal: Palette,
   seed: number,
   opts: { softVegetation?: boolean; sculpt?: boolean } = {},
+  band?: [number, number],
 ): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
   const W = f.width * PX;
-  const H = f.height * PX;
-  const out = new Uint8ClampedArray(W * H * 4);
+  const [y0, y1] = band ?? [0, f.height * PX];
+  const out = new Uint8ClampedArray(W * (y1 - y0) * 4);
   const sdGrad = 1 / PX;
   const indGrad = 0.3 / PX;
   const raw: Layer[] = opts.sculpt
@@ -411,7 +413,7 @@ export function paintTerrain(
   const streaky = layers.map((L) => L.kind === 'sd' && L.t < 0 && L.edge === 'light');
   const hereK = new Float64Array(layers.length);
   const offK = new Float64Array(layers.length);
-  for (let py = 0; py < H; py++) {
+  for (let py = y0; py < y1; py++) {
     for (let px = 0; px < W; px++) {
       const u = (px + 0.5) / PX - 0.5;
       const v = (py + 0.5) / PX - 0.5;
@@ -528,12 +530,12 @@ export function paintTerrain(
           b += (fb - b) * fillA;
         }
       }
-      const o = (py * W + px) * 4;
+      const o = ((py - y0) * W + px) * 4;
       out[o] = r * 255;
       out[o + 1] = g * 255;
       out[o + 2] = b * 255;
       out[o + 3] = 255;
     }
   }
-  return { data: out, width: W, height: H };
+  return { data: out, width: W, height: y1 - y0 };
 }
