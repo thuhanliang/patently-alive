@@ -234,51 +234,168 @@ export function terrainWarp(px: number, py: number, seed: number): number {
   return (fbm(px / (PX * 5), py / (PX * 5), seed) - 0.5) * 1.6;
 }
 
+type Rgb01 = [number, number, number];
+
 interface Layer {
-  kind: 'sd' | 'grass' | 'shrub';
+  /** 用哪张场：离岸距离、草地指示、灌丛指示。'land' 是离岸距离，但只铺在草地上（草地内部的明暗台阶）。 */
+  kind: 'sd' | 'grass' | 'shrub' | 'land';
   t: number;
-  /** 白边宽度（场的单位）。 */
+  /** 边的宽度（场的单位）；0 = 没有边。 */
   rim: number;
+  /** 边的颜色：'white' 米白撕边；'light' 本层颜色提亮一点（纸的切口受光），不像白边那么抢眼。 */
+  edge?: 'white' | 'light';
+  /** 往下一层落的投影有多深（0–1）；不填时有白边的层 0.32，没有的 0。 */
+  shadow?: number;
   /** 场每像素大约变化多少（抗锯齿用）。 */
   grad: number;
   tex: PaperTex;
+  /** 指定这层纸的颜色（0–1），纸纹取自 tex 的相对明暗；不填就用 tex 本色。 */
+  col?: Rgb01;
+  /** 轮廓的额外起伏（格）：每层各自起伏，层与层的边不是一圈圈平行线。 */
+  wob?: number;
+  /** 碎浪花：只在一部分地方有（低频噪声决定），像示意图里断断续续的白色花边。 */
+  lace?: boolean;
   /** 植被量低时混进去的枯色纸。 */
   dry?: PaperTex;
 }
 
+/** 一张纸纹的平均颜色：用来把纸纹换算成"相对明暗"，再乘到任意颜色上。 */
+function meanOf(t: PaperTex): Rgb01 {
+  const m: Rgb01 = [0, 0, 0];
+  const n = t.size * t.size;
+  for (let i = 0; i < n; i++) {
+    m[0] += t.rgb[i * 3]!;
+    m[1] += t.rgb[i * 3 + 1]!;
+    m[2] += t.rgb[i * 3 + 2]!;
+  }
+  return [m[0] / n, m[1] / n, m[2] / n];
+}
+
+const rgb01 = (r: number, g: number, b: number): Rgb01 => [r / 255, g / 255, b / 255];
+
+/**
+ * 纸雕式的分层（plants 模式默认）：每层是一张单色的纸（可以真的剪出来叠起来）。
+ * - 水：从远海到岸边十二层，越近越浅、越绿；层与层之间没有白边，只有一点投影和切口的亮边；
+ * - 白色只用在岸边：一道断断续续的碎浪花和一道贴岸的浪花；
+ * - 海滩分湿沙、干沙两层；草地内部按离岸距离再分三层浅浅的明暗台阶（平的，没有厚度）。
+ */
+function sculptLayers(pal: Palette, soft: boolean): Layer[] {
+  const sdGrad = 1 / PX;
+  const indGrad = 0.3 / PX;
+  // [门槛（格，负数在水里）, 颜色]：远海群青 → 钴蓝 → 青 → 近岸浅绿松石（照示意图，饱和一些）。
+  const water: [number, Rgb01][] = [
+    [-28, rgb01(22, 58, 118)],
+    [-23, rgb01(24, 66, 130)],
+    [-18.5, rgb01(26, 77, 142)],
+    [-14.5, rgb01(28, 89, 154)],
+    [-11.2, rgb01(30, 103, 166)],
+    [-8.5, rgb01(32, 118, 178)],
+    [-6.3, rgb01(34, 134, 188)],
+    [-4.6, rgb01(38, 150, 196)],
+    [-3.3, rgb01(48, 166, 200)],
+    [-2.3, rgb01(70, 182, 204)],
+    [-1.5, rgb01(100, 196, 206)],
+    [-0.9, rgb01(138, 210, 206)],
+  ];
+  const layers: Layer[] = water.map(([t, col], k) => ({
+    kind: 'sd',
+    t,
+    rim: 0.06,
+    edge: 'light',
+    shadow: 0.2,
+    grad: sdGrad,
+    tex: k < 4 ? pal.deep : k < 8 ? pal.mid : pal.shallow,
+    col,
+    wob: 0.22 * Math.pow(-t, 0.75),
+  }));
+  layers.push(
+    { kind: 'sd', t: -1.25, rim: 0.12, edge: 'white', shadow: 0.12, grad: sdGrad, tex: pal.foam, lace: true, wob: 0.3 },
+    { kind: 'sd', t: -0.4, rim: 0.22, edge: 'white', shadow: 0.2, grad: sdGrad, tex: pal.foam, wob: 0.12 },
+    { kind: 'sd', t: 0, rim: 0.05, edge: 'light', shadow: 0.18, grad: sdGrad, tex: pal.beach, col: rgb01(132, 120, 104), wob: 0.1 },
+    { kind: 'sd', t: 0.45, rim: 0.05, edge: 'light', shadow: 0.12, grad: sdGrad, tex: pal.beach, wob: 0.2 },
+    soft
+      ? { kind: 'grass', t: 0.5, rim: 0, shadow: 0.1, grad: indGrad * 5, tex: pal.grass, dry: pal.dry }
+      : { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
+  );
+  // 草地内部的明暗台阶：亮、暗、亮交替，很浅。
+  for (const [t, k] of [
+    [3.5, 1.05],
+    [7, 0.96],
+    [11, 1.04],
+  ] as const) {
+    const m = meanOf(pal.grass);
+    layers.push({ kind: 'land', t, rim: 0.05, edge: 'light', shadow: 0.1, grad: sdGrad, tex: pal.grass, col: [m[0] * k, m[1] * k, m[2] * k], wob: 1.2, dry: pal.dry });
+  }
+  layers.push(
+    soft
+      ? { kind: 'shrub', t: SHRUB_UNDER, rim: 0, grad: indGrad * 6, tex: pal.shrub, dry: pal.dry }
+      : { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
+  );
+  return layers;
+}
+
 /**
  * 逐像素画地形。返回 RGBA，宽高 = 格数 × PX。
- * 每层纸：先在下面一层上落投影（往右下偏），再画白色撕边，最后铺这层的纸。
- * softVegetation：草地、灌丛两层不要白边和投影，边缘柔和过渡（植被的轮廓交给立起来的植物），
- * 灌丛层往里收一点，当作树冠下的暗地面；白色撕边只留在水和陆地之间。
+ * 每层纸：先在下面一层上落投影（往右下偏），再画边（白色撕边或切口亮边），最后铺这层的纸。
+ * softVegetation：草地、灌丛两层不要白边，边缘柔和过渡（植被的轮廓交给立起来的植物），
+ * 灌丛层往里收一点，当作树冠下的暗地面。
+ * sculpt：纸雕式的多层（见 sculptLayers）；不开时是第一版的四层水。
  */
 export function paintTerrain(
   f: Fields,
   pal: Palette,
   seed: number,
-  opts: { softVegetation?: boolean } = {},
+  opts: { softVegetation?: boolean; sculpt?: boolean } = {},
 ): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
   const W = f.width * PX;
   const H = f.height * PX;
   const out = new Uint8ClampedArray(W * H * 4);
   const sdGrad = 1 / PX;
   const indGrad = 0.3 / PX;
-  const layers: Layer[] = [
-    { kind: 'sd', t: -6, rim: 0.22, grad: sdGrad, tex: pal.mid },
-    { kind: 'sd', t: -2.6, rim: 0.22, grad: sdGrad, tex: pal.shallow },
-    { kind: 'sd', t: -0.75, rim: 0.3, grad: sdGrad, tex: pal.foam },
-    { kind: 'sd', t: 0, rim: 0.22, grad: sdGrad, tex: pal.beach },
-    opts.softVegetation
-      ? { kind: 'grass', t: 0.5, rim: 0, grad: indGrad * 5, tex: pal.grass, dry: pal.dry }
-      : { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
-    opts.softVegetation
-      ? { kind: 'shrub', t: SHRUB_UNDER, rim: 0, grad: indGrad * 6, tex: pal.shrub, dry: pal.dry }
-      : { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
-  ];
-  // 投影往右下偏的距离（格）。
-  const SHX = 5 / PX;
-  const SHY = 6 / PX;
+  const raw: Layer[] = opts.sculpt
+    ? sculptLayers(pal, !!opts.softVegetation)
+    : [
+        { kind: 'sd', t: -6, rim: 0.22, grad: sdGrad, tex: pal.mid },
+        { kind: 'sd', t: -2.6, rim: 0.22, grad: sdGrad, tex: pal.shallow },
+        { kind: 'sd', t: -0.75, rim: 0.3, grad: sdGrad, tex: pal.foam },
+        { kind: 'sd', t: 0, rim: 0.22, grad: sdGrad, tex: pal.beach },
+        opts.softVegetation
+          ? { kind: 'grass', t: 0.5, rim: 0, grad: indGrad * 5, tex: pal.grass, dry: pal.dry }
+          : { kind: 'grass', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.grass, dry: pal.dry },
+        opts.softVegetation
+          ? { kind: 'shrub', t: SHRUB_UNDER, rim: 0, grad: indGrad * 6, tex: pal.shrub, dry: pal.dry }
+          : { kind: 'shrub', t: 0.5, rim: 0.07, grad: indGrad, tex: pal.shrub, dry: pal.dry },
+      ];
+  // 统一成同一种形状（每个字段都有值），逐像素循环里读属性才快。
+  const layers: Required<Layer>[] = raw.map((L) => ({
+    kind: L.kind,
+    t: L.t,
+    rim: L.rim,
+    edge: L.edge ?? 'white',
+    shadow: L.shadow ?? (L.rim > 0 ? 0.32 : 0),
+    grad: L.grad,
+    tex: L.tex,
+    col: L.col ?? [0, 0, 0],
+    wob: L.wob ?? 0,
+    lace: L.lace ?? false,
+    dry: L.dry ?? L.tex,
+  }));
+  const hasCol = raw.map((L) => !!L.col);
+  const hasDry = raw.map((L) => !!L.dry);
+  const means = layers.map((L, k) => (hasCol[k] ? meanOf(L.tex) : null));
+  // 远海底色：比最深的一层再深一点。
+  const base = opts.sculpt ? rgb01(20, 50, 104) : null;
+  const baseMean = base ? meanOf(pal.deep) : null;
+  // 投影往右下偏的距离（格）：纸雕的层很薄，投影也短一些。
+  const SHX = (opts.sculpt ? 3 : 5) / PX;
+  const SHY = (opts.sculpt ? 4 : 6) / PX;
   const { width: w, height: h } = f;
+  const wobC = layers.map((_, k) => Math.cos(k * 1.7));
+  const wobS = layers.map((_, k) => Math.sin(k * 1.7));
+  // 完全不透明的层（盖住下面一切）：不是碎浪花、也不是只混一半的柔和灌丛。
+  const opaque = layers.map((L) => !L.lace && !(L.rim === 0 && L.kind === 'shrub'));
+  const hereK = new Float64Array(layers.length);
+  const offK = new Float64Array(layers.length);
   for (let py = 0; py < H; py++) {
     for (let px = 0; px < W; px++) {
       const u = (px + 0.5) / PX - 0.5;
@@ -287,8 +404,13 @@ export function paintTerrain(
       const warp = terrainWarp(px, py, seed);
       const fibre = valueNoise(px / 2.4, py / 2.4, seed + 5);
       const fine = valueNoise(px / 7, py / 7, seed + 9);
+      // 每层各自的轮廓起伏：两张共用的噪声按层转个角度组合，省得每层算一次噪声。
+      const n1 = opts.sculpt ? valueNoise(px / (PX * 2.6), py / (PX * 2.6), seed + 31) - 0.5 : 0;
+      const n2 = opts.sculpt ? valueNoise(px / (PX * 2.6) + 17.3, py / (PX * 2.6) - 5.1, seed + 37) - 0.5 : 0;
       const sdHere = sample(f.sd, w, h, u, v) + warp;
       const sdOff = sample(f.sd, w, h, u - SHX, v - SHY) + warp;
+      // 碎浪花的断续：只在岸边附近才算（分形噪声，断口圆润）。
+      const lace = opts.sculpt && sdHere > -3 && sdHere < 0.5 ? fbm(px / 16, py / 16, seed + 43) : 0;
       const indWarp = warp * 0.12;
       const gHere = sample(f.grass, w, h, u, v) + indWarp;
       const gOff = sample(f.grass, w, h, u - SHX, v - SHY) + indWarp;
@@ -298,35 +420,78 @@ export function paintTerrain(
       let r = pal.deep.rgb[ti]!;
       let g = pal.deep.rgb[ti + 1]!;
       let b = pal.deep.rgb[ti + 2]!;
+      if (base && baseMean) {
+        r = (base[0] * r) / baseMean[0];
+        g = (base[1] * g) / baseMean[1];
+        b = (base[2] * b) / baseMean[2];
+      }
+      // 先算每层的场值，找出最上面一张完全盖住这里的纸：它下面的层看不见，不用画。
+      let start = 0;
       for (let k = 0; k < layers.length; k++) {
         const L = layers[k]!;
-        const here = L.kind === 'sd' ? sdHere : L.kind === 'grass' ? gHere : sHere;
-        const off = L.kind === 'sd' ? sdOff : L.kind === 'grass' ? gOff : sOff;
+        const wob = L.wob ? (n1 * wobC[k]! + n2 * wobS[k]!) * 2 * L.wob : 0;
+        let here = L.kind === 'grass' ? gHere : L.kind === 'shrub' ? sHere : sdHere + wob;
+        let off = L.kind === 'grass' ? gOff : L.kind === 'shrub' ? sOff : sdOff + wob;
+        // 草地内部的台阶只铺在草地上：出了草地就当作不在这层里。
+        if (L.kind === 'land') {
+          here -= Math.max(0, 0.6 - gHere) * 40;
+          off -= Math.max(0, 0.6 - gOff) * 40;
+        }
+        if (L.lace) {
+          // 碎浪花只在噪声高的地方有：其余地方往外推，等于这层不存在。
+          const cut = Math.min(0, (lace - 0.5) * 14);
+          here += cut;
+          off += cut;
+        }
+        hereK[k] = here;
+        offK[k] = off;
+        if (opaque[k] && here > L.t + 0.15 * L.rim + 0.5 * L.grad) start = k;
+      }
+      for (let k = start; k < layers.length; k++) {
+        const L = layers[k]!;
+        const here = hereK[k]!;
+        const off = offK[k]!;
+        // 离这层（连边和投影）都远：整层跳过。
+        if (here < L.t - 1.4 * L.rim - L.grad && off < L.t - L.rim - L.grad * 4) continue;
         const rimEdge = L.t - L.rim * (0.5 + 0.9 * fibre);
-        // 投影：偏移处被这层（连白边）盖住的程度，边缘柔和。没有白边的层也不落投影。
-        if (L.rim > 0) {
+        // 投影：偏移处被这层（连边）盖住的程度，边缘柔和。
+        const shadowK = L.shadow;
+        if (shadowK > 0) {
           const soft = L.grad * 4;
-          const sh = clamp01((off - (L.t - L.rim) + soft) / (2 * soft)) * 0.32;
+          const sh = clamp01((off - (L.t - L.rim) + soft) / (2 * soft)) * shadowK;
           r *= 1 - sh;
           g *= 1 - sh * 1.04;
           b *= 1 - sh * 1.1;
         }
+        // 这层的纸色（指定颜色时，用纸纹的相对明暗乘上去）。
+        ti = texAt(L.tex, px, py, k * 131, k * 53);
+        let fr = L.tex.rgb[ti]!;
+        let fg = L.tex.rgb[ti + 1]!;
+        let fb = L.tex.rgb[ti + 2]!;
+        const m = means[k];
+        if (m) {
+          fr = (L.col[0] * fr) / m[0];
+          fg = (L.col[1] * fg) / m[1];
+          fb = (L.col[2] * fb) / m[2];
+        }
         const rimA = L.rim > 0 ? clamp01((here - rimEdge) / L.grad + 0.5) : 0;
         if (rimA > 0) {
-          ti = texAt(pal.rim, px, py, k * 97, k * 61);
-          r += (pal.rim.rgb[ti]! - r) * rimA;
-          g += (pal.rim.rgb[ti + 1]! - g) * rimA;
-          b += (pal.rim.rgb[ti + 2]! - b) * rimA;
+          if (L.edge === 'white') {
+            const ri = texAt(pal.rim, px, py, k * 97, k * 61);
+            r += (pal.rim.rgb[ri]! - r) * rimA;
+            g += (pal.rim.rgb[ri + 1]! - g) * rimA;
+            b += (pal.rim.rgb[ri + 2]! - b) * rimA;
+          } else {
+            r += (Math.min(1, fr * 1.16 + 0.03) - r) * rimA;
+            g += (Math.min(1, fg * 1.16 + 0.03) - g) * rimA;
+            b += (Math.min(1, fb * 1.16 + 0.03) - b) * rimA;
+          }
         }
         // 没有白边的灌丛层只当树冠下的阴影地面：和草地混一半，不铺满深色。
         const fillA = clamp01((here - (L.t + (fine - 0.5) * L.rim * 0.3)) / L.grad + 0.5) * (L.rim === 0 && L.kind === 'shrub' ? 0.55 : 1);
         if (fillA > 0) {
-          ti = texAt(L.tex, px, py, k * 131, k * 53);
-          let fr = L.tex.rgb[ti]!;
-          let fg = L.tex.rgb[ti + 1]!;
-          let fb = L.tex.rgb[ti + 2]!;
-          if (L.dry) {
-            const amt = L.kind === 'grass' ? sample(f.herb, w, h, u, v) : sample(f.shrub, w, h, u, v);
+          if (hasDry[k]) {
+            const amt = L.kind === 'shrub' ? sample(f.shrub, w, h, u, v) : sample(f.herb, w, h, u, v);
             // 植被量低于约 0.6 开始泛黄，被吃光时接近枯色纸。
             const dryA = clamp01((0.6 - amt) / 0.5) * 0.85;
             const di = texAt(L.dry, px, py, k * 71, k * 29);
