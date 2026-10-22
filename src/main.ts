@@ -20,6 +20,9 @@ import { bindLayerControls } from './ui/layerControls';
 import { readSlot, writeSlot } from './ui/saveSlot';
 import { bindTimeControls } from './ui/timeControls';
 import { bindToolControls } from './ui/toolControls';
+import { bindDock } from './ui/dock';
+import { bindNotebook } from './ui/notebook';
+import { bindViewCard } from './ui/viewCard';
 
 // 地址栏 ?seed=123 指定开局种子，?speed=10 指定开局倍速（开局倍速也作为一条操作记进日志）。
 function intParam(name: string, fallback: number, max: number): number {
@@ -104,10 +107,7 @@ async function main(): Promise<void> {
 
   // 剪纸画面（2026-10-22 定下的美术方向）；?art=notes 是田野笔记的旧画面，界面统一成剪纸之前留作对比。
   const paper = new URLSearchParams(location.search).get('art') !== 'notes';
-  if (paper) {
-    document.body.classList.add('paper');
-    status.textContent = '画剪纸地图……';
-  }
+  if (paper) status.textContent = '画剪纸地图……';
   const view: GameView = paper
     ? await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species)
     : await MapView.mount(el('app'), session.sim.state, session.species);
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
   const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
   /** 物种名，按物种下标排。引进了新物种时换成新的（见 syncSpecies）。 */
   let names = session.species.map((s) => s.params.name);
-  const hud = new Hud(el('hud'));
+  const hud = new Hud(el('ribbon'), el('hud'));
   const deaths = new DeathPanel(el('deaths'), names);
   const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
   const alertBanner = new AlertBanner(el('alert'), names, (at) =>
@@ -167,16 +167,13 @@ async function main(): Promise<void> {
     if (archive.isOpen || desk.isOpen) {
       archive.close();
       desk.close();
+    } else if (dock.kind) {
+      dock.close();
     } else if (introducing) {
       introducing = null;
       status.textContent = '取消了引进';
     }
   });
-  const archiveBtn = document.createElement('button');
-  archiveBtn.textContent = '档案馆';
-  archiveBtn.title = '翻看现有技术：真实动物的数据档案和知识卡';
-  archiveBtn.addEventListener('click', () => archive.toggle());
-  el('office-bar').append(archiveBtn);
   // 设计台：拼部件、看推导和能量收支；情景允许时可以把设计投放到地图上。开着时推演暂停。
   const desk = new DesignDesk(
     el('design'),
@@ -195,15 +192,6 @@ async function main(): Promise<void> {
         }
       : undefined,
   );
-  const deskBtn = document.createElement('button');
-  deskBtn.textContent = '设计台';
-  deskBtn.title = '设计一种新动物：选体型、部件和繁殖策略，看推导出来的代价';
-  deskBtn.addEventListener('click', () => {
-    archive.close();
-    desk.toggle();
-  });
-  archiveBtn.addEventListener('click', () => desk.close());
-  el('office-bar').append(deskBtn);
   cards?.briefing(names);
   const history = new PopulationHistory([...names, '平均植被']);
   const chart = new PopulationChart(
@@ -316,7 +304,28 @@ async function main(): Promise<void> {
     },
   );
 
-  const syncCamera = bindCameraControls(view.canvas, view.camera, el('camera-bar'), (screen) => {
+  // 下方工具栏：兽医箱的五类工具、档案馆、设计台。
+  const dock = bindDock(el('dock'), el('tool-pop'), {
+    choose: (kind) => field.choose(kind),
+    stop: () => field.stop(),
+    archive: () => {
+      desk.close();
+      archive.toggle();
+    },
+    desk: () => {
+      archive.close();
+      desk.toggle();
+    },
+  });
+  // 左边的笔记本：记录、死因、曲线、文件（种子、存档、校验和）。
+  bindNotebook(el('nb-tabs'), el('nb-page'), [
+    ['记录', el('nb-log')],
+    ['死因', el('nb-deaths')],
+    ['曲线', el('nb-chart')],
+    ['文件', el('nb-file')],
+  ]);
+  const viewCard = bindViewCard(el('view-card'), view.camera, view.angles);
+  const syncCamera = bindCameraControls(view.canvas, view.camera, viewCard.presets, (screen) => {
     const pos = view.camera.screenToWorld(screen);
     const cell = worldToCell(pos);
     if (introducing) {
@@ -405,6 +414,8 @@ async function main(): Promise<void> {
     captures.update(state);
     chart.draw();
     syncCamera();
+    viewCard.sync();
+    dock.sync(archive.isOpen, desk.isOpen);
     syncTime();
     session.requestFrame();
     if (perf) {

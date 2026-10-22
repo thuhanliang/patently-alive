@@ -56,9 +56,9 @@ export function bindCameraControls(
 
   const buttons = new Map<ZoomPreset, HTMLButtonElement>();
   for (const [preset, label] of [
-    ['map', '全图 [1]'],
-    ['region', '区域 [2]'],
-    ['plot', '地块 [3]'],
+    ['map', '全图'],
+    ['region', '区域'],
+    ['plot', '地块'],
   ] as const) {
     const b = document.createElement('button');
     b.textContent = label;
