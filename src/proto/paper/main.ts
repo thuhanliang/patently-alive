@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   status.textContent = '画地形……';
   await tick();
   const fields = buildFields({ width: w, height: h, terrain: grid.terrain, herb, shrub });
-  const painted = timed('地形', () => paintTerrain(fields, pal, SEED, { softVegetation: !!kit }));
+  const painted = timed('地形', () => paintTerrain(fields, pal, SEED, { softVegetation: !!kit, sculpt: !!kit }));
   const W = painted.width;
   const H = painted.height;
   const img = new ImageData(painted.data, W, H);
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
   let texBytes = W * H * 4;
 
   const app = new Application();
-  await app.init({ resizeTo: window, background: 0x1f5d7a, antialias: true });
+  await app.init({ resizeTo: window, background: kit ? 0x143268 : 0x1f5d7a, antialias: true });
   document.body.appendChild(app.canvas);
   status.textContent = '';
 
