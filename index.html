@@ -101,6 +101,36 @@
       .swatch { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 50%; vertical-align: -1px; }
       @media (max-width: 760px) { .archive-body { flex-direction: column; } .archive-list { max-height: 20vh; } }
       #chart { cursor: pointer; position: fixed; left: 8px; right: 8px; bottom: 8px; height: 180px; width: calc(100% - 16px); }
+
+      /*
+       * 剪纸画面（?art=paper，main.ts 给 body 加 paper）：界面像钉在桌上的牛皮纸签和卡片。
+       * 大部分只换配色变量（纸 → 奶油色卡纸，墨 → 深褐），面板加一层纸纹和投影；蓝图蓝、朱红的用法不变。
+       */
+      body.paper {
+        --paper: #f2e6c9; --paper-deep: #e4d2a8; --ink: #4a3a28; --ink-soft: rgba(74, 58, 40, 0.68);
+        --kraft: #e3c896;
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .22 0 0 0 0 .12 0 0 0 .14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background: #2a2018;
+        font-family: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+      }
+      body.paper #hud, body.paper #deaths, body.paper .panel, body.paper .alert-log, body.paper #exam-card, body.paper .modal-card {
+        background: var(--grain), var(--kraft);
+        border: none;
+        border-radius: 3px 7px 4px 6px / 6px 3px 7px 4px;
+        box-shadow: 3px 5px 0 rgba(20, 12, 4, 0.28);
+      }
+      body.paper .modal-card, body.paper #exam-card { background: var(--grain), var(--paper); border-top: 6px solid var(--kraft); }
+      body.paper #hud { font-family: inherit; }
+      body.paper .bar button {
+        background: var(--grain), var(--paper);
+        border: 1px solid rgba(74, 58, 40, 0.45);
+        border-radius: 2px 6px 3px 5px / 5px 2px 6px 3px;
+        box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.3);
+      }
+      body.paper .bar button:hover { background: var(--grain), var(--paper-deep); }
+      body.paper .bar button.active { background: var(--blueprint); border-color: var(--blueprint); color: #f7efdc; }
+      body.paper #status { color: #f6d9b8; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+      body.paper #chart { border-radius: 4px; box-shadow: 3px 5px 0 rgba(0, 0, 0, 0.35); }
     </style>
   </head>
   <body>

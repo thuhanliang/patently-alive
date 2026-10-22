@@ -104,7 +104,10 @@ async function main(): Promise<void> {
 
   // ?art=paper：剪纸画面（M0 定下的美术方向，还在接入中）；默认仍是田野笔记的占位画面。
   const paper = new URLSearchParams(location.search).get('art') === 'paper';
-  if (paper) status.textContent = '画剪纸地图……';
+  if (paper) {
+    document.body.classList.add('paper');
+    status.textContent = '画剪纸地图……';
+  }
   const view: GameView = paper
     ? await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species)
     : await MapView.mount(el('app'), session.sim.state, session.species);
