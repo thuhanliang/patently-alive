@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设计台 · 纸偶 · 生生事务所</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #e9dcc0;
+        font-family: system-ui, sans-serif;
+        color: #4a3a28;
+      }
+      .card {
+        position: fixed;
+        padding: 10px 14px;
+        border-radius: 3px;
+        background: #f6eedb;
+        box-shadow: 2px 3px 0 rgba(60, 40, 20, 0.3);
+        font-size: 13px;
+      }
+      #controls {
+        left: 16px;
+        top: 16px;
+        width: 260px;
+        max-height: calc(100% - 52px);
+        overflow-y: auto;
+        display: grid;
+        gap: 6px;
+      }
+      #controls h3 {
+        margin: 6px 0 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: #8a6d4a;
+      }
+      #controls label {
+        display: grid;
+        grid-template-columns: 54px 1fr 58px;
+        align-items: center;
+        gap: 6px;
+      }
+      #controls input[type='range'] {
+        accent-color: #2f5d8a;
+        width: 100%;
+      }
+      #controls select {
+        font: inherit;
+        background: #fbf6ea;
+        border: 1px solid #c9b48f;
+        border-radius: 3px;
+        color: inherit;
+      }
+      .v {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      button {
+        padding: 2px 7px;
+        border: 1px solid #b49a74;
+        border-radius: 3px;
+        background: #fbf6ea;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      button.on {
+        background: #2f5d8a;
+        border-color: #2f5d8a;
+        color: #f6eedb;
+      }
+      #readout {
+        right: 16px;
+        bottom: 16px;
+        width: 230px;
+        line-height: 1.65;
+        font-variant-numeric: tabular-nums;
+      }
+      #readout b {
+        font-weight: 600;
+      }
+      #note {
+        right: 16px;
+        top: 16px;
+        max-width: 300px;
+        font-size: 12px;
+        color: #7a6248;
+        background: #f3e8cf;
+      }
+      #note:empty {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls" class="card"></div>
+    <div id="readout" class="card"></div>
+    <div id="note" class="card"></div>
+    <script type="module" src="/src/proto/desk/main.ts"></script>
+  </body>
+</html>

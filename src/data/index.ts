@@ -13,6 +13,8 @@ import { ScalingLawsSchema, type ScalingLaws } from './schema/scaling';
 import scalingJson from './scaling/laws.json';
 import { ViabilityRulesSchema, type ViabilityRules } from './schema/viability';
 import viabilityJson from './scaling/viability.json';
+import { GaitRulesSchema, type GaitRules, type ReferenceAnimal } from './schema/gait';
+import gaitJson from './scaling/gait.json';
 import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema, type Design, type HintTemplates, type Part } from './schema/design';
 import partsJson from './design/parts.json';
 import hintsJson from './design/hints.json';
@@ -29,6 +31,10 @@ export const scalingLaws: ScalingLaws = ScalingLawsSchema.parse(scalingJson);
 
 /** 身体可行性检查的阈值（阶段 3.5）：每个数带依据、置信度和出处。 */
 export const viabilityRules: ViabilityRules = ViabilityRulesSchema.parse(viabilityJson);
+
+export { type GaitRules, type ReferenceAnimal };
+/** 纸偶的身材和动作节奏（M1 设计台，只在画面里用）。 */
+export const gaitRules: GaitRules = GaitRulesSchema.parse(gaitJson);
 
 /** 尸检报告的模板。 */
 export const necropsyTemplates: NecropsyTemplates = NecropsyTemplatesSchema.parse(necropsyJson);
@@ -148,6 +154,12 @@ const partsFile = PartsFileSchema.parse(partsJson);
 export const designSlots = partsFile.slots;
 /** 设计台的部件，按 id 索引，按文件里的顺序。 */
 export const partLibrary: ReadonlyMap<string, Part> = new Map(partsFile.parts.map((p) => [p.id, p] as const));
+for (const [table, slot] of [['limbLength', 'limbs'], ['tailLength', 'tail']] as const) {
+  for (const id of Object.keys(gaitRules[table])) {
+    if (id === '说明') continue;
+    if (partLibrary.get(id)?.slot !== slot) throw new Error(`gait.json 的 ${table} 写了不存在或不属于 ${slot} 槽的部件：${id}`);
+  }
+}
 /** 设计台提醒的模板。 */
 export const hintTemplates: HintTemplates = HintTemplatesSchema.parse(hintsJson);
 /** 现有技术写成的设计：设计台的起点，也是设计编译器的回归测试。 */
