@@ -5,8 +5,8 @@ export default defineConfig({
   base: './',
   build: {
     rollupOptions: {
-      // 游戏本体，加上 M0 的剪纸风格 demo（独立页面，只读推演）。
-      input: { main: 'index.html', paper: 'paper.html' },
+      // 游戏本体，加上 M0 的剪纸风格 demo（独立页面，只读推演）和 M1 的设计台玩具（独立页面）。
+      input: { main: 'index.html', paper: 'paper.html', desk: 'desk.html' },
     },
   },
   test: {

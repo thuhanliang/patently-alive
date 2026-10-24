@@ -112,8 +112,9 @@ export function tokenLengthCells(bodyMassKg: number): number {
 
 export type PuppetKind = 'cat-orange' | 'cat-piebald' | 'bird' | 'rabbit' | 'rat' | 'otter' | 'generic';
 
-const RIM = 0xf7f2e6;
-const BRAD = 0xc9a24a;
+/** 剪纸的白边、关节的金色纸钉（设计台的纸偶也用）。 */
+export const RIM = 0xf7f2e6;
+export const BRAD = 0xc9a24a;
 
 /**
  * 占位的剪纸木偶（代码画的）：躯干、头、腿、尾各一片，外面一圈白边，关节处一颗金色纸钉。

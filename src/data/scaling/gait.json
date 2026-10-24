@@ -1,0 +1,72 @@
+{
+  "说明": "纸偶的身材和动作节奏（M1 设计台玩具，只在画面里用，不进推演）。每个数都写依据，设计台背面的规格书以后读这一份。长度单位米，体重千克。",
+  "bodyLength": {
+    "coef": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "头体长 ≈ 0.3·M^0.33 米：几何相似（长度 ∝ M^1/3），系数按家猫 4 千克 0.47 米、虎 200 千克 1.7 米、褐家鼠 0.3 千克 0.2 米校" },
+    "exp": { "value": 0.33, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+  },
+  "hipHeight": {
+    "coef": { "value": 0.16, "basis": "assumption", "confidence": "unverified", "source": "髋高（伸直的腿长）≈ 0.16·M^0.35 米：按家猫约 0.26 米、虎约 1 米校；指数取几何相似 1/3 和 Kilbourne & Hoffman 2013（腿长 ∝ M^0.40）之间" },
+    "exp": { "value": 0.35, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+  },
+  "strideLength": {
+    "coef": { "value": 2.3, "basis": "law", "confidence": "2+", "source": "相对步长 λ/h = 2.3·Fr^0.3（Alexander 1976 Nature 261:129，用来从足迹估恐龙速度；换写成 v = 0.25·g^0.5·λ^1.67·h^−1.17，两种写法一致）" },
+    "exp": { "value": 0.3, "basis": "law", "confidence": "2+", "source": "同上" }
+  },
+  "walkTrotFroude": { "value": 0.5, "basis": "law", "confidence": "2+", "source": "动力相似（Alexander & Jayes 1983 J Zool 201:135）：走变小跑在弗劳德数 Fr = v²/(g·h) ≈ 0.5，人也一样" },
+  "trotGallopFroude": { "value": 2.5, "basis": "law", "confidence": "unverified", "source": "小跑变跑（奔跑）在 Fr ≈ 2–3（Alexander & Jayes 1983，凭记忆，未核对）" },
+  "walkFroude": { "value": 0.25, "basis": "assumption", "confidence": "unverified", "source": "平常走路的弗劳德数：多数四足兽喜欢的走速在 Fr 0.2–0.3 附近" },
+  "duty": {
+    "walk": { "value": 0.65, "basis": "assumption", "confidence": "unverified", "source": "每只脚着地的时间占一步的比例：走 > 0.5，小跑约 0.45，奔跑约 0.3（Alexander 2003《Principles of Animal Locomotion》的一般说法，未核对）" },
+    "trot": { "value": 0.45, "basis": "assumption", "confidence": "unverified", "source": "同上" },
+    "gallop": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+  },
+  "breath": {
+    "coef": { "value": 53.5, "basis": "law", "confidence": "2+", "source": "静息呼吸 ≈ 53.5·M^−0.26 次/分（Stahl 1967 J Appl Physiol 22:453；Calder 引作 322·W^−0.26，W 克；Worthington 等 1991 写成 0.89·M^−0.26 赫兹，三者一致）" },
+    "exp": { "value": -0.26, "basis": "law", "confidence": "2+", "source": "同上" }
+  },
+  "heart": {
+    "coef": { "value": 241, "basis": "law", "confidence": "2+", "source": "静息心率 ≈ 241·M^−0.25 次/分（Stahl 1967，见 VIABILITY.md 第三节 5）" },
+    "exp": { "value": -0.25, "basis": "law", "confidence": "2+", "source": "同上" }
+  },
+  "topSpeed": {
+    "a": { "value": 25.5, "basis": "law", "confidence": "checked", "source": "最高跑速 v = a·M^b·(1 − e^(−h·M^i)) 千米/时（Hirt 等 2017 Nat Ecol Evol 1:1116 补充材料表 4，跑；见 VIABILITY.md 第三节 7）" },
+    "b": { "value": 0.26, "basis": "law", "confidence": "checked", "source": "同上" },
+    "h": { "value": 22, "basis": "law", "confidence": "checked", "source": "同上" },
+    "i": { "value": -0.6, "basis": "law", "confidence": "checked", "source": "同上" }
+  },
+  "chew": {
+    "coef": { "value": 3.5, "basis": "assumption", "confidence": "unverified", "source": "咀嚼频率 ≈ 3.5·M^−0.13 赫兹：Druzinsky 1993 的哺乳类咀嚼频率随体重变慢（指数凭记忆，未核对），系数按家猫约 2.9 次/秒校" },
+    "exp": { "value": -0.13, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+  },
+  "limbLength": {
+    "说明": "腿型部件自带的腿长（相对步行腿）。只是画面：推演里腿型的效果在部件的钩子里，腿长手柄才进推演。",
+    "walking_legs": 1,
+    "running_legs": 1.2,
+    "climbing_claws": 0.95,
+    "digging_claws": 0.75,
+    "short_legs": 0.55
+  },
+  "tailLength": {
+    "说明": "尾型部件自带的尾长（相对头体长）和粗细（相对头体长）。只是画面。",
+    "short_tail": { "length": 0.12, "width": 0.09 },
+    "balance_tail": { "length": 0.85, "width": 0.065 },
+    "fat_tail": { "length": 0.35, "width": 0.14 },
+    "bushy_tail": { "length": 0.7, "width": 0.16 }
+  },
+  "references": {
+    "说明": "体型标尺：身后叠的真实动物剪影。体重千克，头体长、肩高米（常见成体的大致值）。",
+    "animals": [
+      { "id": "mouse", "name": "小家鼠", "massKg": 0.02, "bodyLengthM": 0.08, "shoulderM": 0.03, "tail": 0.9, "ears": 0.3, "neck": 0.1 },
+      { "id": "brownrat", "name": "褐家鼠", "massKg": 0.3, "bodyLengthM": 0.22, "shoulderM": 0.07, "tail": 0.85, "ears": 0.18, "neck": 0.1 },
+      { "id": "rabbit", "name": "欧洲兔", "massKg": 1.6, "bodyLengthM": 0.4, "shoulderM": 0.17, "tail": 0.12, "ears": 0.28, "neck": 0.1 },
+      { "id": "cat", "name": "家猫", "massKg": 4, "bodyLengthM": 0.46, "shoulderM": 0.25, "tail": 0.6, "ears": 0.12, "neck": 0.15 },
+      { "id": "fox", "name": "赤狐", "massKg": 6, "bodyLengthM": 0.65, "shoulderM": 0.38, "tail": 0.65, "ears": 0.2, "neck": 0.18 },
+      { "id": "badger", "name": "欧亚獾", "massKg": 12, "bodyLengthM": 0.75, "shoulderM": 0.3, "tail": 0.2, "ears": 0.08, "neck": 0.1 },
+      { "id": "wolf", "name": "灰狼", "massKg": 40, "bodyLengthM": 1.2, "shoulderM": 0.8, "tail": 0.4, "ears": 0.15, "neck": 0.2 },
+      { "id": "reddeer", "name": "马鹿", "massKg": 150, "bodyLengthM": 1.9, "shoulderM": 1.2, "tail": 0.08, "ears": 0.08, "neck": 0.4 },
+      { "id": "tiger", "name": "虎", "massKg": 200, "bodyLengthM": 1.8, "shoulderM": 1.0, "tail": 0.55, "ears": 0.08, "neck": 0.15 },
+      { "id": "horse", "name": "马", "massKg": 500, "bodyLengthM": 2.4, "shoulderM": 1.6, "tail": 0.35, "ears": 0.05, "neck": 0.45 },
+      { "id": "bison", "name": "美洲野牛", "massKg": 900, "bodyLengthM": 3.0, "shoulderM": 1.8, "tail": 0.15, "ears": 0.05, "neck": 0.15 }
+    ]
+  }
+}
