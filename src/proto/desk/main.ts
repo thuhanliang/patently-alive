@@ -17,7 +17,7 @@ import { bracket, drawReference, referenceHead, referenceHeightM, referenceLabel
  * 身后叠着同体重上下的真实动物剪影（体型标尺）；脚下是一条往后拉的纸带尺，看得出它走得多快。
  *
  * 参数（录屏、发链接用）：?t=cat&mass=200&mode=auto|stand|walk|run|eat|lie&speed=2&leg=0.1&tail=0.2
- * 也可以在控制台里 desk.set({ mass: 200, mode: 'walk' })。
+ * 也可以在控制台里 desk.set({ mass: 200, mode: 'walk' })；desk.step(1 / 30) 停掉实时时钟、按固定步长走一帧（录屏用）。
  */
 
 type Mode = 'auto' | 'stand' | 'walk' | 'run' | 'eat' | 'lie';
@@ -235,8 +235,8 @@ async function main(): Promise<void> {
   }
 
   let readoutLeft = 0;
-  app.ticker.add((tk) => {
-    const dt = Math.min(0.1, tk.deltaMS / 1000);
+  app.ticker.add((tk) => frame(Math.min(0.1, tk.deltaMS / 1000)));
+  function frame(dt: number): void {
     time += dt;
     const W = app.screen.width;
     const H = app.screen.height;
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
       readoutLeft = 0.2;
       updateReadout(gs);
     }
-  });
+  }
 
   // ---- 控件（第 1 步的临时控件，第 2 步换成身上的把手） ----
   const panel = document.getElementById('controls')!;
@@ -454,7 +454,13 @@ async function main(): Promise<void> {
     if (p.mode) applyMode(p.mode);
     refreshControls();
   }
-  (window as unknown as { desk: { set: typeof set } }).desk = { set };
+  /** 录屏用：停掉实时时钟，按固定步长一帧一帧地走（无头浏览器帧率低时，录出来的节奏仍是真实的）。 */
+  function step(dt: number): void {
+    app.ticker.stop();
+    frame(dt);
+    app.render();
+  }
+  (window as unknown as { desk: { set: typeof set; step: typeof step } }).desk = { set, step };
 
   const q = new URLSearchParams(location.search);
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);

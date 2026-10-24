@@ -38,7 +38,7 @@
 - 本地：`npm run dev`，打开 `http://localhost:5173/desk.html`。合并后 Pages 上是 `…/desk.html`。
 - 链接参数（发给朋友、录屏用）：`desk.html?t=cat&mass=200&mode=run&speed=2`
   （`t` 现有技术的物种 id，`mode` 是 auto / stand / walk / run / eat / lie，另有 `leg`、`tail`）。
-- 控制台：`desk.set({ mass: 200, mode: 'walk' })`。
+- 控制台：`desk.set({ mass: 200, mode: 'walk' })`；录屏时用 `desk.step(1 / 30)` 停掉实时时钟、一帧一帧地走（无头浏览器帧率低，录出来的节奏仍是真实的）。
 
 ### 已知的不足（这一步不修）
 
@@ -49,3 +49,4 @@
 - 耳朵大小、头的大小不随部件变（没有耳、头的部件）。
 - 体型标尺的剪影只按几个尺寸画，不是精确轮廓。
 - 速度太快、腿够不着时，脚会滑一点。
+- 版面按电脑屏幕排：手机上纸偶太小，还会被控件挡住。第 3 步试玩前要改。
