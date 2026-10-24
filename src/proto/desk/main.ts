@@ -236,6 +236,8 @@ async function main(): Promise<void> {
 
   let readoutLeft = 0;
   app.ticker.add((tk) => frame(Math.min(0.1, tk.deltaMS / 1000)));
+  // ?manual=1：一开始就不走实时时钟，只靠 desk.step 推进（截图对比、录屏用，结果可复现）。
+  if (new URLSearchParams(location.search).has('manual')) app.ticker.stop();
   function frame(dt: number): void {
     time += dt;
     const W = app.screen.width;
