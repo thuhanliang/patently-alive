@@ -45,6 +45,8 @@ export interface BodyPlan {
   /** 吻（或喙）伸出头外多长。 */
   snout: number;
   earH: number;
+  /** 耳朵的宽窄（外观，相对一般的耳朵）。 */
+  earW: number;
   tailLen: number;
   tailW: number;
   tailSegs: number;
@@ -106,7 +108,8 @@ export function bodyPlan(
     neckW: chestH * 0.9,
     headR,
     snout: headR * (SNOUT[parts.mouth.id] ?? 0.7),
-    earH: headR * 0.7,
+    earH: headR * 0.7 * (design.appearance?.earLen ?? 1),
+    earW: design.appearance?.earWide ?? 1,
     tailLen,
     tailW: B * tail.width,
     tailSegs: tail.length < 0.2 ? 1 : parts.tail.id === 'bushy_tail' ? 2 : tail.length < 0.5 ? 3 : 5,

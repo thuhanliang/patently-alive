@@ -54,19 +54,19 @@
     "bushy_tail": { "length": 0.7, "width": 0.16 }
   },
   "references": {
-    "说明": "体型标尺：身后叠的真实动物剪影。体重千克，头体长、肩高米（常见成体的大致值）。",
+    "说明": "体型标尺：身后叠的真实动物剪影。体重千克，头体长、肩高米（常见成体的大致值）。look：切图纸偶怎么拼（底子是哪条现有技术、换哪些部件和外观），没有现有技术的用最像的部件拼替身。",
     "animals": [
-      { "id": "mouse", "name": "小家鼠", "massKg": 0.02, "bodyLengthM": 0.08, "shoulderM": 0.03, "tail": 0.9, "ears": 0.3, "neck": 0.1 },
-      { "id": "brownrat", "name": "褐家鼠", "massKg": 0.3, "bodyLengthM": 0.22, "shoulderM": 0.07, "tail": 0.85, "ears": 0.18, "neck": 0.1 },
-      { "id": "rabbit", "name": "欧洲兔", "massKg": 1.6, "bodyLengthM": 0.4, "shoulderM": 0.17, "tail": 0.12, "ears": 0.28, "neck": 0.1 },
-      { "id": "cat", "name": "家猫", "massKg": 4, "bodyLengthM": 0.46, "shoulderM": 0.25, "tail": 0.6, "ears": 0.12, "neck": 0.15 },
-      { "id": "fox", "name": "赤狐", "massKg": 6, "bodyLengthM": 0.65, "shoulderM": 0.38, "tail": 0.65, "ears": 0.2, "neck": 0.18 },
-      { "id": "badger", "name": "欧亚獾", "massKg": 12, "bodyLengthM": 0.75, "shoulderM": 0.3, "tail": 0.2, "ears": 0.08, "neck": 0.1 },
-      { "id": "wolf", "name": "灰狼", "massKg": 40, "bodyLengthM": 1.2, "shoulderM": 0.8, "tail": 0.4, "ears": 0.15, "neck": 0.2 },
-      { "id": "reddeer", "name": "马鹿", "massKg": 150, "bodyLengthM": 1.9, "shoulderM": 1.2, "tail": 0.08, "ears": 0.08, "neck": 0.4 },
-      { "id": "tiger", "name": "虎", "massKg": 200, "bodyLengthM": 1.8, "shoulderM": 1.0, "tail": 0.55, "ears": 0.08, "neck": 0.15 },
-      { "id": "horse", "name": "马", "massKg": 500, "bodyLengthM": 2.4, "shoulderM": 1.6, "tail": 0.35, "ears": 0.05, "neck": 0.45 },
-      { "id": "bison", "name": "美洲野牛", "massKg": 900, "bodyLengthM": 3.0, "shoulderM": 1.8, "tail": 0.15, "ears": 0.05, "neck": 0.15 }
+      { "id": "mouse", "name": "小家鼠", "massKg": 0.02, "bodyLengthM": 0.08, "shoulderM": 0.03, "tail": 0.9, "ears": 0.3, "neck": 0.1, "look": { "template": "mouse" } },
+      { "id": "brownrat", "name": "褐家鼠", "massKg": 0.3, "bodyLengthM": 0.22, "shoulderM": 0.07, "tail": 0.85, "ears": 0.18, "neck": 0.1, "look": { "template": "brownrat" } },
+      { "id": "rabbit", "name": "欧洲兔", "massKg": 1.6, "bodyLengthM": 0.4, "shoulderM": 0.17, "tail": 0.12, "ears": 0.28, "neck": 0.1, "look": { "template": "rabbit" } },
+      { "id": "cat", "name": "家猫", "massKg": 4, "bodyLengthM": 0.46, "shoulderM": 0.25, "tail": 0.6, "ears": 0.12, "neck": 0.15, "look": { "template": "cat" } },
+      { "id": "fox", "name": "赤狐", "massKg": 6, "bodyLengthM": 0.65, "shoulderM": 0.38, "tail": 0.65, "ears": 0.2, "neck": 0.18, "look": { "template": "fox" } },
+      { "id": "badger", "name": "欧亚獾", "massKg": 12, "bodyLengthM": 0.75, "shoulderM": 0.3, "tail": 0.2, "ears": 0.08, "neck": 0.1, "look": { "template": "stoat", "parts": { "limbs": "digging_claws", "mouth": "mixed_teeth" }, "appearance": { "earLen": 0.4, "earWide": 1.2 } } },
+      { "id": "wolf", "name": "灰狼", "massKg": 40, "bodyLengthM": 1.2, "shoulderM": 0.8, "tail": 0.4, "ears": 0.15, "neck": 0.2, "look": { "template": "fox", "appearance": { "earLen": 1.1 } } },
+      { "id": "reddeer", "name": "马鹿", "massKg": 150, "bodyLengthM": 1.9, "shoulderM": 1.2, "tail": 0.08, "ears": 0.08, "neck": 0.4, "look": { "template": "rabbit", "parts": { "limbs": "running_legs", "digestion": "ruminant" }, "appearance": { "earLen": 1.3, "earWide": 1 } } },
+      { "id": "tiger", "name": "虎", "massKg": 200, "bodyLengthM": 1.8, "shoulderM": 1.0, "tail": 0.55, "ears": 0.08, "neck": 0.15, "look": { "template": "cat", "appearance": { "earLen": 0.6, "earWide": 1.2 } } },
+      { "id": "horse", "name": "马", "massKg": 500, "bodyLengthM": 2.4, "shoulderM": 1.6, "tail": 0.35, "ears": 0.05, "neck": 0.45, "look": { "template": "rabbit", "parts": { "limbs": "running_legs", "tail": "bushy_tail" }, "appearance": { "earLen": 1.1, "earWide": 1 } } },
+      { "id": "bison", "name": "美洲野牛", "massKg": 900, "bodyLengthM": 3.0, "shoulderM": 1.8, "tail": 0.15, "ears": 0.05, "neck": 0.15, "look": { "template": "rabbit", "parts": { "limbs": "walking_legs", "digestion": "ruminant" }, "appearance": { "earLen": 0.5, "earWide": 1.3 } } }
     ]
   }
 }

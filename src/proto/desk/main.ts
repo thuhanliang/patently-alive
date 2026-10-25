@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
+import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
 import { designTemplates, gaitRules, hintTemplates, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
@@ -159,12 +159,17 @@ async function main(): Promise<void> {
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void };
+  /** 切图零件（参照动物也用它拼）。 */
+  let cutKit: { data: CutData; paper: Texture; ref: BodyPlan } | null = null;
   if (cut) {
     const dir = `../../../art/incoming/lovart/paper/cuts/${cut}`;
     const data = (await CUT_DATA[`${dir}/vector.json`]!()) as CutData;
     const paper = (await Assets.load(await CUT_PAPER[`${dir}/paper.png`]!())) as Texture;
     paper.source.addressMode = 'repeat';
-    puppet = new CutoutPuppet(data, paper, { main: 0xe6d8bd, stripe: 0xe6d8bd, pale: 0xe6d8bd }, plan);
+    // 成品图画的是哪条现有技术：按它的身体算“原样”，其他身体按比例贴。
+    const refDesign = MAMMALS.find((t) => t.species === data.rig.template)!.design;
+    cutKit = { data, paper, ref: planOf(refDesign, compileDesign(refDesign, kit)) };
+    puppet = new CutoutPuppet(data, paper, { main: 0xe6d8bd, stripe: 0xe6d8bd, pale: 0xe6d8bd }, cutKit.ref, plan);
   } else {
     puppet = new Puppet(plan, look);
   }
@@ -173,7 +178,7 @@ async function main(): Promise<void> {
 
   let zoom = 0; // 每米多少像素，平滑地追目标
   let refKey = '';
-  let refs: { view: Container; label: Text; head: { x: number; y: number }; earM: number }[] = [];
+  let refs: { view: Container; label: Text; head: { x: number; y: number }; earM: number; setZoom(z: number): void }[] = [];
 
   function rebuild(): void {
     compiled = compileDesign(design, kit);
@@ -196,10 +201,30 @@ async function main(): Promise<void> {
       r.label.destroy();
     }
     refs = near.map((r, i) => {
-      const view = drawReference(r, i === 0 ? 0x9c8467 : 0x7d6a54, i === 0 ? 0.22 : 0.16);
+      const color = i === 0 ? 0x9c8467 : 0x7d6a54;
+      const alpha = i === 0 ? 0.22 : 0.16;
       const label = referenceLabel(r, 0x8a7458);
+      if (cutKit) {
+        // 切图零件拼的参照动物：按 look 拿现有技术的设计当底子，体重换成参照的，站着不动，画成影子纸。
+        const base = MAMMALS.find((t) => t.species === r.look.template)!.design;
+        const d: Design = structuredClone(base);
+        d.bodyMassKg = r.massKg;
+        d.parts = { ...d.parts, ...r.look.parts } as Design['parts'];
+        d.appearance = { ...d.appearance, ...r.look.appearance };
+        const p = planOf(d, compileDesign(d, kit));
+        const ref = new CutoutPuppet(cutKit.data, cutKit.paper, { main: color, stripe: color, pale: color }, cutKit.ref, p, true);
+        ref.apply(standPose(p), 0);
+        // 整只一起半透明（零件叠在一起的地方不会更深）。
+        ref.view.filters = [new AlphaFilter({ alpha: alpha * 1.6 })];
+        ref.setScale(1);
+        const b = ref.view.getLocalBounds();
+        const k = ref.view.scale.x;
+        refLayer.addChild(ref.view, label);
+        return { view: ref.view, label, head: { x: (b.x + b.width * 0.8) * k, y: -b.y * k }, earM: 0, setZoom: (z: number) => ref.setScale(z) };
+      }
+      const view = drawReference(r, color, alpha);
       refLayer.addChild(view, label);
-      return { view, label, head: referenceHead(r), earM: referenceHeightM(r) - referenceHead(r).y };
+      return { view, label, head: referenceHead(r), earM: referenceHeightM(r) - referenceHead(r).y, setZoom: (z: number) => view.scale.set(z / 1000) };
     });
   }
 
@@ -297,7 +322,7 @@ async function main(): Promise<void> {
     rebuildRefs();
     let prevLabel: Text | null = null;
     for (const r of refs) {
-      r.view.scale.set(zoom / 1000);
+      r.setZoom(zoom);
       r.view.position.set(px, gy);
       // 名字签挂在剪影的头上方；和前一张的签挤在一起时往上挪。
       let y = gy - (r.head.y + r.earM) * zoom - 18;
@@ -364,6 +389,11 @@ async function main(): Promise<void> {
   );
   syncs.push(slider('腿长', -0.2, 0.2, 0.01, () => design.shape?.leg ?? 0, (v) => ((design.shape = { ...design.shape, leg: v }), rebuild()), (v) => times(Math.pow(10, v))));
   syncs.push(slider('尾长', -0.3, 0.3, 0.01, () => design.shape?.tail ?? 0, (v) => ((design.shape = { ...design.shape, tail: v }), rebuild()), (v) => times(Math.pow(10, v))));
+
+  // 外观：只影响画面（DECISIONS"外观参数"）。
+  panel.append(el('h3', {}, '外观（只影响画面）'));
+  syncs.push(slider('耳长', 0.3, 3, 0.05, () => design.appearance?.earLen ?? 1, (v) => ((design.appearance = { ...design.appearance, earLen: v }), rebuild()), times));
+  syncs.push(slider('耳宽', 0.5, 2, 0.05, () => design.appearance?.earWide ?? 1, (v) => ((design.appearance = { ...design.appearance, earWide: v }), rebuild()), times));
 
   panel.append(el('h3', {}, '体重分配（倍数，总量不变）'));
   for (const s of BODY_SYSTEMS) {

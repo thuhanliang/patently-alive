@@ -3,6 +3,8 @@
  "gap": 16,
  "rig": {
   "ground": 748,
+  "template": "cat",
+  "snout": {"from": [922, 340], "dir": [1, 0.3]},
   "hind": "hind", "chest": "chest", "head": "head", "jaw": "jaw", "ears": ["nearEar", "farEar"],
   "tail": ["tail1", "tail2", "tail3", "tail4", "tail5"],
   "legs": {

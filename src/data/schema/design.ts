@@ -123,6 +123,11 @@ export const DesignSchema = z.object({
    * 范围见 viability.json 的 shape（编译时夹进范围）。不写就是 0：老设计不受影响，id 也不变。
    */
   shape: z.strictObject({ leg: z.number().finite(), tail: z.number().finite() }).partial().optional(),
+  /**
+   * 外观（2026-10-25）：只影响画面，推演不读。耳长、耳宽是相对"一般的耳朵"（猫）的倍数。
+   * 不写就是 1。耳朵的真实后果（散热、听力）以后再定，见 DECISIONS"外观参数"。
+   */
+  appearance: z.strictObject({ earLen: z.number().min(0.3).max(3), earWide: z.number().min(0.5).max(2) }).partial().optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;
