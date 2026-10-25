@@ -19,6 +19,10 @@
           "tail": "balance_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.55,
+          "earWide": 1.25
         }
       }
     },
@@ -40,6 +44,10 @@
           "tail": "balance_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.75,
+          "earWide": 1.4
         }
       }
     },
@@ -61,6 +69,10 @@
           "tail": "balance_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.7,
+          "earWide": 1.35
         }
       }
     },
@@ -82,6 +94,10 @@
           "tail": "balance_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.8,
+          "earWide": 1.45
         }
       }
     },
@@ -103,6 +119,10 @@
           "tail": "short_tail",
           "digestion": "hindgut_fermenter",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.4,
+          "earWide": 1.15
         }
       }
     },
@@ -124,6 +144,10 @@
           "tail": "short_tail",
           "digestion": "hindgut_fermenter",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 2.6,
+          "earWide": 0.9
         }
       }
     },
@@ -145,6 +169,10 @@
           "tail": "bushy_tail",
           "digestion": "hindgut_fermenter",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.9,
+          "earWide": 1.0
         }
       }
     },
@@ -187,6 +215,10 @@
           "tail": "short_tail",
           "digestion": "short_gut",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.45,
+          "earWide": 1.25
         }
       }
     },
@@ -208,6 +240,10 @@
           "tail": "short_tail",
           "digestion": "short_gut",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.4,
+          "earWide": 1.25
         }
       }
     },
@@ -229,6 +265,10 @@
           "tail": "short_tail",
           "digestion": "short_gut",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.5,
+          "earWide": 1.2
         }
       }
     },
@@ -250,6 +290,10 @@
           "tail": "bushy_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 1.3,
+          "earWide": 1.1
         }
       }
     },
@@ -271,6 +315,10 @@
           "tail": "balance_tail",
           "digestion": "simple_stomach",
           "rearing": "altricial"
+        },
+        "appearance": {
+          "earLen": 0.4,
+          "earWide": 1.2
         }
       }
     },

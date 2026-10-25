@@ -1,5 +1,6 @@
 import { Container, Graphics, TilingSprite, type Texture } from 'pixi.js';
 import { BRAD, RIM } from '../paper/tokens';
+import type { Shape } from './fit';
 
 /**
  * 从 AI 成品图切出来的矢量纸偶（scripts/art/cut_parts.py → vectorize_parts.py 产出的 vector.json）。
@@ -37,6 +38,10 @@ export interface CutData {
 /** 骨架绑定（种子.json 的 rig）：哪几片是腿、头、尾，趾尖在哪，地面多高（都是成品图的像素）。 */
 export interface CutRig {
   ground: number;
+  /** 成品图画的是哪条现有技术（按它的 BodyPlan 算"原样"的比例，其他身体按比例贴）。 */
+  template: string;
+  /** 吻从哪里开始、朝哪边（换嘴型时只拉这一段）。 */
+  snout: { from: [number, number]; dir: [number, number] };
   hind: string;
   chest: string;
   head: string;
@@ -63,6 +68,12 @@ interface Piece {
   rim: Graphics;
   body: Graphics;
   mask: Graphics;
+  grain: TilingSprite;
+  rivets: Graphics;
+  /** 现在的形状（零件自己的坐标）：一开始是成品图上的样子，贴骨头以后换成 setShape 给的。 */
+  shape: Shape;
+  /** 颜色的明暗（远侧的腿调暗）。 */
+  shade: number;
   /** 轮廓上离转轴最远的距离：先用它粗判这片零件够不够得着地面。 */
   reach: number;
   /** 弯折（view 坐标里的点 → 点），见 setWarp。 */
@@ -80,6 +91,8 @@ export class Cutout {
     readonly data: CutData,
     paper: Texture,
     private readonly dye: Dye,
+    /** 影子纸（体型标尺身后的参照动物）：只有平涂的剪影，不画白边、影子、纸纹和铆钉。 */
+    private readonly flat = false,
   ) {
     const parts = [...data.parts].sort((a, b) => a.z - b.z);
     const byId = new Map(parts.map((p) => [p.id, p]));
@@ -96,6 +109,7 @@ export class Cutout {
     }
     // 影子单独一层，放在所有零件下面（纸片投在桌上的影子不会盖住别的纸片）。
     const shadows = new Container();
+    shadows.visible = !flat;
     this.view.addChild(shadows);
     for (const part of parts) {
       const view = new Container();
@@ -105,20 +119,18 @@ export class Cutout {
       const body = new Graphics();
       const mask = new Graphics();
       view.addChild(rim, body);
-      let reach = 0;
-      for (let i = 0; i < part.outline.length; i += 2) reach = Math.max(reach, Math.hypot(part.outline[i]!, part.outline[i + 1]!));
-      const piece: Piece = { part, view, shadow, rim, body, mask, reach, warp: null, deformed: false };
-      this.paint(piece, part.outline, part.stripe, part.pale);
       // 纸纹：正片叠底，裁到轮廓里（四周多留一圈，压扁时轮廓往两边鼓也盖得住）。
-      const b = body.getLocalBounds();
-      const grain = new TilingSprite({ texture: paper, width: b.width + 40, height: b.height + 40 });
-      grain.position.set(b.x - 20, b.y - 20);
+      const grain = new TilingSprite({ texture: paper, width: 1, height: 1 });
       grain.tilePosition.set((part.pivot[0] * 0.7) % 128, (part.pivot[1] * 0.7) % 128);
       grain.blendMode = 'multiply';
       grain.alpha = 0.4;
       grain.mask = mask;
-      view.addChild(grain, mask);
-      for (const [x, y, r] of rivets.get(part.id) ?? []) view.addChild(rivet(x, y, r));
+      grain.visible = !flat;
+      const rivetLayer = new Graphics();
+      view.addChild(grain, mask, rivetLayer);
+      const shape: Shape = { outline: part.outline, stripe: part.stripe, pale: part.pale };
+      const piece: Piece = { part, view, shadow, rim, body, mask, grain, rivets: rivetLayer, shape, shade: 1, reach: 0, warp: null, deformed: false };
+      this.setShape(part.id, shape, rivets.get(part.id) ?? [], piece);
       this.view.addChild(view);
       this.pieces.set(part.id, piece);
       this.byZ.push(piece);
@@ -126,12 +138,51 @@ export class Cutout {
     this.pose({});
   }
 
+  /**
+   * 换一片零件的形状（贴骨头以后）和它身上的铆钉（零件自己的坐标，[x, y, 半径]）。
+   * 变形（deform）以这个形状为准。
+   */
+  setShape(id: string, shape: Shape, rivets: [number, number, number][], target?: Piece): void {
+    const piece = target ?? this.pieces.get(id);
+    if (!piece) return;
+    piece.shape = shape;
+    let reach = 0;
+    for (let i = 0; i < shape.outline.length; i += 2) reach = Math.max(reach, Math.hypot(shape.outline[i]!, shape.outline[i + 1]!));
+    piece.reach = reach;
+    this.paint(piece, shape.outline, shape.stripe, shape.pale);
+    piece.deformed = false;
+    const b = piece.body.getLocalBounds();
+    piece.grain.width = b.width + 40;
+    piece.grain.height = b.height + 40;
+    piece.grain.position.set(b.x - 20, b.y - 20);
+    piece.rivets.clear();
+    if (!this.flat) for (const [x, y, r] of rivets) drawRivet(piece.rivets, x, y, r);
+  }
+
+  /** 显示或藏起一片零件（尾巴节数比成品图少时，多出来的藏起来）。 */
+  setVisible(id: string, on: boolean): void {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+    piece.view.visible = on;
+    piece.shadow.visible = on;
+  }
+
+  /** 颜色调暗（远侧的腿用，约 0.85）。 */
+  setShade(id: string, shade: number): void {
+    const piece = this.pieces.get(id);
+    if (!piece || piece.shade === shade) return;
+    piece.shade = shade;
+    this.paint(piece, piece.shape.outline, piece.shape.stripe, piece.shape.pale);
+  }
+
   /** 按给定的轮廓和色区重画一片零件（白边、颜色、纸纹遮罩、影子）。 */
   private paint(piece: Piece, outline: number[], stripe: number[][], pale: number[][]): void {
-    const { dye } = this;
+    const k = piece.shade;
+    const dye = k === 1 ? this.dye : { main: darken(this.dye.main, k), stripe: darken(this.dye.stripe, k), pale: darken(this.dye.pale, k) };
     piece.shadow.clear().poly(outline).fill({ color: 0x000000, alpha: SHADOW.alpha });
     // 白边：轮廓描粗。
-    piece.rim.clear().poly(outline).fill(RIM).stroke({ width: RIM_W * 2, color: RIM, join: 'round' });
+    const rim = this.flat ? dye.main : k === 1 ? RIM : darken(RIM, k);
+    piece.rim.clear().poly(outline).fill(rim).stroke({ width: RIM_W * 2, color: rim, join: 'round' });
     piece.body.clear().poly(outline).fill(dye.main);
     for (const s of stripe) piece.body.poly(s).fill(dye.stripe);
     for (const s of pale) piece.body.poly(s).fill(dye.pale);
@@ -157,7 +208,8 @@ export class Cutout {
   deform(groundY: number, band: number, spread = 0.35): void {
     const top = groundY - band;
     for (const piece of this.byZ) {
-      const { view, part, warp } = piece;
+      if (!piece.view.visible) continue;
+      const { view, warp, shape } = piece;
       const near = view.position.y + piece.reach * Math.max(1, view.scale.y) > top;
       const c = Math.cos(view.rotation);
       const sn = Math.sin(view.rotation);
@@ -170,7 +222,7 @@ export class Cutout {
         const dy = Y - py;
         return [dx * c + dy * sn, (-dx * sn + dy * c) / sy];
       };
-      const o = part.outline;
+      const o = shape.outline;
       // 接触的中心（压进 band 的点的平均 x），鼓出来的方向以它为中心往两边。
       let sumX = 0;
       let n = 0;
@@ -186,7 +238,7 @@ export class Cutout {
       }
       if (!warp && n === 0) {
         if (piece.deformed) {
-          this.paint(piece, o, part.stripe, part.pale);
+          this.paint(piece, o, shape.stripe, shape.pale);
           piece.deformed = false;
         }
         continue;
@@ -210,7 +262,7 @@ export class Cutout {
         }
         return out;
       };
-      this.paint(piece, map(o), part.stripe.map(map), part.pale.map(map));
+      this.paint(piece, map(o), shape.stripe.map(map), shape.pale.map(map));
       piece.deformed = true;
     }
   }
@@ -276,9 +328,13 @@ function toLocal(p: CutPart, q: [number, number]): [number, number] {
   return [dx * c - dy * s, dx * s + dy * c];
 }
 
+function darken(c: number, k: number): number {
+  return (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
+}
+
 /** 黄铜铆钉：铜圈 + 白色的钉头高光。r 是铜圈的半径。 */
-function rivet(x: number, y: number, r: number): Graphics {
-  return new Graphics()
+function drawRivet(g: Graphics, x: number, y: number, r: number): Graphics {
+  return g
     .circle(x + 1, y + 1.5, r)
     .fill({ color: 0x000000, alpha: 0.3 })
     .circle(x, y, r)
