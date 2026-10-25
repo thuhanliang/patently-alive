@@ -1,7 +1,7 @@
 import type { Container, Texture } from 'pixi.js';
 import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
 import { pendulumOmega, springStep, type Spring } from './gait';
-import { LEGS, isHind, type BodyPlan } from './plan';
+import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { legJoints, standPose, type Pose, type Vec } from './pose';
 
 /**
@@ -18,6 +18,16 @@ import { legJoints, standPose, type Pose, type Vec } from './pose';
  */
 
 type P = [number, number];
+
+/** 设计台的 Pose 表达不了的姿势（坐、揣手、侧躺）用的额外参数。 */
+export interface PoseExtra {
+  /** 有没有地面（默认有）。侧躺在床上的俯视图没有：纸片平放在床上，不用管碰地。 */
+  ground?: boolean;
+  /** 每条腿单独的折叠量，覆盖 pose.fold。 */
+  fold?: Partial<Record<LegKey, number>>;
+  /** 尾巴每一节再多弯多少（弧度，正 = 往上卷）。 */
+  tailCurl?: number;
+}
 
 export class CutoutPuppet {
   readonly view: Container;
@@ -71,7 +81,8 @@ export class CutoutPuppet {
     return this.cut.part(id)!;
   }
 
-  apply(pose: Pose, dt: number, breath = 0): void {
+  apply(pose: Pose, dt: number, breath = 0, extra: PoseExtra = {}): void {
+    const ground = extra.ground ?? true;
     const { rig } = this.data;
     const s = this.s;
     const plan = this.plan;
@@ -105,10 +116,10 @@ export class CutoutPuppet {
       const rootV = (isHind(k) ? hindAt : chestAt)(pts[0]!);
       const root: Vec = { x: rootV[0] * s, y: -rootV[1] * s };
       const f = pose.feet[k];
-      const j = legJoints(legPlan, k, root, { x: root.x + f.x, y: f.y }, pose.fold).map((v): P => [v.x / s, -v.y / s]);
+      const j = legJoints(legPlan, k, root, { x: root.x + f.x, y: f.y }, extra.fold?.[k] ?? pose.fold).map((v): P => [v.x / s, -v.y / s]);
       // 关节不能低于地面：膝、踝的中心至少离地半个肢体粗（搭接片的半径），趾尖贴地。
       // 低了就把这一节放平到那个高度（长度不变，朝向不变），后面的节跟着——趴下时腿折起来平放在地上。
-      for (let i = 1; i < 4; i++) {
+      for (let i = 1; ground && i < 4; i++) {
         const h = i < 3 ? this.part(leg.parts[i]!).lapR : 2;
         if (j[i]![1] <= -h) continue;
         const len = Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]);
@@ -171,16 +182,32 @@ export class CutoutPuppet {
     }
     this.lastHipY = pose.hipY;
     rig.ears.forEach((id, i) => this.cut.place(id, ...headAt(this.pv(id)), this.part(id).angle + aHead + this.earSprings[i]!.x));
-    // 尾巴：尾根挂在臀片上，抬起 pose.tail；每节在上一节的基础上再转自己的弹簧。
+    // 尾巴：尾根挂在臀片上，抬起 pose.tail；每节在上一节的基础上再转自己的弹簧（和 tailCurl）。
+    // 有地面时尾巴不钻地：哪一节的末端低于地面（加半个尾巴粗），这一节就往上转到贴着地面——坐着时尾巴顺着地面拖出去。
     let at: P = hindAt(this.pv(rig.tail[0]!));
     let a = aHind + pose.tail - this.rest.tail;
     rig.tail.forEach((id, i) => {
-      a += this.tailSprings[i]!.x;
-      this.cut.place(id, ...at, this.part(id).angle + a);
+      a += this.tailSprings[i]!.x + (i > 0 ? (extra.tailCurl ?? 0) : 0);
       const next = rig.tail[i + 1];
-      if (next) at = add(at, rot(sub(this.pv(next), this.pv(id)), a));
+      const seg = next ? sub(this.pv(next), this.pv(id)) : null;
+      if (ground && seg) {
+        const v = rot(seg, a);
+        const r = this.part(next!).lapR;
+        if (at[1] + v[1] > -r) {
+          const len = Math.hypot(seg[0], seg[1]);
+          const dy = -r - at[1];
+          if (Math.abs(dy) < len) {
+            const dx = (Math.sign(v[0]) || 1) * Math.sqrt(len * len - dy * dy);
+            let d = Math.atan2(dy, dx) - Math.atan2(v[1], v[0]);
+            d = Math.atan2(Math.sin(d), Math.cos(d));
+            a += d;
+          }
+        }
+      }
+      this.cut.place(id, ...at, this.part(id).angle + a);
+      if (seg) at = add(at, rot(seg, a));
     });
     // 碰到地面的纸片压扁一点、往两边鼓，不穿过地面（趴下时的爪、肘、肚子，走路时踩实的脚掌）。
-    this.cut.deform(-3, 10);
+    this.cut.deform(ground ? -3 : Infinity, 10);
   }
 }
