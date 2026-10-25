@@ -4,7 +4,7 @@ import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
 import { speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
-import { bodyPlan, type BodyPlan } from '../../render/puppet/plan';
+import { bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
 import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../../render/puppet/pose';
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
 import type { CutData } from '../../render/puppet/cutout';
@@ -29,7 +29,7 @@ const kit = makeDesignKit(partLibrary, scalingLaws, hintTemplates, viabilityRule
 /** 第 1 步只有四足兽的骨架：长羽毛的现有技术（鸻、秧鸡、几维、鸮鹦鹉）是两足的鸟，下一步再做。 */
 const MAMMALS = designTemplates.filter((t) => t.design.parts.coat !== 'feathers');
 const SYSTEM_NAMES: Record<BodySystem, string> = { skeleton: '骨骼', muscle: '肌肉', gut: '消化道', heart: '心血管', fat: '脂肪' };
-const GAIT_NAMES: Record<Gait, string> = { stand: '站着', walk: '走', trot: '小跑', gallop: '奔跑' };
+const GAIT_NAMES: Record<Gait, string> = { stand: '站着', walk: '走', trot: '小跑', gallop: '奔跑', hop: '跳' };
 const SHOWN_SLOTS = ['coat', 'mouth', 'limbs', 'tail', 'digestion'] as const;
 
 // ---- 状态 ----
@@ -71,7 +71,7 @@ function makeGen(key: string): Gen {
   if (key.startsWith('move:')) {
     const g = key.slice(5) as Exclude<Gait, 'stand'>;
     // 步态换了也先按原来的步态摆完这一段插值：四条腿的先后顺序不会一下子跳掉。
-    return { key, f: () => gaitPose(plan, { ...gaitOf(gaitRules, Math.max(speed, 1e-3), plan.legLen), gait: g, duty: gaitRules.duty[g].value }, phase) };
+    return { key, f: () => gaitPose(plan, { ...gaitOf(gaitRules, Math.max(speed, 1e-3), plan.legLen, intermembralOf(plan)), gait: g, duty: gaitRules.duty[g].value }, phase) };
   }
   if (key === 'eat') return { key, f: () => eatPose(plan, time, chewHz(gaitRules, design.bodyMassKg)) };
   if (key === 'lie') return { key, f: () => liePose(plan) };
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
     const tau = 0.5 * Math.sqrt(plan.legLen / 0.25);
     speed += (targetSpeed - speed) * (1 - Math.exp(-dt / tau));
     if (targetSpeed === 0 && speed < 0.01 * Math.sqrt(plan.legLen)) speed = 0;
-    const gs = gaitOf(gaitRules, speed, plan.legLen);
+    const gs = gaitOf(gaitRules, speed, plan.legLen, intermembralOf(plan));
     phase += gs.strideHz * dt;
     distance += speed * dt;
 
@@ -308,7 +308,7 @@ async function main(): Promise<void> {
 
     // 呼吸：静息按体重；走、跑时加快；奔跑时一步一口气（跑步和呼吸同步，Bramble & Carrier 1983，未核对）。
     const rest = breathsPerMin(gaitRules, design.bodyMassKg) / 60;
-    const bHz = gs.gait === 'gallop' ? gs.strideHz : gs.gait === 'trot' ? rest * 2.5 : gs.gait === 'walk' ? rest * 1.5 : behavior === 'lie' ? rest * 0.85 : rest;
+    const bHz = gs.gait === 'gallop' || gs.gait === 'hop' ? gs.strideHz : gs.gait === 'trot' ? rest * 2.5 : gs.gait === 'walk' ? rest * 1.5 : behavior === 'lie' ? rest * 0.85 : rest;
     breathPhase += bHz * dt;
     puppet.apply(pose, dt, Math.sin(breathPhase * Math.PI * 2));
 

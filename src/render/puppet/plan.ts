@@ -50,6 +50,8 @@ export interface BodyPlan {
   tailLen: number;
   tailW: number;
   tailSegs: number;
+  /** 尾巴的动力学参数（gait.json 的 tail）。 */
+  tailMotion: { stiffness: number; damping: number; idle: number };
   parts: { coat: string; mouth: string; limbs: string; tail: string; digestion: string };
   relative: Readonly<Record<BodySystem, number>>;
 }
@@ -66,6 +68,15 @@ const SNOUT: Record<string, number> = {
   hooked_beak: 0.75,
   stout_bill: 0.95,
 };
+
+/** 步行腿的后腿三节（大腿 / 小腿 / 跖，相对腿长）。 */
+const HIND_SEGS: readonly [number, number, number] = [0.44, 0.44, 0.27];
+
+/** 前腿 ÷ 后腿的总长（intermembral index）：兔约 0.65，猫约 1。步态跳不跳看它。 */
+export function intermembralOf(plan: Pick<BodyPlan, 'hindSegs' | 'foreSegs'>): number {
+  const sum = (s: readonly number[]): number => s[0]! + s[1]! + s[2]!;
+  return sum(plan.foreSegs) / sum(plan.hindSegs);
+}
 
 /** 消化方式：肚子大多少（反刍、后肠发酵要装大量植物）。只是画面。 */
 const BELLY: Record<string, number> = { ruminant: 1.25, hindgut_fermenter: 1.15, simple_stomach: 1, crop_gizzard: 1, short_gut: 0.88 };
@@ -90,13 +101,18 @@ export function bodyPlan(
   const tail = gait.tailLength[parts.tail.id] ?? { length: 0.6, width: 0.06 };
   const tailLen = B * tail.length * shape.tailScale;
   const headR = B * 0.12 * Math.pow(M / 4, -0.05);
+  // 前后腿的比例：腿型部件自带（跳跃后腿的后腿长、前腿短），总长不变的意思是两边按 √比例 分摊。
+  const ls = gait.limbShape[parts.limbs.id];
+  const hf = Math.sqrt(ls?.hindFore ?? 1);
+  const hp = ls?.hindSegs ?? HIND_SEGS;
+  const hk = (HIND_SEGS[0] + HIND_SEGS[1] + HIND_SEGS[2]) / (hp[0] + hp[1] + hp[2]);
   return {
     massKg: M,
     bird,
     bodyLen: B,
     legLen: L,
-    hindSegs: [0.44 * L, 0.44 * L, 0.27 * L],
-    foreSegs: [0.44 * L, 0.47 * L, 0.22 * L],
+    hindSegs: [hp[0] * hk * hf * L, hp[1] * hk * hf * L, hp[2] * hk * hf * L],
+    foreSegs: [(0.44 * L) / hf, (0.47 * L) / hf, (0.22 * L) / hf],
     hipX: -0.3 * B,
     shoulderX: 0.24 * B,
     chestH,
@@ -113,6 +129,7 @@ export function bodyPlan(
     tailLen,
     tailW: B * tail.width,
     tailSegs: tail.length < 0.2 ? 1 : parts.tail.id === 'bushy_tail' ? 2 : tail.length < 0.5 ? 3 : 5,
+    tailMotion: { stiffness: gait.tail.stiffness.value, damping: gait.tail.damping.value, idle: gait.tail.idle.value },
     parts: { coat: parts.coat.id, mouth: parts.mouth.id, limbs: parts.limbs.id, tail: parts.tail.id, digestion: parts.digestion.id },
     relative: rel,
   };

@@ -18,8 +18,10 @@
   "duty": {
     "walk": { "value": 0.65, "basis": "assumption", "confidence": "unverified", "source": "每只脚着地的时间占一步的比例：走 > 0.5，小跑约 0.45，奔跑约 0.3（Alexander 2003《Principles of Animal Locomotion》的一般说法，未核对）" },
     "trot": { "value": 0.45, "basis": "assumption", "confidence": "unverified", "source": "同上" },
-    "gallop": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "同上" }
+    "gallop": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "同上" },
+    "hop": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "跳（半跳跃步，half-bound）：后脚一起蹬、一起落，着地时间短，同奔跑" }
   },
+  "hopIntermembral": { "value": 0.77, "basis": "assumption", "confidence": "unverified", "source": "前后腿长度比（intermembral index，前腿 ÷ 后腿）低于这个值就跳着走：兔形目约 0.6–0.7、袋鼠约 0.3–0.4，猫、狗、鼬约 0.85–1（大致数，凭记忆，未核对）。看的是身体的几何，不看选了哪个部件" },
   "breath": {
     "coef": { "value": 53.5, "basis": "law", "confidence": "2+", "source": "静息呼吸 ≈ 53.5·M^−0.26 次/分（Stahl 1967 J Appl Physiol 22:453；Calder 引作 322·W^−0.26，W 克；Worthington 等 1991 写成 0.89·M^−0.26 赫兹，三者一致）" },
     "exp": { "value": -0.26, "basis": "law", "confidence": "2+", "source": "同上" }
@@ -44,7 +46,18 @@
     "running_legs": 1.2,
     "climbing_claws": 0.95,
     "digging_claws": 0.75,
-    "short_legs": 0.55
+    "short_legs": 0.55,
+    "leaping_legs": 1
+  },
+  "limbShape": {
+    "说明": "腿型部件自带的前后腿比例（只是画面）。hindFore：后腿总长 ÷ 前腿总长，相对步行腿；hindSegs：后腿三节（大腿、小腿、跖）的比例，不写用步行腿的。跳不跳由这个几何推出来（hopIntermembral），不看部件名。",
+    "leaping_legs": { "hindFore": 1.5, "hindSegs": [0.36, 0.44, 0.42] }
+  },
+  "tail": {
+    "说明": "尾巴的动力学（只是画面）：每节是绕上一节转的阻尼弹簧，外侧那一截的惯性、重力让它跟不上身体，甩起来一节晚一节。肌肉按姿态预先抵消重力，所以静止时尾巴就是画的样子。",
+    "stiffness": { "value": 2.0, "basis": "assumption", "confidence": "unverified", "source": "每个关节的固有角频率 = stiffness × √(g ÷ 外侧那一截的长度)：长尾巴晃得慢（单摆），系数按家猫走路时尾巴的摆动看着自然调的" },
+    "damping": { "value": 0.2, "basis": "assumption", "confidence": "unverified", "source": "阻尼比：小一些，甩出去会回荡一两下" },
+    "idle": { "value": 0.14, "basis": "assumption", "confidence": "unverified", "source": "站着时尾巴自己慢慢摆的幅度（弧度），一阵一阵的" }
   },
   "tailLength": {
     "说明": "尾型部件自带的尾长（相对头体长）和粗细（相对头体长）。只是画面。",

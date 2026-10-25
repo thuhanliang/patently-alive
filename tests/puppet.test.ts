@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { designTemplates, gaitRules, partLibrary, viabilityRules, type Design } from '../src/data';
 import { partsOf } from '../src/sim';
 import { breathsPerMin, gaitOf, heartPerMin, legLengthM, springStep, topSpeed, walkSpeed } from '../src/render/puppet/gait';
-import { bodyPlan } from '../src/render/puppet/plan';
+import { bodyPlan, intermembralOf } from '../src/render/puppet/plan';
 import { LEGS } from '../src/render/puppet/plan';
 import { eatPose, gaitPose, liePose, skeletonOf, solveTwoBone, standPose } from '../src/render/puppet/pose';
 
@@ -124,5 +124,58 @@ describe('姿态', () => {
   it('站着时四只脚都在地上', () => {
     const sk = skeletonOf(planOf(cat), standPose(planOf(cat)));
     for (const k of LEGS) expect(sk.legs[k][3].y).toBeCloseTo(0, 6);
+  });
+});
+
+// 动作的差异来自部件的几何，不来自"选了哪个物种当模板"（DECISIONS"纸偶的部件抽象"）。
+describe('跳由前后腿的比例推出来', () => {
+  const withLimbs = (d: Design, limbs: string): Design => ({ ...d, parts: { ...d.parts, limbs } });
+  const gaitAt = (d: Design, fr: number) => {
+    const p = planOf(d);
+    return gaitOf(gaitRules, Math.sqrt(fr * 9.81 * p.legLen), p.legLen, intermembralOf(p)).gait;
+  };
+  const rabbit = template('rabbit');
+
+  it('穴兔（跳跃后腿）走、跑都是跳；猫也一样，换上跳跃后腿就跳', () => {
+    for (const fr of [0.25, 1, 3]) {
+      expect(gaitAt(rabbit, fr)).toBe('hop');
+      expect(gaitAt(withLimbs(cat, 'leaping_legs'), fr)).toBe('hop');
+    }
+  });
+
+  it('兔子换成步行腿就不跳了：走、小跑、奔跑', () => {
+    const r = withLimbs(rabbit, 'walking_legs');
+    expect(gaitAt(r, 0.25)).toBe('walk');
+    expect(gaitAt(r, 1)).toBe('trot');
+    expect(gaitAt(r, 3)).toBe('gallop');
+  });
+
+  it('前腿 ÷ 后腿：跳跃后腿约 0.65，其余的腿型约 1', () => {
+    expect(intermembralOf(planOf(rabbit))).toBeLessThan(0.7);
+    for (const limbs of ['walking_legs', 'running_legs', 'climbing_claws', 'digging_claws', 'short_legs']) {
+      expect(intermembralOf(planOf(withLimbs(cat, limbs)))).toBeGreaterThan(0.95);
+    }
+  });
+
+  it('前腿短的身体站着前低后高；一般的腿前后一样高（和以前一样）', () => {
+    const r = standPose(planOf(rabbit));
+    expect(r.shoulderY).toBeLessThan(r.hipY * 0.9);
+    const c = standPose(planOf(cat));
+    expect(c.shoulderY).toBe(c.hipY);
+    expect(c.hipY).toBe(planOf(cat).legLen * 0.9);
+  });
+
+  it('跳的每个时刻，骨头长度不变、脚不钻地', () => {
+    const p = planOf(rabbit);
+    const gs = gaitOf(gaitRules, Math.sqrt(9.81 * p.legLen), p.legLen, intermembralOf(p));
+    for (let i = 0; i < 20; i++) {
+      const sk = skeletonOf(p, gaitPose(p, gs, i / 20));
+      for (const k of LEGS) {
+        const segs = k.endsWith('Hind') ? p.hindSegs : p.foreSegs;
+        const pts = sk.legs[k];
+        for (let j = 0; j < 3; j++) expect(Math.hypot(pts[j + 1]!.x - pts[j]!.x, pts[j + 1]!.y - pts[j]!.y)).toBeCloseTo(segs[j]!, 6);
+        expect(pts[3]!.y).toBeGreaterThan(-1e-9);
+      }
+    }
   });
 });

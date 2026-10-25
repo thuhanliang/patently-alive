@@ -33,7 +33,9 @@ export const GaitRulesSchema = z.strictObject({
   walkTrotFroude: ThresholdSchema,
   trotGallopFroude: ThresholdSchema,
   walkFroude: ThresholdSchema,
-  duty: z.strictObject({ walk: ThresholdSchema, trot: ThresholdSchema, gallop: ThresholdSchema }),
+  duty: z.strictObject({ walk: ThresholdSchema, trot: ThresholdSchema, gallop: ThresholdSchema, hop: ThresholdSchema }),
+  /** 前腿 ÷ 后腿总长低于它就跳着走（看身体的几何，不看部件名）。 */
+  hopIntermembral: ThresholdSchema,
   breath: Power,
   heart: Power,
   topSpeed: z.strictObject({ a: ThresholdSchema, b: ThresholdSchema, h: ThresholdSchema, i: ThresholdSchema }),
@@ -42,6 +44,12 @@ export const GaitRulesSchema = z.strictObject({
   limbLength: z.object({ 说明: z.string() }).catchall(z.number().positive()),
   /** 尾型部件自带的尾长、粗细（相对头体长），键是部件 id。 */
   tailLength: z.object({ 说明: z.string() }).catchall(z.strictObject({ length: z.number().positive(), width: z.number().positive() })),
+  /** 腿型部件自带的前后腿比例（后腿 ÷ 前腿，相对步行腿）和后腿三节的比例，键是部件 id。 */
+  limbShape: z
+    .object({ 说明: z.string() })
+    .catchall(z.strictObject({ hindFore: z.number().positive(), hindSegs: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional() })),
+  /** 尾巴的动力学。 */
+  tail: z.strictObject({ 说明: z.string(), stiffness: ThresholdSchema, damping: ThresholdSchema, idle: ThresholdSchema }),
   references: z.strictObject({ 说明: z.string(), animals: z.array(Reference).min(2) }),
 });
 export type GaitRules = z.infer<typeof GaitRulesSchema>;
