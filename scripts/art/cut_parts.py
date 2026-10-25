@@ -13,6 +13,7 @@
 5. 炸开图：按种子.json 的零件树，从根开始，每片沿给定方向推开，直到和已经放好的零件之间留出空隙；角度和大小都不变。
 
 种子.json：{"parts": {"<名字>": {"seeds": [[x, y], ...], "parent": "<父零件>" | null, "dir": [dx, dy]}}, "gap": 16}
+图上没有分界线的零件（耳根、嘴、腕、踝）不给 seeds，改给 "cutFrom": "<从哪片切>", "poly": [[x, y], ...]。
 （坐标是原图像素，y 朝下；dir 是相对父零件往哪边推。）
 
 输出：
@@ -30,14 +31,9 @@ import numpy as np
 from skimage.segmentation import watershed
 
 
-def main(src: str, seeds_path: str, out: str) -> None:
-    im = cv2.imread(src)
-    if im is None:
-        sys.exit(f'读不了图：{src}')
-    spec = json.load(open(seeds_path, encoding='utf-8'))
-    parts: dict = spec['parts']
-    gap = int(spec.get('gap', 16))
-    names = list(parts)
+def segment(im: np.ndarray, parts: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """分水岭切分。返回 (标签图：0 背景、i+1 第 i 片零件, 前景遮罩, 背景色)。"""
+    names = [n for n in parts if 'seeds' in parts[n]]
     H, W = im.shape[:2]
 
     # 1. 背景：和四角的平均色接近。
@@ -62,13 +58,16 @@ def main(src: str, seeds_path: str, out: str) -> None:
     markers[cv2.erode((~fg).astype(np.uint8), k) > 0] = bg
     lab = watershed(elev, markers)
     lab[~fg] = 0
+    lab[lab == bg] = 0
+    return lab, fg, corners
 
-    # 4. 每片零件：带上分界线（往外 1 像素），只留最大的一块，填掉里面的小洞。
-    os.makedirs(os.path.join(out, 'parts'), exist_ok=True)
-    rgba = cv2.cvtColor(im, cv2.COLOR_BGR2BGRA)
+
+def part_masks(lab: np.ndarray, fg: np.ndarray, parts: dict) -> dict:
+    """每片零件的遮罩：带上分界线（往外 1 像素），只留最大的一块，填掉里面的小洞。
+    没有种子、给了 "cutFrom" 和 "poly" 的零件：图上没有分界线（耳根、嘴、腕、踝），用多边形从 cutFrom 那片里切出来。"""
     masks = {}
-    manifest = {}
-    for i, n in enumerate(names):
+    seeded = [n for n in parts if 'seeds' in parts[n]]
+    for i, n in enumerate(seeded):
         m = cv2.dilate((lab == i + 1).astype(np.uint8), np.ones((3, 3), np.uint8)) & fg.astype(np.uint8)
         cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         if not cnts:
@@ -76,10 +75,42 @@ def main(src: str, seeds_path: str, out: str) -> None:
         m2 = np.zeros_like(m)
         cv2.drawContours(m2, [max(cnts, key=cv2.contourArea)], -1, 1, -1)
         masks[n] = m2.astype(bool)
-        ys, xs = np.nonzero(m2)
+    for n, spec in parts.items():
+        if 'seeds' in spec:
+            continue
+        src = spec['cutFrom']
+        poly = np.zeros(fg.shape, np.uint8)
+        cv2.fillPoly(poly, [np.array(spec['poly'], np.int32)], 1)
+        cut = masks[src] & (poly > 0)
+        if not cut.any():
+            sys.exit(f'零件 {n} 的多边形和 {src} 没有交集')
+        masks[n] = cut
+        masks[src] = masks[src] & ~cut
+    return {n: masks[n] for n in parts}
+
+
+def main(src: str, seeds_path: str, out: str) -> None:
+    im = cv2.imread(src)
+    if im is None:
+        sys.exit(f'读不了图：{src}')
+    spec = json.load(open(seeds_path, encoding='utf-8'))
+    parts: dict = spec['parts']
+    gap = int(spec.get('gap', 16))
+    names = list(parts)
+    H, W = im.shape[:2]
+    lab, fg, corners = segment(im, parts)
+    masks = part_masks(lab, fg, parts)
+    bg = len(names) + 1
+
+    # 4. 每片零件存成透明 PNG。
+    os.makedirs(os.path.join(out, 'parts'), exist_ok=True)
+    rgba = cv2.cvtColor(im, cv2.COLOR_BGR2BGRA)
+    manifest = {}
+    for n, m in masks.items():
+        ys, xs = np.nonzero(m)
         x0, x1, y0, y1 = int(xs.min()), int(xs.max()) + 1, int(ys.min()), int(ys.max()) + 1
         p = rgba[y0:y1, x0:x1].copy()
-        p[:, :, 3] = m2[y0:y1, x0:x1] * 255
+        p[:, :, 3] = m[y0:y1, x0:x1] * 255
         cv2.imwrite(os.path.join(out, 'parts', f'{n}.png'), p)
         manifest[n] = {'bbox': [x0, y0, x1 - x0, y1 - y0], 'parent': parts[n].get('parent')}
 

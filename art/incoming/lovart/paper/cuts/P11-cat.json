@@ -1,23 +1,41 @@
 {
  "source": "art/incoming/lovart/paper/raw/P11-cat-whole.webp",
  "gap": 16,
+ "rig": {
+  "ground": 748,
+  "hind": "hind", "chest": "chest", "head": "head", "jaw": "jaw", "ears": ["nearEar", "farEar"],
+  "tail": ["tail1", "tail2", "tail3", "tail4", "tail5"],
+  "legs": {
+   "nearHind": {"parts": ["thigh", "shank", "hindPaw"], "toe": [318, 745]},
+   "farHind": {"parts": ["farThigh", "farShank", "farHindPaw"], "toe": [560, 745]},
+   "nearFore": {"parts": ["upperArm", "forearm", "forePaw"], "toe": [968, 745]},
+   "farFore": {"parts": ["farUpperArm", "farForearm", "farForePaw"], "toe": [712, 745]}
+  }
+ },
+ "zOrder": ["farThigh", "farHindPaw", "farShank", "farUpperArm", "farForePaw", "farForearm", "tail5", "tail4", "tail3", "tail2", "tail1", "hind", "chest", "upperArm", "forePaw", "forearm", "farEar", "jaw", "head", "nearEar", "thigh", "hindPaw", "shank"],
  "parts": {
-  "hind":        { "seeds": [[480, 330], [520, 470], [540, 500]], "parent": null },
-  "chest":       { "seeds": [[650, 330], [870, 440], [700, 480], [620, 480]], "parent": "hind", "dir": [1, 0] },
-  "tail1":       { "seeds": [[305, 425], [300, 455]], "parent": "hind", "dir": [-1, -0.2] },
-  "tail2":       { "seeds": [[250, 480], [232, 492]], "parent": "tail1", "dir": [-1, 0.55] },
-  "tail3":       { "seeds": [[195, 522], [180, 535]], "parent": "tail2", "dir": [-1, 0.55] },
-  "tail4":       { "seeds": [[130, 570], [118, 580]], "parent": "tail3", "dir": [-1, 0.55] },
-  "tail5":       { "seeds": [[60, 615], [40, 625], [80, 600]], "parent": "tail4", "dir": [-1, 0.55] },
-  "thigh":       { "seeds": [[420, 460], [360, 520], [390, 420]], "parent": "hind", "dir": [0, 1] },
-  "shank":       { "seeds": [[285, 650], [270, 720], [310, 600]], "parent": "thigh", "dir": [0, 1] },
-  "farThigh":    { "seeds": [[490, 545]], "parent": "hind", "dir": [0, 1] },
-  "farShank":    { "seeds": [[480, 680], [520, 720], [460, 630]], "parent": "farThigh", "dir": [0, 1] },
-  "scapula":     { "seeds": [[760, 350], [740, 400]], "parent": "chest", "dir": [0.2, -1] },
-  "upperArm":    { "seeds": [[790, 490], [810, 530], [760, 470]], "parent": "scapula", "dir": [0, 1] },
-  "forearm":     { "seeds": [[880, 660], [930, 720], [830, 590]], "parent": "upperArm", "dir": [0, 1] },
-  "farUpperArm": { "seeds": [[725, 565]], "parent": "chest", "dir": [0, 1] },
-  "farForearm":  { "seeds": [[680, 690], [665, 720], [690, 640]], "parent": "farUpperArm", "dir": [0, 1] },
-  "head":        { "seeds": [[900, 300], [950, 360], [880, 240]], "parent": "chest", "dir": [1, -0.5] }
+  "hind": {"seeds": [[480, 330], [520, 470], [540, 500]], "parent": null, "pivot": [556, 433]},
+  "chest": {"overlap": 28, "seeds": [[650, 330], [870, 440], [700, 480], [620, 480], [760, 350], [740, 400]], "parent": "hind", "dir": [1, 0], "pivot": [556, 433]},
+  "tail1": {"seeds": [[305, 425], [300, 455]], "parent": "hind", "dir": [-1, -0.2], "pivot": [338, 392], "pivotEstimated": true},
+  "tail2": {"seeds": [[250, 480], [232, 492]], "parent": "tail1", "dir": [-1, 0.55], "pivot": [275, 457]},
+  "tail3": {"seeds": [[195, 522], [180, 535]], "parent": "tail2", "dir": [-1, 0.55], "pivot": [221, 502]},
+  "tail4": {"seeds": [[130, 570], [118, 580]], "parent": "tail3", "dir": [-1, 0.55], "pivot": [166, 545]},
+  "tail5": {"seeds": [[60, 615], [40, 625], [80, 600]], "parent": "tail4", "dir": [-1, 0.55], "pivot": [101, 589]},
+  "thigh": {"seeds": [[420, 460], [360, 520], [390, 420]], "parent": "hind", "dir": [0, 1], "pivot": [392, 380]},
+  "shank": {"seeds": [[285, 650], [270, 720], [310, 600]], "parent": "thigh", "dir": [0, 1], "pivot": [304, 576]},
+  "hindPaw": {"cutFrom": "shank", "poly": [[200, 697], [300, 689], [340, 689], [340, 780], [200, 780]], "parent": "shank", "dir": [0, 1], "pivot": [262, 691]},
+  "farThigh": {"seeds": [[490, 545]], "parent": "hind", "dir": [0, 1], "pivot": [500, 392], "pivotEstimated": true},
+  "farShank": {"seeds": [[480, 680], [520, 720], [460, 630]], "parent": "farThigh", "dir": [0, 1], "pivot": [456, 607]},
+  "farHindPaw": {"cutFrom": "farShank", "poly": [[440, 706], [530, 690], [600, 690], [600, 780], [440, 780]], "parent": "farShank", "dir": [0, 1], "pivot": [494, 697]},
+  "upperArm": {"seeds": [[790, 490], [810, 530], [760, 470]], "parent": "chest", "dir": [0, 1], "pivot": [778, 425]},
+  "forearm": {"seeds": [[880, 660], [930, 720], [830, 590]], "parent": "upperArm", "dir": [0, 1], "pivot": [805, 563]},
+  "forePaw": {"cutFrom": "forearm", "poly": [[830, 706], [940, 682], [1010, 682], [1010, 780], [830, 780]], "parent": "forearm", "dir": [0, 1], "pivot": [888, 694]},
+  "farUpperArm": {"seeds": [[725, 565]], "parent": "chest", "dir": [0, 1], "pivot": [692, 442], "pivotEstimated": true},
+  "farForearm": {"seeds": [[680, 690], [665, 720], [690, 640]], "parent": "farUpperArm", "dir": [0, 1], "pivot": [688, 613]},
+  "farForePaw": {"cutFrom": "farForearm", "poly": [[610, 692], [705, 688], [740, 688], [740, 780], [610, 780]], "parent": "farForearm", "dir": [0, 1], "pivot": [660, 690]},
+  "head": {"seeds": [[900, 300], [950, 360], [880, 240]], "parent": "chest", "dir": [1, -0.5], "pivot": [866, 356]},
+  "nearEar": {"cutFrom": "head", "poly": [[810, 160], [904, 160], [904, 238], [838, 282], [810, 282]], "parent": "head", "dir": [-0.3, -1], "pivot": [872, 262]},
+  "farEar": {"cutFrom": "head", "poly": [[904, 160], [970, 160], [970, 252], [904, 238]], "parent": "head", "dir": [0.3, -1], "pivot": [921, 243]},
+  "jaw": {"cutFrom": "head", "poly": [[930, 366], [972, 352], [1003, 346], [1030, 344], [1030, 420], [920, 420], [918, 384]], "parent": "head", "dir": [0.4, 1], "pivot": [936, 372]}
  }
 }
