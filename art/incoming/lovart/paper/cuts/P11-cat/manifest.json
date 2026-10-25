@@ -1,0 +1,226 @@
+{
+ "source": "P11-cat-whole.webp",
+ "parts": {
+  "hind": {
+   "bbox": [
+    393,
+    298,
+    174,
+    223
+   ],
+   "parent": null,
+   "offset": [
+    0.0,
+    0.0
+   ]
+  },
+  "chest": {
+   "bbox": [
+    540,
+    302,
+    204,
+    241
+   ],
+   "parent": "hind",
+   "offset": [
+    30.0,
+    0.0
+   ]
+  },
+  "tail1": {
+   "bbox": [
+    265,
+    359,
+    86,
+    124
+   ],
+   "parent": "hind",
+   "offset": [
+    -9.8,
+    -2.0
+   ]
+  },
+  "tail2": {
+   "bbox": [
+    209,
+    432,
+    85,
+    93
+   ],
+   "parent": "tail1",
+   "offset": [
+    -29.1,
+    8.6
+   ]
+  },
+  "tail3": {
+   "bbox": [
+    156,
+    478,
+    83,
+    88
+   ],
+   "parent": "tail2",
+   "offset": [
+    -46.6,
+    18.3
+   ]
+  },
+  "tail4": {
+   "bbox": [
+    92,
+    518,
+    94,
+    91
+   ],
+   "parent": "tail3",
+   "offset": [
+    -67.6,
+    29.8
+   ]
+  },
+  "tail5": {
+   "bbox": [
+    6,
+    561,
+    113,
+    91
+   ],
+   "parent": "tail4",
+   "offset": [
+    -88.7,
+    41.4
+   ]
+  },
+  "thigh": {
+   "bbox": [
+    282,
+    330,
+    206,
+    284
+   ],
+   "parent": "hind",
+   "offset": [
+    0.0,
+    164.0
+   ]
+  },
+  "shank": {
+   "bbox": [
+    225,
+    555,
+    110,
+    198
+   ],
+   "parent": "thigh",
+   "offset": [
+    0.0,
+    228.0
+   ]
+  },
+  "farThigh": {
+   "bbox": [
+    418,
+    517,
+    124,
+    109
+   ],
+   "parent": "hind",
+   "offset": [
+    0.0,
+    196.0
+   ]
+  },
+  "farShank": {
+   "bbox": [
+    417,
+    586,
+    153,
+    167
+   ],
+   "parent": "farThigh",
+   "offset": [
+    0.0,
+    232.0
+   ]
+  },
+  "scapula": {
+   "bbox": [
+    718,
+    278,
+    195,
+    185
+   ],
+   "parent": "chest",
+   "offset": [
+    59.0,
+    -145.1
+   ]
+  },
+  "upperArm": {
+   "bbox": [
+    723,
+    401,
+    145,
+    195
+   ],
+   "parent": "scapula",
+   "offset": [
+    59.0,
+    -97.1
+   ]
+  },
+  "forearm": {
+   "bbox": [
+    776,
+    561,
+    202,
+    196
+   ],
+   "parent": "upperArm",
+   "offset": [
+    59.0,
+    -53.1
+   ]
+  },
+  "farUpperArm": {
+   "bbox": [
+    656,
+    539,
+    110,
+    94
+   ],
+   "parent": "chest",
+   "offset": [
+    30.0,
+    20.0
+   ]
+  },
+  "farForearm": {
+   "bbox": [
+    626,
+    594,
+    94,
+    159
+   ],
+   "parent": "farUpperArm",
+   "offset": [
+    30.0,
+    64.0
+   ]
+  },
+  "head": {
+   "bbox": [
+    817,
+    184,
+    203,
+    228
+   ],
+   "parent": "chest",
+   "offset": [
+    162.4,
+    -66.2
+   ]
+  }
+ }
+}
