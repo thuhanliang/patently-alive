@@ -141,6 +141,10 @@ function autoStep(dt: number): void {
   }
 }
 
+// 切图零件（?cut=<名字>）：按需加载，打包时一起带上（GitHub Pages 上也能用）。
+const CUT_DATA = import.meta.glob<unknown>('../../../art/incoming/lovart/paper/cuts/*/vector.json', { import: 'default' });
+const CUT_PAPER = import.meta.glob<string>('../../../art/incoming/lovart/paper/cuts/*/paper.png', { query: '?url', import: 'default' });
+
 // ---- 画面 ----
 async function main(): Promise<void> {
   const app = new Application();
@@ -156,9 +160,9 @@ async function main(): Promise<void> {
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void };
   if (cut) {
-    const dir = `art/incoming/lovart/paper/cuts/${cut}`;
-    const data = (await (await fetch(`${dir}/vector.json`)).json()) as CutData;
-    const paper = (await Assets.load(`${dir}/paper.png`)) as Texture;
+    const dir = `../../../art/incoming/lovart/paper/cuts/${cut}`;
+    const data = (await CUT_DATA[`${dir}/vector.json`]!()) as CutData;
+    const paper = (await Assets.load(await CUT_PAPER[`${dir}/paper.png`]!())) as Texture;
     paper.source.addressMode = 'repeat';
     puppet = new CutoutPuppet(data, paper, { main: 0xe6d8bd, stripe: 0xe6d8bd, pale: 0xe6d8bd }, plan);
   } else {
