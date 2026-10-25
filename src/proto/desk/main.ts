@@ -156,7 +156,7 @@ async function main(): Promise<void> {
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void };
   if (cut) {
-    const dir = `/art/incoming/lovart/paper/cuts/${cut}`;
+    const dir = `art/incoming/lovart/paper/cuts/${cut}`;
     const data = (await (await fetch(`${dir}/vector.json`)).json()) as CutData;
     const paper = (await Assets.load(`${dir}/paper.png`)) as Texture;
     paper.source.addressMode = 'repeat';
