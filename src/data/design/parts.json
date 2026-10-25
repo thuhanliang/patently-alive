@@ -110,6 +110,13 @@
       ]
     },
     {
+      "id": "leaping_legs",
+      "slot": "limbs",
+      "name": "跳跃后腿",
+      "blurb": "后腿又长又有劲，前腿短：一蹬就窜出去，跳着走。",
+      "effects": [{ "target": "mortality", "factor": 0.88, "why": "后腿一蹬就窜出去、急转弯，甩得掉追的" }]
+    },
+    {
       "id": "climbing_claws",
       "slot": "limbs",
       "name": "攀爬钩爪",

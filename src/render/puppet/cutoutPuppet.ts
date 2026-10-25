@@ -2,6 +2,7 @@ import type { Container, Texture } from 'pixi.js';
 import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
 import { boneWarp, compose, mapShape, reach, regionStretch, scale, type P, type Shape, type Warp } from './fit';
 import { pendulumOmega, springStep, type Spring } from './gait';
+import { TailChain, idleSwish } from './tail';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { legJoints, standPose, type Pose, type Vec } from './pose';
 
@@ -61,13 +62,14 @@ export class CutoutPuppet {
   private readonly fitted = new Map<string, Fitted>();
   /** 用到的尾节（成品图里的最后几节）。 */
   private tail: string[] = [];
-  private tailSprings: Spring[] = [];
+  private tailChain = new TailChain([], [], { stiffness: 1, damping: 1 });
   private earSprings: Spring[] = [];
-  private lastHipY = 0;
   private lastHead = 0;
   private time = 0;
   /** 站姿：成品图画的就是站姿，头和尾巴的角度都相对它算。 */
   private rest!: Pose;
+  /** 原样的站姿：成品图画的是它，身体的倾斜相对它算（前腿短的身体站着就前低后高）。 */
+  private restRef!: Pose;
 
   /** ref 是成品图那条现有技术（data.rig.template）的 BodyPlan；flat 画成影子纸（见 Cutout）。 */
   constructor(
@@ -101,6 +103,7 @@ export class CutoutPuppet {
   build(plan: BodyPlan): void {
     this.plan = plan;
     this.rest = standPose(plan);
+    this.restRef = standPose(this.ref);
     const { rig } = this.data;
     const ref = this.ref;
     const shapes = new Map<string, Shape>();
@@ -210,7 +213,15 @@ export class CutoutPuppet {
       const rB = rig.tail[i + 1] ? this.part(rig.tail[i + 1]!).lapR : 0;
       fitPiece(id, boneWarp({ end, rA: this.part(id).lapR, rB }, kW, tailLen(i) * kLen), { end: tailEnd(id, i) });
     });
-    this.tailSprings = this.tail.map(() => ({ x: 0, v: 0 }));
+    // 尾巴的动力学：每节的长度、粗细（米）按贴好的零件算。
+    this.tailChain = new TailChain(
+      this.tail.map((id) => {
+        const e = fitted.get(id)!.sockets.end!;
+        return Math.hypot(e[0], e[1]) * this.s;
+      }),
+      this.tail.map((id) => this.part(id).lapR * kW * 2 * this.s),
+      plan.tailMotion,
+    );
 
     // 铆钉：每个关节一颗，钉在上下两片里上面那片上；大小跟着关节的粗细（圆头半径 × 0.32）。
     const rivets = new Map<string, [number, number, number][]>();
@@ -266,7 +277,7 @@ export class CutoutPuppet {
 
     // 躯干：倾斜角按 BodyPlan 的髋肩距离算（和代码纸偶一样斜），再减去站姿的倾斜（成品图画的是站姿）。
     const pitch = Math.atan2(pose.shoulderY - pose.hipY, plan.shoulderX - plan.hipX);
-    const pitchRest = Math.atan2(this.rest.shoulderY - this.rest.hipY, plan.shoulderX - plan.hipX);
+    const pitchRest = Math.atan2(this.restRef.shoulderY - this.restRef.hipY, this.ref.shoulderX - this.ref.hipX);
     const aHind = -(pitch - pitchRest);
     const rHind = this.part(rig.hind).angle + aHind;
     const hipV: P = [plan.hipX / s, -pose.hipY / s];
@@ -331,31 +342,34 @@ export class CutoutPuppet {
     this.cut.place(rig.head, ...headV, rHead);
     this.cut.place(rig.jaw, ...at(headV, rHead, so(rig.head, rig.jaw)), this.part(rig.jaw).angle + aHead + pose.jaw);
 
-    // 尾巴、耳朵的弹簧（同 Puppet）。
+    // 耳朵的弹簧（同 Puppet）。
     if (dt > 0) {
-      const vy = (pose.hipY - this.lastHipY) / dt / Math.max(0.05, plan.legLen);
-      const omega = pendulumOmega(plan.tailLen) * 2.2;
-      const swish = 0.18 * Math.sin(this.time * omega * 0.18) * Math.sin(this.time * 0.37);
-      let lead = Math.max(-0.6, Math.min(0.6, vy * 0.12));
-      this.tailSprings.forEach((sp, i) => {
-        springStep(sp, lead + (i === this.tailSprings.length - 1 ? swish : 0), omega, 0.32, dt);
-        lead = sp.x * 0.85;
-      });
       const headAng = pose.neck + pose.head;
       const hv = (headAng - this.lastHead) / dt;
       const earOmega = pendulumOmega(plan.earH) * 1.6;
       for (const sp of this.earSprings) springStep(sp, Math.max(-0.5, Math.min(0.5, -hv * 0.05)), earOmega, 0.28, dt);
       this.lastHead = headAng;
     }
-    this.lastHipY = pose.hipY;
     rig.ears.forEach((id, i) => this.cut.place(id, ...at(headV, rHead, so(rig.head, id)), this.part(id).angle + aHead + this.earSprings[i]!.x));
 
-    // 尾巴：尾根挂在臀片上，抬起 pose.tail；每节在上一节的基础上再转自己的弹簧（和 tailCurl）。
-    // 有地面时尾巴不钻地：哪一节的末端低于地面（加半个尾巴粗），这一节就往上转到贴着地面——坐着时尾巴顺着地面拖出去。
+    // 尾巴：尾根挂在臀片上，抬起 pose.tail，每节再弯 tailCurl，这是"想要的"尾巴；动力学（tail.ts）算出每个关节跟不上多少。
+    // 有地面时尾巴不钻地：哪一节的末端低于地面（加半个尾巴粗），这一节就往上转到贴着地面——坐着时尾巴顺着地面拖出去，
+    // 抬起来的量记回动力学的状态里，下一帧不再往地里甩。
+    // 坐标：这里 y 朝下、角度顺时针；动力学 y 朝上，所以位置的 y、角度都取反。
     let pos = at(midV, rHind, so(rig.hind, 'tail'));
-    let a = aHind + pose.tail - this.rest.tail;
+    const a0 = aHind + pose.tail - this.rest.tail;
+    {
+      const dirs: number[] = [];
+      let k = a0;
+      this.tail.forEach((id, i) => {
+        if (i > 0) k += extra.tailCurl ?? 0;
+        dirs.push(-(angleOf(so(id, 'end')) + this.part(id).angle + k));
+      });
+      this.tailChain.step(dt, [pos[0] * s, -pos[1] * s], dirs, idleSwish(this.time, plan.tailLen, plan.tailMotion.idle));
+    }
+    let a = a0;
     this.tail.forEach((id, i) => {
-      a += this.tailSprings[i]!.x + (i > 0 ? (extra.tailCurl ?? 0) : 0);
+      a += -this.tailChain.dev[i]! + (i > 0 ? (extra.tailCurl ?? 0) : 0);
       const p = this.part(id);
       const end = so(id, 'end');
       const next = this.tail[i + 1];
@@ -370,6 +384,7 @@ export class CutoutPuppet {
             let d = Math.atan2(dy, dx) - Math.atan2(v[1], v[0]);
             d = Math.atan2(Math.sin(d), Math.cos(d));
             a += d;
+            this.tailChain.push(i, -d);
           }
         }
       }

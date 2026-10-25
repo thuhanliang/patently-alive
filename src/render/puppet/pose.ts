@@ -41,17 +41,23 @@ const LEG_PHASE: Record<Exclude<Gait, 'stand'>, Record<LegKey, number>> = {
   trot: { nearHind: 0, farFore: 0, farHind: 0.5, nearFore: 0.5 },
   // 奔跑（横向跑步）：两条后腿先后落地，半个周期后两条前腿。
   gallop: { nearHind: 0, farHind: 0.1, nearFore: 0.5, farFore: 0.6 },
+  // 跳（半跳跃步）：两只前脚先后落地，半个周期后两只后脚几乎同时落在前脚前面，一蹬，腾空。
+  hop: { nearFore: 0, farFore: 0.08, nearHind: 0.5, farHind: 0.53 },
 };
 
-const LIFT: Record<Exclude<Gait, 'stand'>, number> = { walk: 0.12, trot: 0.2, gallop: 0.28 };
+const LIFT: Record<Exclude<Gait, 'stand'>, number> = { walk: 0.12, trot: 0.2, gallop: 0.28, hop: 0.22 };
 
 const frac = (x: number): number => x - Math.floor(x);
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 const TAU = Math.PI * 2;
 
-/** 站着时髋、肩的高度（腿不完全伸直）。 */
+/**
+ * 站着时髋、肩的高度（腿不完全伸直）。腿短的一头（跳跃后腿的前腿）够不着就压低：兔子站着是前低后高、后腿折着。
+ * 一般的腿两头都够得着，正好是腿长的 0.9。
+ */
 export function standHeights(plan: BodyPlan): { hipY: number; shoulderY: number } {
-  return { hipY: plan.legLen * 0.9, shoulderY: plan.legLen * 0.9 };
+  const h = plan.legLen * 0.9;
+  return { hipY: Math.min(h, reachOf(plan, 'nearHind') * 0.85), shoulderY: Math.min(h, reachOf(plan, 'nearFore') * 0.85) };
 }
 
 function feetAll(f: (k: LegKey) => Vec): Record<LegKey, Vec> {
@@ -104,6 +110,13 @@ export function gaitPose(plan: BodyPlan, gs: GaitState, phase: number): Pose {
     shoulderY -= 0.03 * L + 0.03 * L * Math.cos(TAU * 2 * phase);
     neck = 0.4;
     tail = 0.15;
+  } else if (gait === 'hop') {
+    // 跳：后脚一蹬，身体往前上方腾起，脊背伸直；前脚落地接住，后脚收到前脚前面落下，脊背弓起。尾巴翘着。
+    hipY += -0.04 * L + 0.09 * L * Math.cos(TAU * (phase - 0.95));
+    shoulderY += -0.05 * L - 0.06 * L * Math.cos(TAU * (phase - 0.1));
+    spine = 0.2 * Math.cos(TAU * (phase - 0.95));
+    neck = 0.45 + 0.08 * Math.sin(TAU * (phase - 0.1));
+    tail = 0.35;
   } else {
     // 奔跑：前后摇，脊背在后腿往前收时弓起、前腿往前伸时伸直。
     hipY -= 0.05 * L - 0.06 * L * Math.sin(TAU * (phase - 0.15));
@@ -119,10 +132,12 @@ export function gaitPose(plan: BodyPlan, gs: GaitState, phase: number): Pose {
     // 步子太大、腿够不着时，按腿能够到的范围收窄（这时脚会滑一点）。
     const maxHalf = Math.sqrt(Math.max(0, r * r - y0 * y0)) * 0.95;
     const half = Math.min((gs.duty * gs.strideM) / 2, maxHalf);
+    // 跳的时候后脚落在前面：着地段整体往前挪（够不着时腿会伸直，脚滑一点）。
+    const ahead = gait === 'hop' && isHind(k) ? Math.min(0.2 * L, Math.max(0, maxHalf - half)) : 0;
     const p = frac(phase - LEG_PHASE[gait][k]);
-    if (p < gs.duty) return { x: half - (2 * half * p) / gs.duty, y: 0 };
+    if (p < gs.duty) return { x: ahead + half - (2 * half * p) / gs.duty, y: 0 };
     const s = (p - gs.duty) / (1 - gs.duty);
-    return { x: -half + 2 * half * smooth(s), y: lift * Math.sin(Math.PI * s) };
+    return { x: ahead - half + 2 * half * smooth(s), y: lift * Math.sin(Math.PI * s) };
   });
   return { hipY, shoulderY, spine, neck, head: -0.35, jaw: 0, tail, fold: 0, feet };
 }

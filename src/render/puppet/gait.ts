@@ -13,7 +13,7 @@ import type { GaitRules } from '../../data/schema/gait';
 
 export const G = 9.81;
 
-export type Gait = 'stand' | 'walk' | 'trot' | 'gallop';
+export type Gait = 'stand' | 'walk' | 'trot' | 'gallop' | 'hop';
 
 export interface GaitState {
   gait: Gait;
@@ -44,11 +44,19 @@ export function walkSpeed(rules: GaitRules, legM: number): number {
   return speedAtFroude(rules.walkFroude.value, legM);
 }
 
-/** 按弗劳德数选步态；速度几乎是 0 就站着。 */
-export function gaitOf(rules: GaitRules, speedMs: number, legM: number): GaitState {
+/** 前后腿差得多（前腿 ÷ 后腿低于 hopIntermembral）就跳着走：兔子、袋鼠。 */
+export function hops(rules: GaitRules, intermembral: number): boolean {
+  return intermembral < rules.hopIntermembral.value;
+}
+
+/**
+ * 按弗劳德数选步态；速度几乎是 0 就站着。
+ * intermembral 是这具身体的前腿 ÷ 后腿总长（plan.ts 的 intermembralOf）：跳不跳由腿的几何定，不由选了哪个物种当模板定。
+ */
+export function gaitOf(rules: GaitRules, speedMs: number, legM: number, intermembral = 1): GaitState {
   if (speedMs < 0.02 * Math.sqrt(G * legM)) return { gait: 'stand', froude: 0, strideM: 0, strideHz: 0, duty: 1 };
   const froude = froudeOf(speedMs, legM);
-  const gait: Gait = froude < rules.walkTrotFroude.value ? 'walk' : froude < rules.trotGallopFroude.value ? 'trot' : 'gallop';
+  const gait: Gait = hops(rules, intermembral) ? 'hop' : froude < rules.walkTrotFroude.value ? 'walk' : froude < rules.trotGallopFroude.value ? 'trot' : 'gallop';
   const strideM = rules.strideLength.coef.value * Math.pow(froude, rules.strideLength.exp.value) * legM;
   return { gait, froude, strideM, strideHz: speedMs / strideM, duty: rules.duty[gait].value };
 }

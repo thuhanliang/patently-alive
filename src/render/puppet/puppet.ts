@@ -2,6 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { pendulumOmega, springStep, type Spring } from './gait';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { skeletonOf, type Pose, type Vec } from './pose';
+import { TailChain, idleSwish } from './tail';
 import { anchors, drawChest, drawEar, drawHead, drawHind, drawJaw, drawLegSegment, drawNeck, drawTailSegment, partCtx, type Look } from './parts';
 
 export { lookOf, type Look } from './parts';
@@ -52,9 +53,9 @@ export class Puppet {
   private ears: Container[] = [];
   private tail: Container[] = [];
   private tailRest: { droop: number; curl: number } = { droop: 0.8, curl: 0.1 };
-  private tailSprings: Spring[] = [];
+  private tailChain = new TailChain([], [], { stiffness: 1, damping: 1 });
+  private tailRootAt: [number, number] = [0, 0];
   private earSprings: Spring[] = [];
-  private lastHipY = 0;
   private lastHead = 0;
   private time = 0;
 
@@ -120,7 +121,13 @@ export class Puppet {
       parent = c;
       this.tail.push(c);
     }
-    this.tailSprings = this.tail.map(() => ({ x: 0, v: 0 }));
+    this.tailRootAt = a.tailRoot;
+    const segM = (a.tailSegL * 0.92) / k;
+    this.tailChain = new TailChain(
+      this.tail.map(() => segM),
+      this.tail.map(() => plan.tailW),
+      plan.tailMotion,
+    );
 
     // 臀片（带肚子）、胸片。
     this.torso.addChild(part((g) => drawHind(g, ctx)));
@@ -162,28 +169,34 @@ export class Puppet {
     this.head.rotation = -pose.head;
     this.jaw.rotation = pose.jaw;
 
-    // 尾巴：尾根跟着臀的上下晃（惯性），每节追上一节，越往后越晚；站着时尾尖偶尔慢慢甩一下。
+    // 尾巴：动力学（tail.ts）。"想要的"尾巴是尾根往下垂 droop、每节往上卷 curl；y 朝上的角度和 PixiJS 的相反。
+    const r = this.tailRest;
+    const lift = pose.tail;
+    {
+      const [tx, ty] = this.tailRootAt;
+      const lx = tx / k;
+      const ly = -ty / k;
+      const c = Math.cos(sk.pitch);
+      const sn = Math.sin(sk.pitch);
+      const root: [number, number] = [sk.mid.x + lx * c - ly * sn, sk.mid.y + lx * sn + ly * c];
+      const dirs: number[] = [];
+      let d = sk.pitch + Math.PI + r.droop - lift;
+      for (let i = 0; i < this.tail.length; i++) {
+        if (i > 0) d -= r.curl;
+        dirs.push(d);
+      }
+      this.tailChain.step(dt, root, dirs, idleSwish(this.time, plan.tailLen, plan.tailMotion.idle));
+    }
     if (dt > 0) {
-      const vy = (pose.hipY - this.lastHipY) / dt / Math.max(0.05, plan.legLen);
-      const omega = pendulumOmega(plan.tailLen) * 2.2;
-      const swish = 0.18 * Math.sin(this.time * omega * 0.18) * Math.sin(this.time * 0.37);
-      let lead = Math.max(-0.6, Math.min(0.6, vy * 0.12));
-      this.tailSprings.forEach((s, i) => {
-        springStep(s, lead + (i === this.tailSprings.length - 1 ? swish : 0), omega, 0.32, dt);
-        lead = s.x * 0.85;
-      });
       const headAng = pose.neck + pose.head;
       const hv = (headAng - this.lastHead) / dt;
       const earOmega = pendulumOmega(plan.earH) * 1.6;
       for (const s of this.earSprings) springStep(s, Math.max(-0.5, Math.min(0.5, -hv * 0.05)), earOmega, 0.28, dt);
       this.lastHead = headAng;
     }
-    this.lastHipY = pose.hipY;
-    const r = this.tailRest;
-    const lift = pose.tail;
     this.tail.forEach((c, i) => {
-      const spring = this.tailSprings[i]!.x;
-      c.rotation = i === 0 ? -(Math.PI + r.droop - lift) + spring : r.curl + spring;
+      const dev = this.tailChain.dev[i]!;
+      c.rotation = i === 0 ? -(Math.PI + r.droop - lift) - dev : r.curl - dev;
     });
     this.ears.forEach((c, i) => (c.rotation = -0.12 + this.earSprings[i]!.x));
   }
