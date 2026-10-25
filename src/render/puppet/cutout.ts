@@ -60,6 +60,15 @@ interface Piece {
   part: CutPart;
   view: Container;
   shadow: Graphics;
+  rim: Graphics;
+  body: Graphics;
+  mask: Graphics;
+  /** 轮廓上离转轴最远的距离：先用它粗判这片零件够不够得着地面。 */
+  reach: number;
+  /** 弯折（view 坐标里的点 → 点），见 setWarp。 */
+  warp: ((X: number, Y: number) => [number, number]) | null;
+  /** 上一帧有没有变形过（变形过的，不再变形时要画回原样）。 */
+  deformed: boolean;
 }
 
 export class Cutout {
@@ -70,7 +79,7 @@ export class Cutout {
   constructor(
     readonly data: CutData,
     paper: Texture,
-    dye: Dye,
+    private readonly dye: Dye,
   ) {
     const parts = [...data.parts].sort((a, b) => a.z - b.z);
     const byId = new Map(parts.map((p) => [p.id, p]));
@@ -90,31 +99,120 @@ export class Cutout {
     this.view.addChild(shadows);
     for (const part of parts) {
       const view = new Container();
-      const shadow = new Graphics().poly(part.outline).fill({ color: 0x000000, alpha: SHADOW.alpha });
+      const shadow = new Graphics();
       shadows.addChild(shadow);
-      // 白边：轮廓描粗。
-      view.addChild(new Graphics().poly(part.outline).fill(RIM).stroke({ width: RIM_W * 2, color: RIM, join: 'round' }));
-      const body = new Graphics().poly(part.outline).fill(dye.main);
-      for (const s of part.stripe) body.poly(s).fill(dye.stripe);
-      for (const s of part.pale) body.poly(s).fill(dye.pale);
-      view.addChild(body);
-      // 纸纹：正片叠底，裁到轮廓里。
+      const rim = new Graphics();
+      const body = new Graphics();
+      const mask = new Graphics();
+      view.addChild(rim, body);
+      let reach = 0;
+      for (let i = 0; i < part.outline.length; i += 2) reach = Math.max(reach, Math.hypot(part.outline[i]!, part.outline[i + 1]!));
+      const piece: Piece = { part, view, shadow, rim, body, mask, reach, warp: null, deformed: false };
+      this.paint(piece, part.outline, part.stripe, part.pale);
+      // 纸纹：正片叠底，裁到轮廓里（四周多留一圈，压扁时轮廓往两边鼓也盖得住）。
       const b = body.getLocalBounds();
-      const grain = new TilingSprite({ texture: paper, width: b.width + 4, height: b.height + 4 });
-      grain.position.set(b.x - 2, b.y - 2);
+      const grain = new TilingSprite({ texture: paper, width: b.width + 40, height: b.height + 40 });
+      grain.position.set(b.x - 20, b.y - 20);
       grain.tilePosition.set((part.pivot[0] * 0.7) % 128, (part.pivot[1] * 0.7) % 128);
       grain.blendMode = 'multiply';
       grain.alpha = 0.4;
-      const mask = new Graphics().poly(part.outline).fill(0xffffff);
       grain.mask = mask;
       view.addChild(grain, mask);
       for (const [x, y, r] of rivets.get(part.id) ?? []) view.addChild(rivet(x, y, r));
       this.view.addChild(view);
-      const piece = { part, view, shadow };
       this.pieces.set(part.id, piece);
       this.byZ.push(piece);
     }
     this.pose({});
+  }
+
+  /** 按给定的轮廓和色区重画一片零件（白边、颜色、纸纹遮罩、影子）。 */
+  private paint(piece: Piece, outline: number[], stripe: number[][], pale: number[][]): void {
+    const { dye } = this;
+    piece.shadow.clear().poly(outline).fill({ color: 0x000000, alpha: SHADOW.alpha });
+    // 白边：轮廓描粗。
+    piece.rim.clear().poly(outline).fill(RIM).stroke({ width: RIM_W * 2, color: RIM, join: 'round' });
+    piece.body.clear().poly(outline).fill(dye.main);
+    for (const s of stripe) piece.body.poly(s).fill(dye.stripe);
+    for (const s of pale) piece.body.poly(s).fill(dye.pale);
+    piece.mask.clear().poly(outline).fill(0xffffff);
+  }
+
+  /**
+   * 设一片零件的弯折（view 坐标里的点 → 点），下一次 deform 时生效；null 取消。
+   * 用来让一片零件的一部分跟着相邻的骨头弯（例如胸片前上方的“脖子”跟着低头）。
+   */
+  setWarp(id: string, warp: ((X: number, Y: number) => [number, number]) | null): void {
+    const piece = this.pieces.get(id);
+    if (piece) piece.warp = warp;
+  }
+
+  /**
+   * 摆好姿态以后调用：先按 setWarp 弯折，再做地面接触。
+   * 地面接触：纸片碰到地面（view 坐标 y = groundY，y 朝下）就被压扁，不穿过地面：
+   * 离地面 band 以内的点往地面方向平滑地压（越往下压得越狠，永远到不了地面以下），
+   * 被压下去的量一部分往两边鼓出来（像软垫子踩在地上），看起来是“踩实了”而不是被切掉一截。
+   * 只重画需要变形的零件；不再变形的零件画回原样。
+   */
+  deform(groundY: number, band: number, spread = 0.35): void {
+    const top = groundY - band;
+    for (const piece of this.byZ) {
+      const { view, part, warp } = piece;
+      const near = view.position.y + piece.reach * Math.max(1, view.scale.y) > top;
+      const c = Math.cos(view.rotation);
+      const sn = Math.sin(view.rotation);
+      const sy = view.scale.y;
+      const { x: px, y: py } = view.position;
+      // 零件坐标 → view 坐标，以及反过来。
+      const fwd = (x: number, y: number): [number, number] => [px + x * c - y * sy * sn, py + x * sn + y * sy * c];
+      const back = (X: number, Y: number): [number, number] => {
+        const dx = X - px;
+        const dy = Y - py;
+        return [dx * c + dy * sn, (-dx * sn + dy * c) / sy];
+      };
+      const o = part.outline;
+      // 接触的中心（压进 band 的点的平均 x），鼓出来的方向以它为中心往两边。
+      let sumX = 0;
+      let n = 0;
+      if (near) {
+        for (let i = 0; i < o.length; i += 2) {
+          let [X, Y] = fwd(o[i]!, o[i + 1]!);
+          if (warp) [X, Y] = warp(X, Y);
+          if (Y > top) {
+            sumX += X;
+            n++;
+          }
+        }
+      }
+      if (!warp && n === 0) {
+        if (piece.deformed) {
+          this.paint(piece, o, part.stripe, part.pale);
+          piece.deformed = false;
+        }
+        continue;
+      }
+      const cx = n > 0 ? sumX / n : 0;
+      const map = (poly: number[]): number[] => {
+        const out = new Array<number>(poly.length);
+        for (let i = 0; i < poly.length; i += 2) {
+          let [X, Y] = fwd(poly[i]!, poly[i + 1]!);
+          if (warp) [X, Y] = warp(X, Y);
+          if (n > 0 && Y > top) {
+            // band 以内：y' = top + band·(1 − e^(−(y − top)/band))，平滑，到不了地面。
+            const Y2 = top + band * (1 - Math.exp(-(Y - top) / band));
+            // 往两边鼓：以接触中心为界平滑过渡（tanh），中心附近几乎不动，不会在中间撕出缺口。
+            X += Math.tanh((X - cx) / band) * Math.min(Y - Y2, band) * spread;
+            Y = Y2;
+          }
+          const [x, y] = back(X, Y);
+          out[i] = x;
+          out[i + 1] = y;
+        }
+        return out;
+      };
+      this.paint(piece, map(o), part.stripe.map(map), part.pale.map(map));
+      piece.deformed = true;
+    }
   }
 
   /** 直接摆一片零件：转轴放在 (x, y)，零件转到 rotation（弧度，PixiJS 的 y 朝下）。sy 是竖直方向的缩放（胸片呼吸用）。 */

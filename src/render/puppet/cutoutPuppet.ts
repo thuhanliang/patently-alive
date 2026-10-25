@@ -106,6 +106,20 @@ export class CutoutPuppet {
       const root: Vec = { x: rootV[0] * s, y: -rootV[1] * s };
       const f = pose.feet[k];
       const j = legJoints(legPlan, k, root, { x: root.x + f.x, y: f.y }, pose.fold).map((v): P => [v.x / s, -v.y / s]);
+      // 关节不能低于地面：膝、踝的中心至少离地半个肢体粗（搭接片的半径），趾尖贴地。
+      // 低了就把这一节放平到那个高度（长度不变，朝向不变），后面的节跟着——趴下时腿折起来平放在地上。
+      for (let i = 1; i < 4; i++) {
+        const h = i < 3 ? this.part(leg.parts[i]!).lapR : 2;
+        if (j[i]![1] <= -h) continue;
+        const len = Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]);
+        const dy = -h - j[i - 1]![1];
+        const dx = Math.sqrt(Math.max(0, len * len - dy * dy));
+        const side = Math.sign(j[i]![0] - j[i - 1]![0]) || 1;
+        const old = j[i]!;
+        j[i] = [j[i - 1]![0] + side * dx, -h];
+        // 后面的关节平移过去（形状不变），下一轮再检查它们。
+        for (let m = i + 1; m < 4; m++) j[m] = [j[m]![0] + j[i]![0] - old[0], j[m]![1] + j[i]![1] - old[1]];
+      }
       for (let i = 0; i < 3; i++) {
         const imgA = Math.atan2(pts[i + 1]![1] - pts[i]![1], pts[i + 1]![0] - pts[i]![0]);
         const viewA = Math.atan2(j[i + 1]![1] - j[i]![1], j[i + 1]![0] - j[i]![0]);
@@ -117,7 +131,23 @@ export class CutoutPuppet {
     // 头的铆钉跟着它画弧；头片再按脖子 + 头相对站姿的角度转。下颌、耳朵跟着头。
     const headImg = this.pv(rig.head);
     const neckV = chestAt(shImg);
-    const headV = add(neckV, rot(sub(headImg, shImg), -(pose.neck - this.rest.neck)));
+    const aNeck = -(pose.neck - this.rest.neck);
+    const headV = add(neckV, rot(sub(headImg, shImg), aNeck));
+    // 胸片前上方本来画着脖子：这一块跟着虚拟脖子弯，越靠近头转得越多（否则低头时脖子后面会翘出一个尖）。
+    const head0 = chestAt(headImg);
+    const ax = sub(head0, neckV);
+    const axLen2 = ax[0] * ax[0] + ax[1] * ax[1];
+    this.cut.setWarp(
+      rig.chest,
+      Math.abs(aNeck) < 1e-3
+        ? null
+        : (X, Y) => {
+            const t = ((X - neckV[0]) * ax[0] + (Y - neckV[1]) * ax[1]) / axLen2;
+            const u = Math.min(1, Math.max(0, (t - 0.25) / 0.75));
+            const w = u * u * (3 - 2 * u);
+            return add(neckV, rot(sub([X, Y], neckV), w * aNeck));
+          },
+    );
     const aHead = -(pose.neck + pose.head - this.rest.neck - this.rest.head);
     const headAt = (q: P): P => add(headV, rot(sub(q, headImg), aHead));
     this.cut.place(rig.head, ...headV, this.part(rig.head).angle + aHead);
@@ -150,5 +180,7 @@ export class CutoutPuppet {
       const next = rig.tail[i + 1];
       if (next) at = add(at, rot(sub(this.pv(next), this.pv(id)), a));
     });
+    // 碰到地面的纸片压扁一点、往两边鼓，不穿过地面（趴下时的爪、肘、肚子，走路时踩实的脚掌）。
+    this.cut.deform(-3, 10);
   }
 }

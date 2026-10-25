@@ -127,6 +127,15 @@ def main(src: str, seeds_path: str, out: str) -> None:
         extra[n] |= grow_n
         extra[p] |= grow_p
 
+    # 修圆：补全和搭接片拼起来的地方会留下小凹口和细尖，先闭运算填凹口，再开运算削尖（剪刀剪出来的纸边是圆顺的）。
+    close_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13))
+    open_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    for n in names:
+        m = np.pad(full[n].astype(np.uint8), 8)
+        m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, close_k)
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, open_k)
+        full[n] = m[8:-8, 8:-8] > 0
+
     # 色区：去掉铆钉和白边，按颜色分主色 / 条纹 / 浅色。
     hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV).astype(int)
     Lc = cv2.cvtColor(im, cv2.COLOR_BGR2LAB)[:, :, 0].astype(int)
@@ -175,7 +184,7 @@ def main(src: str, seeds_path: str, out: str) -> None:
             'pivotEstimated': bool(parts[n].get('pivotEstimated', False)),
             'angle': round(ang, 4),
             'lapR': round(lap_r.get(n, 0.0), 1),
-            'outline': local(smooth_poly(full[n])),
+            'outline': local(smooth_poly(full[n], 2.5, 0.5)),
             **regions,
         })
 
