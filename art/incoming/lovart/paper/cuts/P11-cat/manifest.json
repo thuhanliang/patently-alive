@@ -1,0 +1,304 @@
+{
+ "source": "P11-cat-whole.webp",
+ "parts": {
+  "hind": {
+   "bbox": [
+    393,
+    298,
+    174,
+    223
+   ],
+   "parent": null,
+   "offset": [
+    0.0,
+    0.0
+   ]
+  },
+  "chest": {
+   "bbox": [
+    540,
+    278,
+    373,
+    265
+   ],
+   "parent": "hind",
+   "offset": [
+    30.0,
+    0.0
+   ]
+  },
+  "tail1": {
+   "bbox": [
+    265,
+    359,
+    86,
+    124
+   ],
+   "parent": "hind",
+   "offset": [
+    -9.8,
+    -2.0
+   ]
+  },
+  "tail2": {
+   "bbox": [
+    209,
+    432,
+    85,
+    93
+   ],
+   "parent": "tail1",
+   "offset": [
+    -29.1,
+    8.6
+   ]
+  },
+  "tail3": {
+   "bbox": [
+    156,
+    478,
+    83,
+    88
+   ],
+   "parent": "tail2",
+   "offset": [
+    -46.6,
+    18.3
+   ]
+  },
+  "tail4": {
+   "bbox": [
+    92,
+    518,
+    94,
+    91
+   ],
+   "parent": "tail3",
+   "offset": [
+    -67.6,
+    29.8
+   ]
+  },
+  "tail5": {
+   "bbox": [
+    6,
+    561,
+    113,
+    91
+   ],
+   "parent": "tail4",
+   "offset": [
+    -88.7,
+    41.4
+   ]
+  },
+  "thigh": {
+   "bbox": [
+    282,
+    330,
+    206,
+    284
+   ],
+   "parent": "hind",
+   "offset": [
+    0.0,
+    164.0
+   ]
+  },
+  "shank": {
+   "bbox": [
+    227,
+    555,
+    108,
+    140
+   ],
+   "parent": "thigh",
+   "offset": [
+    0.0,
+    228.0
+   ]
+  },
+  "hindPaw": {
+   "bbox": [
+    225,
+    689,
+    100,
+    64
+   ],
+   "parent": "shank",
+   "offset": [
+    0.0,
+    244.0
+   ]
+  },
+  "farThigh": {
+   "bbox": [
+    418,
+    517,
+    124,
+    109
+   ],
+   "parent": "hind",
+   "offset": [
+    0.0,
+    196.0
+   ]
+  },
+  "farShank": {
+   "bbox": [
+    417,
+    586,
+    109,
+    116
+   ],
+   "parent": "farThigh",
+   "offset": [
+    0.0,
+    232.0
+   ]
+  },
+  "farHindPaw": {
+   "bbox": [
+    461,
+    691,
+    109,
+    62
+   ],
+   "parent": "farShank",
+   "offset": [
+    0.0,
+    250.0
+   ]
+  },
+  "upperArm": {
+   "bbox": [
+    723,
+    401,
+    145,
+    195
+   ],
+   "parent": "chest",
+   "offset": [
+    30.0,
+    144.0
+   ]
+  },
+  "forearm": {
+   "bbox": [
+    776,
+    561,
+    150,
+    140
+   ],
+   "parent": "upperArm",
+   "offset": [
+    30.0,
+    208.0
+   ]
+  },
+  "forePaw": {
+   "bbox": [
+    853,
+    685,
+    125,
+    72
+   ],
+   "parent": "forearm",
+   "offset": [
+    30.0,
+    226.0
+   ]
+  },
+  "farUpperArm": {
+   "bbox": [
+    656,
+    539,
+    110,
+    94
+   ],
+   "parent": "chest",
+   "offset": [
+    30.0,
+    196.0
+   ]
+  },
+  "farForearm": {
+   "bbox": [
+    628,
+    594,
+    89,
+    97
+   ],
+   "parent": "farUpperArm",
+   "offset": [
+    30.0,
+    240.0
+   ]
+  },
+  "farForePaw": {
+   "bbox": [
+    626,
+    689,
+    94,
+    64
+   ],
+   "parent": "farForearm",
+   "offset": [
+    30.0,
+    256.0
+   ]
+  },
+  "head": {
+   "bbox": [
+    819,
+    239,
+    201,
+    173
+   ],
+   "parent": "chest",
+   "offset": [
+    58.6,
+    -14.3
+   ]
+  },
+  "nearEar": {
+   "bbox": [
+    817,
+    186,
+    88,
+    97
+   ],
+   "parent": "head",
+   "offset": [
+    54.0,
+    -29.6
+   ]
+  },
+  "farEar": {
+   "bbox": [
+    905,
+    184,
+    48,
+    65
+   ],
+   "parent": "head",
+   "offset": [
+    69.5,
+    -50.7
+   ]
+  },
+  "jaw": {
+   "bbox": [
+    918,
+    345,
+    97,
+    66
+   ],
+   "parent": "head",
+   "offset": [
+    72.7,
+    21.0
+   ]
+  }
+ }
+}

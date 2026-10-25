@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
 import { designTemplates, gaitRules, hintTemplates, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
@@ -7,6 +7,8 @@ import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, wa
 import { bodyPlan, type BodyPlan } from '../../render/puppet/plan';
 import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../../render/puppet/pose';
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
+import type { CutData } from '../../render/puppet/cutout';
+import { CutoutPuppet } from '../../render/puppet/cutoutPuppet';
 import { bracket, drawReference, referenceHead, referenceHeightM, referenceLabel } from '../../render/puppet/ruler';
 
 /**
@@ -139,6 +141,10 @@ function autoStep(dt: number): void {
   }
 }
 
+// 切图零件（?cut=<名字>）：按需加载，打包时一起带上（GitHub Pages 上也能用）。
+const CUT_DATA = import.meta.glob<unknown>('../../../art/incoming/lovart/paper/cuts/*/vector.json', { import: 'default' });
+const CUT_PAPER = import.meta.glob<string>('../../../art/incoming/lovart/paper/cuts/*/paper.png', { query: '?url', import: 'default' });
+
 // ---- 画面 ----
 async function main(): Promise<void> {
   const app = new Application();
@@ -150,7 +156,18 @@ async function main(): Promise<void> {
   const tapeLabels = new Container();
   const puppetLayer = new Container();
   app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer);
-  const puppet = new Puppet(plan, look);
+  // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
+  const cut = new URLSearchParams(location.search).get('cut');
+  let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void };
+  if (cut) {
+    const dir = `../../../art/incoming/lovart/paper/cuts/${cut}`;
+    const data = (await CUT_DATA[`${dir}/vector.json`]!()) as CutData;
+    const paper = (await Assets.load(await CUT_PAPER[`${dir}/paper.png`]!())) as Texture;
+    paper.source.addressMode = 'repeat';
+    puppet = new CutoutPuppet(data, paper, { main: 0xe6d8bd, stripe: 0xe6d8bd, pale: 0xe6d8bd }, plan);
+  } else {
+    puppet = new Puppet(plan, look);
+  }
   puppetLayer.addChild(puppet.view);
   const labelPool: Text[] = [];
 
