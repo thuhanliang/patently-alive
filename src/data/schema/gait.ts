@@ -22,7 +22,7 @@ const Reference = z.strictObject({
    * 用切图零件拼它（2026-10-25）：拿哪条现有技术的设计当底子，体重换成上面的 massKg，再换几个部件、外观。
    * 没有对应现有技术的（獾、狼、鹿……）用最像的部件拼一个替身。只是画面。
    */
-  look: z.strictObject({ template: z.string(), parts: z.record(z.string(), z.string()).optional(), appearance: z.strictObject({ earLen: z.number(), earWide: z.number() }).partial().optional() }),
+  look: z.strictObject({ template: z.string(), parts: z.record(z.string(), z.string()).optional(), appearance: z.strictObject({ earLen: z.number(), earWide: z.number(), earTip: z.number(), earStiff: z.number(), earPos: z.number() }).partial().optional() }),
 });
 
 export const GaitRulesSchema = z.strictObject({

@@ -126,8 +126,23 @@ export const DesignSchema = z.object({
   /**
    * 外观（2026-10-25）：只影响画面，推演不读。耳长、耳宽是相对"一般的耳朵"（猫）的倍数。
    * 不写就是 1。耳朵的真实后果（散热、听力）以后再定，见 DECISIONS"外观参数"。
+   *
+   * 耳朵的形状（2026-10-26，`docs/research/body-params.md` 第三节 D）：
+   * - earLen 拉到 0.12 以下就是没有耳廓（只剩耳孔），所以最小是 0；
+   * - earTip 耳尖从圆（0）到尖（1），不写就是猫的样子（约 0.69）；
+   * - earStiff 耳的软硬，1 立着、0 整只垂下，不写就是 1；
+   * - earPos 耳在头上的位置，0 头顶、1 头的两侧，不写就是 0。
    */
-  appearance: z.strictObject({ earLen: z.number().min(0.3).max(3), earWide: z.number().min(0.5).max(2) }).partial().optional(),
+  appearance: z
+    .strictObject({
+      earLen: z.number().min(0).max(3),
+      earWide: z.number().min(0.5).max(2),
+      earTip: z.number().min(0).max(1),
+      earStiff: z.number().min(0).max(1),
+      earPos: z.number().min(0).max(1),
+    })
+    .partial()
+    .optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;

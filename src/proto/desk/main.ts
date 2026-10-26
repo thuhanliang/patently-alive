@@ -4,7 +4,7 @@ import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
 import { speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
-import { bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
+import { EAR_ABSENT, EAR_TIP_CAT, bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
 import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../../render/puppet/pose';
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
 import type { CutData } from '../../render/puppet/cutout';
@@ -392,8 +392,16 @@ async function main(): Promise<void> {
 
   // 外观：只影响画面（DECISIONS"外观参数"）。
   panel.append(el('h3', {}, '外观（只影响画面）'));
-  syncs.push(slider('耳长', 0.3, 3, 0.05, () => design.appearance?.earLen ?? 1, (v) => ((design.appearance = { ...design.appearance, earLen: v }), rebuild()), times));
-  syncs.push(slider('耳宽', 0.5, 2, 0.05, () => design.appearance?.earWide ?? 1, (v) => ((design.appearance = { ...design.appearance, earWide: v }), rebuild()), times));
+  const setLook = (k: 'earLen' | 'earWide' | 'earTip' | 'earStiff' | 'earPos', v: number): void => {
+    design.appearance = { ...design.appearance, [k]: v };
+    rebuild();
+  };
+  const ends = (lo: string, hi: string) => (v: number): string => (v < 0.05 ? lo : v > 0.95 ? hi : `${lo} → ${hi} ${Math.round(v * 100)}%`);
+  syncs.push(slider('耳长', 0, 3, 0.05, () => design.appearance?.earLen ?? 1, (v) => setLook('earLen', v), (v) => (v <= EAR_ABSENT ? '没有（只剩耳孔）' : times(v))));
+  syncs.push(slider('耳宽', 0.5, 2, 0.05, () => design.appearance?.earWide ?? 1, (v) => setLook('earWide', v), times));
+  syncs.push(slider('耳尖', 0, 1, 0.01, () => design.appearance?.earTip ?? EAR_TIP_CAT, (v) => setLook('earTip', v), ends('圆', '尖')));
+  syncs.push(slider('耳软硬', 0, 1, 0.01, () => design.appearance?.earStiff ?? 1, (v) => setLook('earStiff', v), ends('垂', '立')));
+  syncs.push(slider('耳位置', 0, 1, 0.01, () => design.appearance?.earPos ?? 0, (v) => setLook('earPos', v), ends('头顶', '两侧')));
 
   panel.append(el('h3', {}, '体重分配（倍数，总量不变）'));
   for (const s of BODY_SYSTEMS) {
@@ -491,6 +499,7 @@ async function main(): Promise<void> {
     tail?: number;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
+    appearance?: Design['appearance'];
   }
   function set(p: DeskParams): void {
     if (p.template) loadTemplate(p.template);
@@ -498,6 +507,7 @@ async function main(): Promise<void> {
     if (p.leg !== undefined || p.tail !== undefined) design.shape = { ...design.shape, ...(p.leg !== undefined ? { leg: p.leg } : {}), ...(p.tail !== undefined ? { tail: p.tail } : {}) };
     if (p.parts) design.parts = { ...design.parts, ...p.parts } as Design['parts'];
     if (p.allocation) design.allocation = { ...design.allocation, ...p.allocation };
+    if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;
     rebuild();
     if (p.mode) applyMode(p.mode);

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { designTemplates, gaitRules, partLibrary, viabilityRules, type Design } from '../src/data';
 import { partsOf } from '../src/sim';
 import { breathsPerMin, gaitOf, heartPerMin, legLengthM, springStep, topSpeed, walkSpeed } from '../src/render/puppet/gait';
-import { bodyPlan, intermembralOf } from '../src/render/puppet/plan';
+import { EAR_TIP_CAT, bodyPlan, intermembralOf } from '../src/render/puppet/plan';
+import { DesignSchema } from '../src/data/schema/design';
 import { LEGS } from '../src/render/puppet/plan';
 import { eatPose, gaitPose, liePose, skeletonOf, solveTwoBone, standPose } from '../src/render/puppet/pose';
 
@@ -177,5 +178,33 @@ describe('跳由前后腿的比例推出来', () => {
         expect(pts[3]!.y).toBeGreaterThan(-1e-9);
       }
     }
+  });
+});
+
+// 耳朵的形状参数（外观，只影响画面）：不写就是猫的耳；耳长拉到头就没有耳廓。
+describe('耳朵的形状参数', () => {
+  const tpl = (sp: string): Design => structuredClone(designTemplates.find((t) => t.species === sp)!.design);
+
+  it('猫不写，就是原画的样子', () => {
+    const p = planOf(tpl('cat'));
+    expect(p.earTip).toBe(EAR_TIP_CAT);
+    expect(p.earStiff).toBe(1);
+    expect(p.earPos).toBe(0);
+    expect(p.earOn).toBe(true);
+  });
+
+  it('啮齿类、鼬的耳是圆的，狐的比猫尖', () => {
+    for (const sp of ['brownrat', 'rat', 'kiore', 'mouse', 'vole', 'stoat', 'weasel', 'ferret', 'mongoose']) expect(planOf(tpl(sp)).earTip).toBeLessThan(0.3);
+    expect(planOf(tpl('fox')).earTip).toBeGreaterThan(EAR_TIP_CAT);
+  });
+
+  it('耳长拉到 0 就没有耳廓，schema 接受', () => {
+    const d = tpl('cat');
+    d.appearance = { earLen: 0 };
+    expect(DesignSchema.safeParse(d).success).toBe(true);
+    expect(planOf(d).earOn).toBe(false);
+    d.appearance = { earLen: 0.2, earTip: 0, earStiff: 0, earPos: 1 };
+    expect(DesignSchema.safeParse(d).success).toBe(true);
+    expect(planOf(d).earOn).toBe(true);
   });
 });

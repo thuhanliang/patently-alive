@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { boneWarp, mapPoly, regionStretch } from '../src/render/puppet/fit';
+import { bend, boneWarp, densify, mapPoly, radialReshape, regionStretch } from '../src/render/puppet/fit';
+import { EAR_TIP_CAT, earExponent } from '../src/render/puppet/plan';
 
 // 零件贴骨头（DECISIONS"纸偶的部件抽象"）：关节的圆头不变形、骨头末端落到新的长度上。
 describe('零件贴骨头', () => {
@@ -73,5 +74,84 @@ describe('零件贴骨头', () => {
     expect(x).toBeCloseTo(50, 9);
     expect(y).toBeCloseTo(0, 9);
     expect(mapPoly([0, 0, 30, 0], f)).toEqual([0, 0, 50, 0]);
+  });
+});
+
+// 耳朵的变形算子（docs/research/body-params.md 第六节）：从原画的耳出发，参数取原画的值时一点不动。
+describe('耳朵的变形算子', () => {
+  const C: [number, number] = [0, 0];
+  const ax: [number, number] = [0, -1]; // 耳朝上（y 朝下）
+
+  it('圆尖取原画的值时原样不动', () => {
+    const f = radialReshape(C, ax, 40, 30, 1, 1);
+    for (const [x, y] of [
+      [10, -20],
+      [-25, -5],
+      [3, -39],
+      [0, 10],
+    ] as const) {
+      const [X, Y] = f(x, y);
+      expect(X).toBeCloseTo(x, 12);
+      expect(Y).toBeCloseTo(y, 12);
+    }
+    expect(earExponent(EAR_TIP_CAT)).toBeCloseTo(1, 12);
+  });
+
+  it('磨圆：肩往外鼓、耳根的宽窄不变、根部以下不动；削尖：肩往里收', () => {
+    const round = radialReshape(C, ax, 40, 30, earExponent(0), 1);
+    const sharp = radialReshape(C, ax, 40, 30, earExponent(1), 1);
+    // 菱形边上 45° 方向的点（x/30 + y/40 = 1 上）。
+    const t = 1 / (1 / 30 + 1 / 40);
+    const p: [number, number] = [t * Math.SQRT1_2, -t * Math.SQRT1_2];
+    const r0 = Math.hypot(...p);
+    expect(Math.hypot(...round(...p))).toBeGreaterThan(r0 * 1.15);
+    expect(Math.hypot(...sharp(...p))).toBeLessThan(r0 * 0.95);
+    // 垂直于中线的点（耳根的宽窄）不动。
+    expect(round(30, 0)[0]).toBeCloseTo(30, 9);
+    expect(sharp(-30, 0)[0]).toBeCloseTo(-30, 9);
+    // 中心以下（埋在头里的耳根）不动。
+    expect(round(12, 8)).toEqual([12, 8]);
+    // 圆耳比原画矮一点，尖耳一样高。
+    expect(-round(0, -40)[1]).toBeLessThan(40);
+    expect(-sharp(0, -40)[1]).toBeCloseTo(40, 9);
+  });
+
+  it('弯折：不弯时原样；折点以前不动；中线的长短不变', () => {
+    const id = bend([0, -10], ax, 30, 0);
+    expect(id(3, -50)).toEqual([3, -50]);
+    const f = bend([0, -10], ax, 30, -2.5);
+    expect(f(5, -4)).toEqual([5, -4]);
+    // 中线上等距的点，弯过去以后仍然等距。
+    const pts = [0, 10, 20, 30, 40, 50, 60].map((d) => f(0, -10 - d));
+    for (let i = 1; i < pts.length; i++) expect(Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1])).toBeCloseTo(10, 0);
+    // 走完 len 以后，方向转过了 angle：最后一段朝着 axis 转 −2.5 弧度的方向。
+    const d = [pts[6]![0] - pts[5]![0], pts[6]![1] - pts[5]![1]];
+    const want = [Math.cos(-Math.PI / 2 - 2.5), Math.sin(-Math.PI / 2 - 2.5)];
+    expect(d[0]! / 10).toBeCloseTo(want[0]!, 6);
+    expect(d[1]! / 10).toBeCloseTo(want[1]!, 6);
+  });
+
+  it('弯折的内侧挤紧、不翻过去：半径比半宽小时，内侧的点也不越过圆心', () => {
+    const len = 12;
+    const angle = -2.4;
+    const R = len / Math.abs(angle);
+    const f = bend([0, 0], ax, len, angle);
+    // 圆心：从起点沿法线（内侧）走 R。法线 n = rot(axis, +90°) = [1, 0]；angle < 0，内侧在 −n 一侧。
+    const centre: [number, number] = [-R, 0];
+    // 内侧的点（v < 0）不管离中线多远，弯过去以后都还在圆心外面。
+    for (const v of [-1, -3, -6, -12, -50]) {
+      const [X, Y] = f(v, -len);
+      expect(Math.hypot(X - centre[0], Y - centre[1])).toBeGreaterThan(R * 0.05);
+    }
+    // 外侧照常：离圆心 R + v。
+    const [Xo, Yo] = f(10, -len);
+    expect(Math.hypot(Xo - centre[0], Yo - centre[1])).toBeCloseTo(R + 10, 6);
+  });
+
+  it('加密：形状不变，长边被等分', () => {
+    const sq = [0, 0, 10, 0, 10, 10, 0, 10];
+    const d = densify(sq, 3);
+    expect(d.length / 2).toBe(16);
+    for (let i = 0; i < d.length; i += 2) expect(d[i]! === 0 || d[i]! === 10 || d[i + 1]! === 0 || d[i + 1]! === 10).toBe(true);
   });
 });
