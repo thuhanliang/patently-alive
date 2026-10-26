@@ -47,6 +47,14 @@ export interface BodyPlan {
   earH: number;
   /** 耳朵的宽窄（外观，相对一般的耳朵）。 */
   earW: number;
+  /** 有没有耳廓（耳长拉到 EAR_ABSENT 以下就只剩耳孔，不画耳片）。 */
+  earOn: boolean;
+  /** 耳尖从圆（0）到尖（1）；猫是 EAR_TIP_CAT。 */
+  earTip: number;
+  /** 耳的软硬：1 立着，0 软到整只垂下来。 */
+  earStiff: number;
+  /** 耳在头上的位置：0 头顶，1 头的两侧（后方）。 */
+  earPos: number;
   tailLen: number;
   tailW: number;
   tailSegs: number;
@@ -55,6 +63,15 @@ export interface BodyPlan {
   parts: { coat: string; mouth: string; limbs: string; tail: string; digestion: string };
   relative: Readonly<Record<BodySystem, number>>;
 }
+
+/**
+ * 耳尖的圆尖 → 超椭圆的指数（fit.ts 的 radialReshape）：0 是 2.4（圆），1 是 0.55（凹边，比猫还尖），按对数插值。
+ * 猫的耳是直边的三角形，指数 1，对应 EAR_TIP_CAT（约 0.69）。
+ */
+export const earExponent = (tip: number): number => 2.4 * Math.pow(0.55 / 2.4, tip);
+export const EAR_TIP_CAT = Math.log(1 / 2.4) / Math.log(0.55 / 2.4);
+/** 耳长（倍数）不到这么多就算没有耳廓（鼹鼠、海豹、猫头鹰）。 */
+export const EAR_ABSENT = 0.12;
 
 /** 嘴型部件：吻伸出多长（相对头的半径）。只是画面。 */
 const SNOUT: Record<string, number> = {
@@ -126,6 +143,10 @@ export function bodyPlan(
     snout: headR * (SNOUT[parts.mouth.id] ?? 0.7),
     earH: headR * 0.7 * (design.appearance?.earLen ?? 1),
     earW: design.appearance?.earWide ?? 1,
+    earOn: (design.appearance?.earLen ?? 1) > EAR_ABSENT,
+    earTip: design.appearance?.earTip ?? EAR_TIP_CAT,
+    earStiff: design.appearance?.earStiff ?? 1,
+    earPos: design.appearance?.earPos ?? 0,
     tailLen,
     tailW: B * tail.width,
     tailSegs: tail.length < 0.2 ? 1 : parts.tail.id === 'bushy_tail' ? 2 : tail.length < 0.5 ? 3 : 5,
