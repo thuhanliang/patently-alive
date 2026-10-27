@@ -113,32 +113,6 @@ export function reach(poly: number[], dir: P): number {
 }
 
 /**
- * 磨圆或削尖（耳尖）：以 center 为圆心，朝 axis 方向的那一半（和 axis 的夹角不到 90°）按超椭圆的比例径向伸缩。
- * 超椭圆 |x/a|^n + |y/b|^n = 1：n = 1 是菱形（直边、尖），n = 2 是椭圆（圆），n < 1 是凹边（更尖）。
- * 原画的形状算作 nRef；每个方向的半径乘 SE(θ; n) ÷ SE(θ; nRef)，所以 n = nRef 时一点不动，原画的手绘起伏都保留。
- * 垂直于 axis（θ = 90°）的点不动，根部的宽窄不变。比原画圆的时候，正对 axis 的长度也收一点（圆耳不会和尖耳一样高）：
- * 目标的半长是 a × min(1, (n ÷ nRef)^−0.25)。
- */
-export function radialReshape(center: P, axis: P, a: number, b: number, n: number, nRef: number): Warp {
-  const aT = a * Math.min(1, Math.pow(n / nRef, -0.25));
-  const m = Math.hypot(axis[0], axis[1]);
-  const ax: P = [axis[0] / m, axis[1] / m];
-  const se = (c: number, s: number, k: number, A: number): number => Math.pow(Math.pow(c / A, k) + Math.pow(s / b, k), -1 / k);
-  return (x, y) => {
-    const dx = x - center[0];
-    const dy = y - center[1];
-    const u = dx * ax[0] + dy * ax[1];
-    if (u <= 0) return [x, y];
-    const v = -dx * ax[1] + dy * ax[0];
-    const r = Math.hypot(u, v);
-    const c = u / r;
-    const s = Math.abs(v) / r;
-    const k = se(c, s, n, aT) / se(c, s, nRef, a);
-    return [center[0] + dx * k, center[1] + dy * k];
-  };
-}
-
-/**
  * 弯折（垂下的耳朵）：沿 axis 走到 from 以后，中线弯成一段圆弧，走 len 转过 angle（弧度，转的方向和 rot() 相同），再接着直走。
  * 离中线 v 远的点跟着中线的法线走，所以沿中线的长短不变（纸片是弯过去的，不是拉过去的）。
  * 圆弧的半径 R = len ÷ |angle| 可以比零件的半宽小：弯的内侧像折痕一样被挤紧（离中线最多 R），不会翻过去；外侧照常。

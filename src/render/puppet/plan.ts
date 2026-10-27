@@ -64,12 +64,8 @@ export interface BodyPlan {
   relative: Readonly<Record<BodySystem, number>>;
 }
 
-/**
- * 耳尖的圆尖 → 超椭圆的指数（fit.ts 的 radialReshape）：0 是 2.4（圆），1 是 0.55（凹边，比猫还尖），按对数插值。
- * 猫的耳是直边的三角形，指数 1，对应 EAR_TIP_CAT（约 0.69）。
- */
-export const earExponent = (tip: number): number => 2.4 * Math.pow(0.55 / 2.4, tip);
-export const EAR_TIP_CAT = Math.log(1 / 2.4) / Math.log(0.55 / 2.4);
+/** 猫（成品图）的耳尖在"圆（0）↔ 尖（1）"上的位置：不写 earTip 就是它，耳的形状就是原画（ear.ts）。 */
+export const EAR_TIP_CAT = 0.6;
 /** 耳长（倍数）不到这么多就算没有耳廓（鼹鼠、海豹、猫头鹰）。 */
 export const EAR_ABSENT = 0.12;
 
