@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bend, boneWarp, densify, mapPoly, radialReshape, regionStretch } from '../src/render/puppet/fit';
-import { EAR_TIP_CAT, earExponent } from '../src/render/puppet/plan';
+import { bend, boneWarp, densify, mapPoly, regionStretch } from '../src/render/puppet/fit';
 
 // 零件贴骨头（DECISIONS"纸偶的部件抽象"）：关节的圆头不变形、骨头末端落到新的长度上。
 describe('零件贴骨头', () => {
@@ -77,44 +76,9 @@ describe('零件贴骨头', () => {
   });
 });
 
-// 耳朵的变形算子（docs/research/body-params.md 第六节）：从原画的耳出发，参数取原画的值时一点不动。
-describe('耳朵的变形算子', () => {
-  const C: [number, number] = [0, 0];
+// 弯折、加密（耳朵用，见 ear.ts）。
+describe('弯折和加密', () => {
   const ax: [number, number] = [0, -1]; // 耳朝上（y 朝下）
-
-  it('圆尖取原画的值时原样不动', () => {
-    const f = radialReshape(C, ax, 40, 30, 1, 1);
-    for (const [x, y] of [
-      [10, -20],
-      [-25, -5],
-      [3, -39],
-      [0, 10],
-    ] as const) {
-      const [X, Y] = f(x, y);
-      expect(X).toBeCloseTo(x, 12);
-      expect(Y).toBeCloseTo(y, 12);
-    }
-    expect(earExponent(EAR_TIP_CAT)).toBeCloseTo(1, 12);
-  });
-
-  it('磨圆：肩往外鼓、耳根的宽窄不变、根部以下不动；削尖：肩往里收', () => {
-    const round = radialReshape(C, ax, 40, 30, earExponent(0), 1);
-    const sharp = radialReshape(C, ax, 40, 30, earExponent(1), 1);
-    // 菱形边上 45° 方向的点（x/30 + y/40 = 1 上）。
-    const t = 1 / (1 / 30 + 1 / 40);
-    const p: [number, number] = [t * Math.SQRT1_2, -t * Math.SQRT1_2];
-    const r0 = Math.hypot(...p);
-    expect(Math.hypot(...round(...p))).toBeGreaterThan(r0 * 1.15);
-    expect(Math.hypot(...sharp(...p))).toBeLessThan(r0 * 0.95);
-    // 垂直于中线的点（耳根的宽窄）不动。
-    expect(round(30, 0)[0]).toBeCloseTo(30, 9);
-    expect(sharp(-30, 0)[0]).toBeCloseTo(-30, 9);
-    // 中心以下（埋在头里的耳根）不动。
-    expect(round(12, 8)).toEqual([12, 8]);
-    // 圆耳比原画矮一点，尖耳一样高。
-    expect(-round(0, -40)[1]).toBeLessThan(40);
-    expect(-sharp(0, -40)[1]).toBeCloseTo(40, 9);
-  });
 
   it('弯折：不弯时原样；折点以前不动；中线的长短不变', () => {
     const id = bend([0, -10], ax, 30, 0);
