@@ -73,7 +73,7 @@ export function boneWarp(bone: Bone, w: number, len: number): Warp {
   };
 }
 
-/** 沿某个方向的一段（从 from 开始往 dir 方向）拉伸 k 倍，这段之前不动、之后平移（吻、耳朵用）。 */
+/** 沿某个方向的一段（从 from 开始往 dir 方向）拉伸 k 倍，这段之前不动、之后平移（吻用）。 */
 export function regionStretch(from: P, dir: P, k: number, wide = 1): Warp {
   const n = Math.hypot(dir[0], dir[1]);
   const ax: P = [dir[0] / n, dir[1] / n];
@@ -110,64 +110,4 @@ export function reach(poly: number[], dir: P): number {
   let best = 0;
   for (let i = 0; i < poly.length; i += 2) best = Math.max(best, (poly[i]! * dir[0] + poly[i + 1]! * dir[1]) / n);
   return best;
-}
-
-/**
- * 弯折（垂下的耳朵）：沿 axis 走到 from 以后，中线弯成一段圆弧，走 len 转过 angle（弧度，转的方向和 rot() 相同），再接着直走。
- * 离中线 v 远的点跟着中线的法线走，所以沿中线的长短不变（纸片是弯过去的，不是拉过去的）。
- * 圆弧的半径 R = len ÷ |angle| 可以比零件的半宽小：弯的内侧像折痕一样被挤紧（离中线最多 R），不会翻过去；外侧照常。
- */
-export function bend(from: P, axis: P, len: number, angle: number): Warp {
-  const m = Math.hypot(axis[0], axis[1]);
-  const ax: P = [axis[0] / m, axis[1] / m];
-  const nx: P = [-ax[1], ax[0]];
-  if (Math.abs(angle) < 1e-9 || len <= 0) return (x, y) => [x, y];
-  const kap = angle / len;
-  const R = 1 / Math.abs(kap);
-  // 内侧（圆心那一侧）的 v 的符号：angle > 0 时圆心在 +n 一侧。
-  const inner = Math.sign(angle);
-  return (x, y) => {
-    const dx = x - from[0];
-    const dy = y - from[1];
-    const u = dx * ax[0] + dy * ax[1];
-    if (u <= 0) return [x, y];
-    let v = dx * nx[0] + dy * nx[1];
-    const s = Math.min(u, len);
-    // 挤紧的程度随弯过的比例渐渐加上，折点处不出台阶。
-    const f = s / len;
-    if (v * inner > 0) {
-      const d = Math.abs(v);
-      const squeezed = R * 0.92 * (1 - Math.exp(-d / (R * 0.92)));
-      v = inner * (d + (squeezed - d) * f);
-    }
-    const al = kap * s;
-    // 中线：c(s) = from + (sin κs · axis + (1 − cos κs) · n) / κ。
-    const ci = Math.sin(al) / kap;
-    const cj = (1 - Math.cos(al)) / kap;
-    const ca = Math.cos(al);
-    const sa = Math.sin(al);
-    // 这一点的切线、法线是 axis、n 转过 al。
-    const t: P = [ax[0] * ca + nx[0] * sa, ax[1] * ca + nx[1] * sa];
-    const nn: P = [nx[0] * ca - ax[0] * sa, nx[1] * ca - ax[1] * sa];
-    const rest = u - s;
-    return [
-      from[0] + ax[0] * ci + nx[0] * cj + nn[0] * v + t[0] * rest,
-      from[1] + ax[1] * ci + nx[1] * cj + nn[1] * v + t[1] * rest,
-    ];
-  };
-}
-
-/** 把多边形加密：长于 maxSeg 的边等分（变形以后弯处才圆，不出棱角）。 */
-export function densify(poly: number[], maxSeg: number): number[] {
-  const out: number[] = [];
-  const n = poly.length / 2;
-  for (let i = 0; i < n; i++) {
-    const x0 = poly[2 * i]!;
-    const y0 = poly[2 * i + 1]!;
-    const x1 = poly[(2 * i + 2) % poly.length]!;
-    const y1 = poly[(2 * i + 3) % poly.length]!;
-    const k = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / maxSeg));
-    for (let j = 0; j < k; j++) out.push(x0 + ((x1 - x0) * j) / k, y0 + ((y1 - y0) * j) / k);
-  }
-  return out;
 }
