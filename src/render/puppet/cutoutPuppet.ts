@@ -16,8 +16,8 @@ import { legJoints, standPose, type Pose, type Vec } from './pose';
  * - 腿：每节先按粗细（大腿、上臂按 thighW，其余按 legW）整片缩放，再只拉关节之间的杆，补足长度（hindSegs / foreSegs）；
  *   远侧的腿复用近侧的零件、调暗，长短永远一样；
  * - 头：按头的大小整片缩放，吻按嘴型拉长或缩短；
- * - 耳：从原画的耳出发，按外观参数一步步变（`docs/research/body-params.md` 第六节"描出来的多边形 + 变形算子"）：
- *   原画的耳先读成"中线 + 两侧的宽度轮廓 + 手绘的起伏"（ear.ts），换参数时按新的长、宽、圆尖重画；软的耳朵整片绕铆钉垂下、耳尖弯下来；
+ * - 耳：按外观参数剪出来的一片纸（ear.ts，`docs/research/body-params.md` 第六节），原画只给方向、长短、耳根的宽；
+ *   软的耳朵整片绕铆钉垂下（铆钉再往头里挪一点，耳根贴着头顶），半软时耳尖往前弯；
  *   耳的插口沿头的轮廓从头顶滑到两侧；
  *   耳长拉到没有，耳片就不画；
  * - 尾：尾型决定节数（plan.tailSegs），用成品图最后几节（尾尖总在最后），总长按尾长、粗细按尾宽。
@@ -112,11 +112,10 @@ export class CutoutPuppet {
 
   /**
    * 耳的插口沿头的轮廓滑动（成品图坐标）：pos = 0 在原画的位置（头顶），1 滑到头的后侧（人、猫头鹰的耳在两侧，侧面看在头的后半）。
-   * 插口离轮廓的深度不变；耳跟着轮廓的朝向转。返回插口和转角。
+   * 插口离轮廓的深度不变，再往头里挪 sink（垂下来的耳，ear.ts）；耳跟着轮廓的朝向转。返回插口和转角。
    */
-  private earSlide(id: string, pos: number): [P, number] {
+  private earSlide(id: string, pos: number, sink = 0): [P, number] {
     const ear = this.part(id);
-    if (pos <= 0) return [ear.pivot, 0];
     const head = this.part(this.data.rig.head);
     const pts: P[] = [];
     for (let j = 0; j < head.outline.length; j += 2) pts.push(add(head.pivot, rot([head.outline[j]!, head.outline[j + 1]!], head.angle)));
@@ -126,6 +125,11 @@ export class CutoutPuppet {
     const d2 = (a: P, b: P): number => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
     let i0 = 0;
     for (let j = 1; j < pts.length; j++) if (d2(pts[j]!, ear.pivot) < d2(pts[i0]!, ear.pivot)) i0 = j;
+    if (pos <= 0) {
+      const inC = sub(c, pts[i0]!);
+      const mC = Math.hypot(inC[0], inC[1]) || 1;
+      return [[ear.pivot[0] + (inC[0] / mC) * sink, ear.pivot[1] + (inC[1] / mC) * sink], 0];
+    }
     // 头的后侧：从中心往后、稍往下（成品图里头朝 +x，y 朝下）。
     const back: P = [-0.97, 0.25];
     const along = (q: P): number => (q[0] - cx) * back[0] + (q[1] - cy) * back[1];
@@ -149,7 +153,7 @@ export class CutoutPuppet {
     const depth = Math.sqrt(d2(ear.pivot, pts[i0]!));
     const toC = sub(c, q);
     const m = Math.hypot(toC[0], toC[1]) || 1;
-    const at: P = [q[0] + (toC[0] / m) * depth, q[1] + (toC[1] / m) * depth];
+    const at: P = [q[0] + (toC[0] / m) * (depth + sink), q[1] + (toC[1] / m) * (depth + sink)];
     let turn = angleOf(sub(q, c)) - angleOf(sub(pts[i0]!, c));
     while (turn > Math.PI) turn -= 2 * Math.PI;
     while (turn < -Math.PI) turn += 2 * Math.PI;
@@ -229,35 +233,33 @@ export class CutoutPuppet {
     const snoutFrom = sub(rig.snout.from, head.pivot);
     const headWarp = compose(regionStretch(snoutFrom, rig.snout.dir, snoutK), scale(kh));
     const headSockets: Record<string, P> = { [rig.jaw]: piv(rig.jaw) };
+    // 耳：按参数剪（ear.ts）。插口沿头的轮廓滑（耳位置），垂下来的耳再往头里挪一点。
+    const earK = plan.earH / plan.headR / (ref.earH / ref.headR);
+    // 圆尖：原画（成品图那条现有技术）是 0；比它圆往 1 走，比它尖往 −1 走。
+    const tipRef = ref.earTip;
+    const round = plan.earTip <= tipRef ? (tipRef - plan.earTip) / tipRef : -(plan.earTip - tipRef) / (1 - tipRef);
     this.earTurn = rig.ears.map(() => 0);
+    this.earHinge = rig.ears.map(() => 0);
     rig.ears.forEach((e, i) => {
-      const [at, turn] = this.earSlide(e, plan.earPos);
-      headSockets[e] = at;
-      this.earTurn[i] = turn;
+      const ear = this.part(e);
+      this.cut.setVisible(e, plan.earOn);
+      this.earTurn[i] = this.earSlide(e, plan.earPos)[1];
+      let model = this.earModels.get(e);
+      if (!model) {
+        model = fitEar(ear.outline, ear.lapR * 0.6);
+        this.earModels.set(e, model);
+      }
+      const { shape, hinge, sink } = earShape(model, { lenK: earK, wide: plan.earW / ref.earW, round, stiff: plan.earStiff, frame: ear.angle + this.earTurn[i]! });
+      this.earHinge[i] = hinge;
+      headSockets[e] = this.earSlide(e, plan.earPos, sink)[0];
+      shapes.set(e, mapShape(shape, (x, y) => [x * kh, y * kh]));
+      fitted.set(e, { sockets: {} });
     });
     fitPiece(rig.head, headWarp, headSockets);
     // 下颌在头的变换里变（它是从头上切下来的），再挪回自己的转轴。
     const jawPiv = piv(rig.jaw);
     const jawAt = headWarp(...sub(jawPiv, head.pivot));
     fitPiece(rig.jaw, (x, y) => sub(headWarp(x + jawPiv[0] - head.pivot[0], y + jawPiv[1] - head.pivot[1]), jawAt), {});
-    const earK = plan.earH / plan.headR / (ref.earH / ref.headR);
-    // 圆尖：原画（成品图那条现有技术）是 0；比它圆往 1 走，比它尖往 −1 走。
-    const tipRef = ref.earTip;
-    const round = plan.earTip <= tipRef ? (tipRef - plan.earTip) / tipRef : -(plan.earTip - tipRef) / (1 - tipRef);
-    this.earHinge = rig.ears.map(() => 0);
-    rig.ears.forEach((e, i) => {
-      const ear = this.part(e);
-      this.cut.setVisible(e, plan.earOn);
-      let model = this.earModels.get(e);
-      if (!model) {
-        model = fitEar(ear.outline, ear.lapR * 0.6);
-        this.earModels.set(e, model);
-      }
-      const { shape, hinge } = earShape(model, ear, { lenK: earK, wide: plan.earW / ref.earW, round, stiff: plan.earStiff, frame: ear.angle + this.earTurn[i]! });
-      this.earHinge[i] = hinge;
-      shapes.set(e, mapShape(shape, (x, y) => [x * kh, y * kh]));
-      fitted.set(e, { sockets: {} });
-    });
 
     // 尾：最后 n 节；总长按尾长，粗细按尾宽（第一节的粗细对上原样的尾根）。
     const n = Math.max(1, Math.min(rig.tail.length, plan.tailSegs));
