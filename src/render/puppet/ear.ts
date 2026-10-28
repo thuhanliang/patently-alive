@@ -7,8 +7,8 @@ import type { P, Shape } from './fit';
  * 原画的猫耳是从侧前方看进耳窝的样子（带透视的内耳、深色的耳边、不规则的搭接片），
  * 拿它去拉长、垂下来，不规则的地方都会跟着放大，所以轮廓整片按参数重新剪：
  * - 耳根：以铆钉为圆心的半圆搭接片（纸偶的关节就是这样，`handoff/007` 的"圆头 + 搭接片"），整片绕铆钉怎么转，耳根都不变形；
- * - 耳身：两侧对称，半宽 w(s) = R · (1 − sᵃ)ᵇ（s 从铆钉 0 到耳尖 1）：
- *   R 是耳根的半宽（"耳宽"只管它）；b 管耳尖（0.5 圆、1 直边的尖、大于 1 边略凹的尖），a 管耳身多饱满（大是 U 形的舌头，1 是三角）；
+ * - 耳身：两侧对称。从铆钉到露出头的地方一样宽（半宽 R，"耳宽"只管它），露出头以后半宽 R · (1 − tᵃ)ᵇ（t 从露出头 0 到耳尖 1）：
+ *   耳最宽的地方总在露出头的那里，短耳也不会变成贴在脸上的一个大圆片；b 管耳尖（0.5 圆、1 直边的尖、大于 1 边略凹的尖），a 管耳身多饱满（大是 U 形的舌头，1 是三角）；
  * - 内耳：耳身里一块同形缩小的浅色，只在立着的耳上；
  * - 软硬只管"自然状态下耳朝哪"：整片绕铆钉经过脑后转下来（不往前盖住脸），半软的耳只把耳尖往前弯一点（半立耳）。
  */
@@ -21,13 +21,13 @@ export interface EarModel {
   len: number;
   /** 铆钉埋在头的轮廓以内多深（这一截不随耳长伸缩）。 */
   base: number;
-  /** 铆钉处的半宽（按猫耳的形状从原画露出头的地方的宽推回去）。 */
+  /** 耳根（露出头的地方）的半宽。 */
   R: number;
 }
 
 const dot = (u: P, v: P): number => u[0] * v[0] + u[1] * v[1];
 
-/** 半宽的形状：s ∈ [0, 1]，铆钉处 1、耳尖 0。 */
+/** 露出头以后半宽的形状：t ∈ [0, 1]，露出头的地方 1、耳尖 0。 */
 export const earProfile = (s: number, a: number, b: number): number => (s <= 0 ? 1 : s >= 1 ? 0 : Math.pow(1 - Math.pow(s, a), b));
 
 /**
@@ -57,7 +57,7 @@ export function fitEar(outline: number[], base: number): EarModel {
     cross.push(dot(p, nx) + (dot(q, nx) - dot(p, nx)) * k);
   }
   const half = cross.length >= 2 ? (Math.max(...cross) - Math.min(...cross)) / 2 : len * 0.3;
-  return { ax, len, base, R: half / earProfile(base / len, CAT.a, CAT.b) };
+  return { ax, len, base, R: half };
 }
 
 /** 耳的参数（都相对原画）。 */
@@ -79,7 +79,7 @@ const ROUND = { a: 2.4, b: 0.5 };
 const SHARP = { a: 1.1, b: 1.35 };
 /** 整只垂下来时耳尖朝哪（画面里，y 朝下）：正下方略偏前，贴着脸颊。 */
 const HANG = Math.PI / 2 - 0.15;
-/** 半立耳的耳尖往前弯：最多弯多少（弧度），在耳长的哪一段弯（这一段以外的耳尖是直的）。真正折过来的耳尖（柯利）要画折痕，还没做。 */
+/** 半立耳的耳尖往前弯：最多弯多少（弧度），在露出头的那一截的哪一段弯（这一段以外的耳尖是直的）。真正折过来的耳尖（柯利）要画折痕，还没做。 */
 const FOLD_MAX = 1.5;
 const FOLD_AT = 0.5;
 const FOLD_SPAN = 0.25;
@@ -104,7 +104,11 @@ export function earShape(m: EarModel, look: EarLook): { shape: Shape; hinge: num
   const to = look.round >= 0 ? ROUND : SHARP;
   const a = CAT.a + (to.a - CAT.a) * f;
   const b = CAT.b + (to.b - CAT.b) * f;
-  const w = (s: number): number => R * earProfile(s, a, b);
+  // 中线上的位置 s 从铆钉 0 到耳尖 1；露出头的地方是 sb。
+  const sb = m.base / L;
+  const w = (s: number): number => (s <= sb ? R : R * earProfile((s - sb) / (1 - sb), a, b));
+  const fAt = sb + FOLD_AT * (1 - sb);
+  const fSpan = FOLD_SPAN * (1 - sb);
   const nx: P = [-m.ax[1], m.ax[0]];
 
   // 软硬：整片垂下的量 droop；还没怎么垂下的时候（半立耳，软度 0–0.5），耳尖往前弯，软度 0.25 时弯得最多。
@@ -123,9 +127,9 @@ export function earShape(m: EarModel, look: EarLook): { shape: Shape; hinge: num
   // 弯得最急的地方半径也不小于那里半宽的 1.6 倍（内侧不挤出缺口）。
   // +n 是中线顺时针转 90°（y 朝下），耳朝上时就是朝前（脸那边）。
   const K = 120;
-  const ramp = (s: number): number => (s <= FOLD_AT || s >= FOLD_AT + FOLD_SPAN ? 0 : Math.sin((Math.PI * (s - FOLD_AT)) / FOLD_SPAN) ** 2);
+  const ramp = (s: number): number => (s <= fAt || s >= fAt + fSpan ? 0 : Math.sin((Math.PI * (s - fAt)) / fSpan) ** 2);
   let fold = soft < 0.5 ? FOLD_MAX * Math.sin((Math.PI * soft) / 0.5) : 0;
-  const rampArea = FOLD_SPAN / 2;
+  const rampArea = fSpan / 2;
   if (fold > 0) {
     let worst = 0;
     for (let k = 0; k <= K; k++) worst = Math.max(worst, (ramp(k / K) / (rampArea * L)) * w(k / K));
@@ -166,8 +170,8 @@ export function earShape(m: EarModel, look: EarLook): { shape: Shape; hinge: num
   // 内耳：耳身中间一块同形缩小的浅色，从露出头的地方到弯起来的地方（或耳尖附近）；垂下来露的是耳背，没有内耳。
   const pale: number[][] = [];
   if (droop < 0.3) {
-    const s0 = Math.min(0.5, m.base / L + 0.06);
-    const s1 = fold > 0.3 ? FOLD_AT + FOLD_SPAN / 2 : 0.88;
+    const s0 = sb + 0.06 * (1 - sb);
+    const s1 = fold > 0.3 ? fAt + fSpan / 2 : sb + 0.88 * (1 - sb);
     if (s1 - s0 > 0.1) {
       const inner = (s: number): number => {
         const e = (2 * (s - s0)) / (s1 - s0) - 1;
