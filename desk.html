@@ -98,12 +98,105 @@
       #note:empty {
         display: none;
       }
+      /* 抽屉的把手、复位视图：宽屏不用把手。 */
+      #sheet {
+        display: none;
+      }
+      #viewReset {
+        position: fixed;
+        left: 50%;
+        top: 16px;
+        transform: translateX(-50%);
+        padding: 6px 12px;
+        box-shadow: 2px 3px 0 rgba(60, 40, 20, 0.3);
+      }
+      #viewReset[hidden] {
+        display: none;
+      }
+      canvas {
+        touch-action: none;
+      }
+      /* 手机（竖屏窄、横屏矮）：参数收进底部的抽屉，读数缩成顶上一条（点开看全部），纸偶站在中间的空地上。 */
+      @media (max-width: 719px), (max-height: 499px) {
+        .card {
+          font-size: 14px;
+        }
+        #controls {
+          left: 0;
+          right: 0;
+          top: auto;
+          bottom: 0;
+          width: auto;
+          max-height: 52%;
+          padding: 0 14px 14px;
+          border-radius: 10px 10px 0 0;
+          box-shadow: 0 -2px 0 rgba(60, 40, 20, 0.25);
+          gap: 8px;
+        }
+        #controls.collapsed {
+          overflow: hidden;
+          padding-bottom: 0;
+        }
+        #controls.collapsed > :not(#sheet) {
+          display: none;
+        }
+        #sheet {
+          display: block;
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          margin: 0 -14px;
+          padding: 12px 0 10px;
+          border: 0;
+          border-radius: 10px 10px 0 0;
+          background: #f6eedb;
+          font-weight: 600;
+          color: #8a6d4a;
+        }
+        #controls label {
+          grid-template-columns: 64px 1fr 78px;
+          min-height: 36px;
+        }
+        #controls input[type='range'] {
+          height: 28px;
+        }
+        #controls select {
+          padding: 4px;
+        }
+        button {
+          padding: 6px 10px;
+        }
+        #readout {
+          left: 8px;
+          right: 8px;
+          top: 8px;
+          bottom: auto;
+          width: auto;
+          padding: 6px 10px;
+          font-size: 13px;
+          line-height: 1.55;
+        }
+        #readout:not(.open) .more {
+          display: none;
+        }
+        #note {
+          left: 8px;
+          right: 8px;
+          top: auto;
+          bottom: 60px;
+          max-width: none;
+        }
+        #controls:not(.collapsed) ~ #note {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
-    <div id="controls" class="card"></div>
+    <div id="controls" class="card"><button id="sheet" type="button"></button></div>
     <div id="readout" class="card"></div>
     <div id="note" class="card"></div>
+    <button id="viewReset" type="button" hidden>复位视图</button>
     <script type="module" src="/src/proto/desk/main.ts"></script>
   </body>
 </html>
