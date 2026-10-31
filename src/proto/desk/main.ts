@@ -31,6 +31,10 @@ const MAMMALS = designTemplates.filter((t) => t.design.parts.coat !== 'feathers'
 const SYSTEM_NAMES: Record<BodySystem, string> = { skeleton: '骨骼', muscle: '肌肉', gut: '消化道', heart: '心血管', fat: '脂肪' };
 const GAIT_NAMES: Record<Gait, string> = { stand: '站着', walk: '走', trot: '小跑', gallop: '奔跑', hop: '跳' };
 const SHOWN_SLOTS = ['coat', 'mouth', 'limbs', 'tail', 'digestion'] as const;
+/** 比这窄、或者比这矮（横着拿的手机）就是手机的排法（和 desk.html 的 @media 一致）。 */
+const NARROW = 720;
+const SHORT = 500;
+const isPhone = (W: number, H: number): boolean => W < NARROW || H < SHORT;
 
 // ---- 状态 ----
 let templateId = 'cat';
@@ -177,6 +181,11 @@ async function main(): Promise<void> {
   const labelPool: Text[] = [];
 
   let zoom = 0; // 每米多少像素，平滑地追目标
+  /** 舞台上纸偶站的位置（屏幕像素），平滑地追空地的中间。 */
+  let stageX = NaN;
+  let stageY = NaN;
+  /** 手指 / 滚轮叠上去的缩放（k 倍）和拖动（x、y 像素）。 */
+  const view = { k: 1, x: 0, y: 0 };
   let refKey = '';
   let refs: { view: Container; label: Text; head: { x: number; y: number }; earM: number; setZoom(z: number): void }[] = [];
 
@@ -228,7 +237,8 @@ async function main(): Promise<void> {
     });
   }
 
-  function targetZoom(W: number, H: number): number {
+  /** 纸偶和参照动物都放得下的缩放（W、H 是舞台的空地：宽屏去掉左边的参数面板，手机去掉上面的读数和底下的抽屉）。 */
+  function targetZoom(W: number, H: number, narrow: boolean): number {
     const lenM = plan.bodyLen + plan.tailLen * 0.7 + plan.snout + plan.headR * 2;
     const hM = plan.legLen + plan.chestH * 2 + plan.neckLen + plan.headR * 2;
     let refLen = 0;
@@ -237,11 +247,13 @@ async function main(): Promise<void> {
       refLen = Math.max(refLen, r.bodyLengthM * (1.6 + r.tail));
       refH = Math.max(refH, referenceHeightM(r));
     }
-    const usableW = W - 320;
-    return Math.min((usableW * 0.5) / lenM, (H * 0.45) / hM, (usableW * 0.85) / Math.max(refLen, 1e-3), (H * 0.6) / Math.max(refH, 1e-3));
+    // 手机：纸偶占得满一些，参照动物的剪影可以出一点画面。
+    const fill = narrow ? 0.8 : 0.5;
+    const refFill = narrow ? 1.1 : 0.85;
+    return Math.min((W * fill) / lenM, (H * 0.45) / hM, (W * refFill) / Math.max(refLen, 1e-3), (H * 0.6) / Math.max(refH, 1e-3));
   }
 
-  function drawGround(W: number, gy: number, px: number): void {
+  function drawGround(W: number, gy: number, px: number, zoom: number): void {
     ground.clear();
     ground.rect(0, gy, W, 30).fill(0xf4ead3);
     ground.rect(0, gy, W, 1.5).fill(0x8a7458);
@@ -312,26 +324,40 @@ async function main(): Promise<void> {
     breathPhase += bHz * dt;
     puppet.apply(pose, dt, Math.sin(breathPhase * Math.PI * 2));
 
-    // 缩放：慢慢追，体重一变先看到它长大，再看到镜头往后拉。
-    const tz = targetZoom(W, H);
-    zoom = zoom === 0 ? tz : Math.exp(Math.log(zoom) + (Math.log(tz) - Math.log(zoom)) * (1 - Math.exp(-dt / 0.8)));
-    const gy = Math.round(H * 0.72);
-    const px = 320 + (W - 320) * 0.5;
-    puppet.setScale(zoom);
+    // 舞台的空地：宽屏左边让给参数面板；手机上参数在底部的抽屉里，上面是一条读数。
+    const narrow = isPhone(W, H);
+    const left = narrow ? 0 : 320;
+    const top = narrow ? readout.getBoundingClientRect().bottom : 0;
+    const bottom = narrow ? panel.getBoundingClientRect().top : H;
+    const stageH = Math.max(80, bottom - top);
+    // 缩放：慢慢追，体重一变先看到它长大，再看到镜头往后拉。抽屉开合时舞台也慢慢挪过去。
+    const tz = targetZoom(W - left, stageH, narrow);
+    const ease = (from: number, to: number, tau: number): number => from + (to - from) * (1 - Math.exp(-dt / tau));
+    zoom = zoom === 0 ? tz : Math.exp(ease(Math.log(zoom), Math.log(tz), 0.8));
+    const sx = left + (W - left) * 0.5;
+    const sy = top + stageH * 0.72;
+    stageX = Number.isNaN(stageX) || dt === 0 ? sx : ease(stageX, sx, 0.25);
+    stageY = Number.isNaN(stageY) || dt === 0 ? sy : ease(stageY, sy, 0.25);
+    // 再叠上手指 / 滚轮的缩放和拖动（view）。
+    const z = zoom * view.k;
+    const gy = Math.round(stageY + view.y);
+    const px = stageX + view.x;
+    puppet.setScale(z);
     puppet.view.position.set(px, gy);
     rebuildRefs();
     let prevLabel: Text | null = null;
     for (const r of refs) {
-      r.setZoom(zoom);
+      r.setZoom(z);
       r.view.position.set(px, gy);
       // 名字签挂在剪影的头上方；和前一张的签挤在一起时往上挪。
-      let y = gy - (r.head.y + r.earM) * zoom - 18;
-      const x = px + r.head.x * zoom - r.label.width / 2;
+      let y = gy - (r.head.y + r.earM) * z - 18;
+      const x = px + r.head.x * z - r.label.width / 2;
       if (prevLabel && Math.abs(prevLabel.y - y) < 16 && Math.abs(prevLabel.x - x) < prevLabel.width) y = prevLabel.y - 16;
       r.label.position.set(x, y);
       prevLabel = r.label;
     }
-    drawGround(W, gy, px);
+    drawGround(W, gy, px, z);
+    if (!resetBtn.hidden) resetBtn.style.top = `${Math.round(top + 12)}px`;
 
     readoutLeft -= dt;
     if (readoutLeft <= 0) {
@@ -344,6 +370,89 @@ async function main(): Promise<void> {
   const panel = document.getElementById('controls')!;
   const readout = document.getElementById('readout')!;
   const note = document.getElementById('note')!;
+  const resetBtn = document.getElementById('viewReset') as HTMLButtonElement;
+
+  // 手机：参数收在底部的抽屉里，一开始收着（先看到纸偶）；读数只显示两行，点一下看全部。
+  const sheet = document.getElementById('sheet')!;
+  const setSheet = (open: boolean): void => {
+    panel.classList.toggle('collapsed', !open);
+    sheet.textContent = open ? '▼ 收起参数' : '▲ 调参数';
+  };
+  setSheet(!isPhone(window.innerWidth, window.innerHeight));
+  sheet.addEventListener('click', () => setSheet(panel.classList.contains('collapsed')));
+  readout.addEventListener('click', () => readout.classList.toggle('open'));
+
+  // 舞台的手势：双指捏合缩放、单指拖动（看细节用），双击复位；桌面上滚轮缩放、拖动。只改画面，不碰设计。
+  const canvas = app.canvas;
+  const pointers = new Map<number, { x: number; y: number }>();
+  let lastTap = { t: 0, x: 0, y: 0 };
+  /** 以屏幕上的点 (cx, cy) 为中心缩放 f 倍：那一点下面的东西不动。 */
+  const zoomAt = (cx: number, cy: number, f: number): void => {
+    const k = Math.min(12, Math.max(0.5, view.k * f));
+    const g = k / view.k;
+    view.x = cx - stageX - (cx - stageX - view.x) * g;
+    view.y = cy - stageY - (cy - stageY - view.y) * g;
+    view.k = k;
+    resetBtn.hidden = false;
+  };
+  const resetView = (): void => {
+    view.k = 1;
+    view.x = 0;
+    view.y = 0;
+    resetBtn.hidden = true;
+  };
+  resetBtn.addEventListener('click', resetView);
+  const local = (e: PointerEvent | WheelEvent): { x: number; y: number } => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  canvas.addEventListener('pointerdown', (e) => {
+    const p = local(e);
+    pointers.set(e.pointerId, p);
+    canvas.setPointerCapture(e.pointerId);
+    if (pointers.size === 1) {
+      const now = performance.now();
+      if (now - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30) {
+        resetView();
+        lastTap = { t: 0, x: 0, y: 0 };
+      } else lastTap = { t: now, ...p };
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const old = pointers.get(e.pointerId);
+    if (!old) return;
+    const p = local(e);
+    if (pointers.size === 1) {
+      view.x += p.x - old.x;
+      view.y += p.y - old.y;
+      if (Math.hypot(view.x, view.y) > 2) resetBtn.hidden = false;
+    } else if (pointers.size === 2) {
+      const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)![1];
+      const d0 = Math.hypot(old.x - other.x, old.y - other.y);
+      const d1 = Math.hypot(p.x - other.x, p.y - other.y);
+      // 两指的中点跟着走（拖动），两指的距离决定缩放。
+      view.x += (p.x - old.x) / 2;
+      view.y += (p.y - old.y) / 2;
+      if (d0 > 1) zoomAt((p.x + other.x) / 2, (p.y + other.y) / 2, d1 / d0);
+    }
+    pointers.set(e.pointerId, p);
+  });
+  const up = (e: PointerEvent): void => {
+    pointers.delete(e.pointerId);
+  };
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      const p = local(e);
+      zoomAt(p.x, p.y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+    },
+    { passive: false },
+  );
+  // iOS Safari 的整页捏合缩放：在画布上不要（画布自己缩放）。
+  canvas.addEventListener('gesturestart', (e) => e.preventDefault());
 
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
     const e = Object.assign(document.createElement(tag), attrs);
@@ -477,7 +586,8 @@ async function main(): Promise<void> {
       `呼吸 ${Math.round(breathsPerMin(gaitRules, M))} 次/分 · 心跳 ${Math.round(heartPerMin(gaitRules, M))} 次/分（静息）`,
       `最快 ${(top() * 3.6).toFixed(0)} 千米/时`,
     ];
-    readout.innerHTML = rows.join('<br>');
+    // 手机上只显示前两行（.more 收着，点读数展开）。
+    readout.innerHTML = `${rows.slice(0, 2).join('<br>')}<span class="more"><br>${rows.slice(2).join('<br>')}</span>`;
   }
 
   function loadTemplate(id: string): void {
