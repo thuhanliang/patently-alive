@@ -2,6 +2,7 @@ import type { Container, Texture } from 'pixi.js';
 import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
 import { boneWarp, compose, mapShape, reach, regionStretch, scale, type P, type Shape, type Warp } from './fit';
 import { earShape, fitEar, type EarModel } from './ear';
+import type { HandleSpot } from './handles';
 import { pendulumOmega, springStep, type Spring } from './gait';
 import { TailChain, idleSwish } from './tail';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
@@ -75,6 +76,10 @@ export class CutoutPuppet {
   private earHinge: number[] = [];
   /** 原画的耳读成的参数（ear.ts），每片耳读一次。 */
   private readonly earModels = new Map<string, EarModel>();
+  /** 近侧耳上把手的位置（零件自己的坐标）：耳尖、耳根中点、耳根后缘；unit 是耳长 = 1 时露出头那一截的长度。 */
+  private earSpots: { tip: P; root: P; back: P; unit: number } | null = null;
+  /** 这一帧的把手（handles.ts），apply 里记下。 */
+  private spots: HandleSpot[] = [];
   private lastHead = 0;
   private time = 0;
   /** 站姿：成品图画的就是站姿，头和尾巴的角度都相对它算。 */
@@ -254,6 +259,18 @@ export class CutoutPuppet {
       headSockets[e] = this.earSlide(e, plan.earPos, sink)[0];
       shapes.set(e, mapShape(shape, (x, y) => [x * kh, y * kh]));
       fitted.set(e, { sockets: {} });
+      if (e === this.nearEar()) {
+        // 把手：耳尖是轮廓上离铆钉最远的点；耳根后缘在露出头的地方往后（−n 一侧，ear.ts）一个半宽。
+        let tip: P = [0, 0];
+        for (let k = 0; k < shape.outline.length; k += 2) {
+          const q: P = [shape.outline[k]! * kh, shape.outline[k + 1]! * kh];
+          if (Math.hypot(...q) > Math.hypot(...tip)) tip = q;
+        }
+        const root: P = [model.ax[0] * model.base * kh, model.ax[1] * model.base * kh];
+        const R = model.R * (plan.earW / ref.earW) * kh;
+        const refEarLen = ref.earH / (ref.headR * 0.7);
+        this.earSpots = { tip, root, back: [root[0] + model.ax[1] * R, root[1] - model.ax[0] * R], unit: ((model.len - model.base) * kh) / refEarLen };
+      }
     });
     fitPiece(rig.head, headWarp, headSockets);
     // 下颌在头的变换里变（它是从头上切下来的），再挪回自己的转轴。
@@ -335,6 +352,17 @@ export class CutoutPuppet {
     this.setScale(this.pxPerM);
   }
 
+  /** 近侧的耳（rig.ears 里名字带 near 的那片，没有就取最后一片）。 */
+  private nearEar(): string | undefined {
+    const ears = this.data.rig.ears;
+    return ears.find((e) => e.toLowerCase().includes('near')) ?? ears[ears.length - 1];
+  }
+
+  /** 这一帧的把手（view 的坐标）。 */
+  handles(): HandleSpot[] {
+    return this.spots;
+  }
+
   setScale(pxPerM: number): void {
     this.pxPerM = pxPerM;
     this.view.scale.set(pxPerM * this.s);
@@ -365,6 +393,8 @@ export class CutoutPuppet {
     const shoulderAt = at(midV, rChest, so(rig.chest, 'shoulder'));
 
     // 腿：贴好的三节长度。
+    let toe: P = [0, 0];
+    let shoulder: P = [0, 0];
     for (const k of LEGS) {
       const leg = rig.legs[k];
       const ends = leg.parts.map((id) => so(id, 'end'));
@@ -387,6 +417,10 @@ export class CutoutPuppet {
         j[i] = [j[i - 1]![0] + side * dx, -h];
         // 后面的关节平移过去（形状不变），下一轮再检查它们。
         for (let m = i + 1; m < 4; m++) j[m] = [j[m]![0] + j[i]![0] - old[0], j[m]![1] + j[i]![1] - old[1]];
+      }
+      if (k === 'nearFore') {
+        toe = j[3]!;
+        shoulder = j[0]!;
       }
       for (let i = 0; i < 3; i++) {
         const viewA = Math.atan2(j[i + 1]![1] - j[i]![1], j[i + 1]![0] - j[i]![0]);
@@ -427,13 +461,26 @@ export class CutoutPuppet {
       for (const sp of this.earSprings) springStep(sp, Math.max(-0.5, Math.min(0.5, -hv * earGain)), earOmega, 0.28, dt);
       this.lastHead = headAng;
     }
-    rig.ears.forEach((id, i) => this.cut.place(id, ...at(headV, rHead, so(rig.head, id)), this.part(id).angle + aHead + this.earTurn[i]! + this.earHinge[i]! + this.earSprings[i]!.x));
+    const spots: HandleSpot[] = [{ id: 'back', at: midV, from: [midV[0], 0] }];
+    rig.ears.forEach((id, i) => {
+      const earAt = at(headV, rHead, so(rig.head, id));
+      const earRot = this.part(id).angle + aHead + this.earTurn[i]! + this.earHinge[i]! + this.earSprings[i]!.x;
+      this.cut.place(id, ...earAt, earRot);
+      const es = this.earSpots;
+      if (id === this.nearEar() && es) {
+        const root = at(earAt, earRot, es.root);
+        // 耳长拖到没有时耳片不画，耳尖的把手留在耳根上，还能再拖出来。
+        spots.push({ id: 'earTip', at: plan.earOn ? at(earAt, earRot, es.tip) : root, from: root, unit: es.unit });
+        spots.push({ id: 'earWide', at: at(earAt, earRot, es.back), from: root });
+      }
+    });
 
     // 尾巴：尾根挂在臀片上，抬起 pose.tail，每节再弯 tailCurl，这是"想要的"尾巴；动力学（tail.ts）算出每个关节跟不上多少。
     // 有地面时尾巴不钻地：哪一节的末端低于地面（加半个尾巴粗），这一节就往上转到贴着地面——坐着时尾巴顺着地面拖出去，
     // 抬起来的量记回动力学的状态里，下一帧不再往地里甩。
     // 坐标：这里 y 朝下、角度顺时针；动力学 y 朝上，所以位置的 y、角度都取反。
     let pos = at(midV, rHind, so(rig.hind, 'tail'));
+    const tailRoot = pos;
     const a0 = aHind + pose.tail - this.rest.tail;
     {
       const dirs: number[] = [];
@@ -468,6 +515,8 @@ export class CutoutPuppet {
       this.cut.place(id, ...pos, p.angle + a);
       pos = at(pos, p.angle + a, end);
     });
+    spots.push({ id: 'toe', at: toe, from: shoulder }, { id: 'tail', at: pos, from: tailRoot });
+    this.spots = spots;
     // 碰到地面的纸片压扁一点、往两边鼓，不穿过地面（趴下时的爪、肘、肚子，走路时踩实的脚掌）。
     this.cut.deform(ground ? -3 : Infinity, 10);
   }

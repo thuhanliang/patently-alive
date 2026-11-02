@@ -2,13 +2,14 @@ import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Textu
 import { designTemplates, gaitRules, hintTemplates, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
-import { speciesColor } from '../../render/palette';
+import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
 import { EAR_ABSENT, EAR_TIP_CAT, bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
 import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../../render/puppet/pose';
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
 import type { CutData } from '../../render/puppet/cutout';
 import { CutoutPuppet } from '../../render/puppet/cutoutPuppet';
+import type { HandleId, HandleSpot } from '../../render/puppet/handles';
 import { bracket, drawReference, referenceHead, referenceHeightM, referenceLabel } from '../../render/puppet/ruler';
 
 /**
@@ -159,10 +160,14 @@ async function main(): Promise<void> {
   const ground = new Graphics();
   const tapeLabels = new Container();
   const puppetLayer = new Container();
-  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer);
+  /** 长在纸偶身上的把手（蓝图蓝的墨点）和拖动时的标注。 */
+  const handleInk = new Graphics();
+  const handleLabel = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: BLUEPRINT, fontWeight: '600' } });
+  handleLabel.visible = false;
+  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, handleLabel);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
-  let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void };
+  let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[] };
   /** 切图零件（参照动物也用它拼）。 */
   let cutKit: { data: CutData; paper: Texture; ref: BodyPlan } | null = null;
   if (cut) {
@@ -338,6 +343,19 @@ async function main(): Promise<void> {
     const sy = top + stageH * 0.72;
     stageX = Number.isNaN(stageX) || dt === 0 ? sx : ease(stageX, sx, 0.25);
     stageY = Number.isNaN(stageY) || dt === 0 ? sy : ease(stageY, sy, 0.25);
+    stageBox = { top, h: stageH };
+    // 拖耳上的把手时镜头推近（松手退回）。
+    if (focus) {
+      const f = focus;
+      view.k = Math.exp(ease(Math.log(view.k), Math.log(f.k), 0.18));
+      view.x = ease(view.x, f.x, 0.18);
+      view.y = ease(view.y, f.y, 0.18);
+      if (!grab && Math.abs(Math.log(view.k / f.k)) < 0.002 && Math.hypot(view.x - f.x, view.y - f.y) < 0.5) {
+        Object.assign(view, { k: f.k, x: f.x, y: f.y });
+        focus = null;
+      }
+      if (grab) resetBtn.hidden = true;
+    }
     // 再叠上手指 / 滚轮的缩放和拖动（view）。
     const z = zoom * view.k;
     const gy = Math.round(stageY + view.y);
@@ -357,6 +375,7 @@ async function main(): Promise<void> {
       prevLabel = r.label;
     }
     drawGround(W, gy, px, z);
+    drawHandles(dt);
     if (!resetBtn.hidden) resetBtn.style.top = `${Math.round(top + 12)}px`;
 
     readoutLeft -= dt;
@@ -386,6 +405,8 @@ async function main(): Promise<void> {
   const canvas = app.canvas;
   const pointers = new Map<number, { x: number; y: number }>();
   let lastTap = { t: 0, x: 0, y: 0 };
+  /** 一次点按：从哪儿按下、最远挪了多少（分辨"点一下"和"拖"）。 */
+  let tapStart: { t: number; x: number; y: number; moved: number } | null = null;
   /** 以屏幕上的点 (cx, cy) 为中心缩放 f 倍：那一点下面的东西不动。 */
   const zoomAt = (cx: number, cy: number, f: number): void => {
     const k = Math.min(12, Math.max(0.5, view.k * f));
@@ -393,9 +414,11 @@ async function main(): Promise<void> {
     view.x = cx - stageX - (cx - stageX - view.x) * g;
     view.y = cy - stageY - (cy - stageY - view.y) * g;
     view.k = k;
+    focus = null;
     resetBtn.hidden = false;
   };
   const resetView = (): void => {
+    focus = null;
     view.k = 1;
     view.x = 0;
     view.y = 0;
@@ -408,20 +431,40 @@ async function main(): Promise<void> {
   };
   canvas.addEventListener('pointerdown', (e) => {
     const p = local(e);
+    // 手指先按到把手就归把手；拖把手的时候别的手指不管。
+    if (grab) return;
+    if (pointers.size === 0) {
+      const hit = pickHandle(p, e.pointerType);
+      if (hit) {
+        startGrab(hit, e.pointerId, p);
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     pointers.set(e.pointerId, p);
     canvas.setPointerCapture(e.pointerId);
     if (pointers.size === 1) {
+      tapStart = { t: performance.now(), ...p, moved: 0 };
       const now = performance.now();
       if (now - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30) {
         resetView();
         lastTap = { t: 0, x: 0, y: 0 };
       } else lastTap = { t: now, ...p };
-    }
+    } else tapStart = null;
   });
   canvas.addEventListener('pointermove', (e) => {
-    const old = pointers.get(e.pointerId);
-    if (!old) return;
     const p = local(e);
+    if (grab) {
+      if (e.pointerId === grab.pointerId) dragHandle(p);
+      return;
+    }
+    const old = pointers.get(e.pointerId);
+    if (!old) {
+      // 鼠标悬停：指到纸偶身上，把手显出来；指到把手上，换成手的光标。
+      if (e.pointerType === 'mouse') hoverAt(p);
+      return;
+    }
+    if (tapStart) tapStart.moved = Math.max(tapStart.moved, Math.hypot(p.x - tapStart.x, p.y - tapStart.y));
     if (pointers.size === 1) {
       view.x += p.x - old.x;
       view.y += p.y - old.y;
@@ -438,10 +481,25 @@ async function main(): Promise<void> {
     pointers.set(e.pointerId, p);
   });
   const up = (e: PointerEvent): void => {
+    if (grab && e.pointerId === grab.pointerId) {
+      endGrab();
+      return;
+    }
     pointers.delete(e.pointerId);
+    // 触屏没有悬停：点一下纸偶，把手亮出来，一会儿不动就淡掉。
+    const t = tapStart;
+    tapStart = null;
+    if (t && e.type === 'pointerup' && e.pointerType !== 'mouse' && t.moved < 10 && performance.now() - t.t < 400 && onPuppet(local(e), 12)) showHandles(4000);
   };
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'mouse' && !grab) {
+      mouseInside = false;
+      hoverId = null;
+      canvas.style.cursor = '';
+    }
+  });
   canvas.addEventListener(
     'wheel',
     (e) => {
@@ -453,6 +511,199 @@ async function main(): Promise<void> {
   );
   // iOS Safari 的整页捏合缩放：在画布上不要（画布自己缩放）。
   canvas.addEventListener('gesturestart', (e) => e.preventDefault());
+
+
+  // ---- 长在纸偶身上的把手（第 2 步；docs/feel/desk.md）----
+  // 背 → 体重，脚 → 腿长，尾尖 → 尾长，耳尖 → 耳长，耳根后缘 → 耳宽。每个把手只改一件事。
+  const HANDLE_NAMES: Record<HandleId, string> = { back: '体重', toe: '腿长', tail: '尾长', earTip: '耳长', earWide: '耳宽' };
+  type Pt = { x: number; y: number };
+  /** 这一帧的把手（屏幕坐标）。 */
+  let spots: { id: HandleId; at: Pt; from: Pt; unit: number }[] = [];
+  /** 把手显到什么时候（performance.now()），现在的不透明度。 */
+  let handlesUntil = 0;
+  let handleAlpha = 0;
+  let hoverId: HandleId | null = null;
+  /** 鼠标停在纸偶身上：把手一直亮着（瞄准的时候不动，也不该淡掉）。 */
+  let mouseInside = false;
+  interface Grab {
+    id: HandleId;
+    pointerId: number;
+    /**
+     * 按下时手指、把手、参照点。back/toe/tail 用屏幕坐标（体重一变镜头会退，按按下时的画面算才稳）；
+     * 耳用纸偶的 view 坐标：镜头推近时手指不动耳就不变，手指挪多少像素、把手在当时的画面里就挪多少。
+     */
+    p0: Pt;
+    /** 耳：上一次手指在屏幕上的位置、把手现在被拖到哪（view 坐标）。 */
+    last: Pt;
+    cur: Pt;
+    at0: Pt;
+    from0: Pt;
+    unit: number;
+    /** 按下时的值。 */
+    v0: number;
+  }
+  let grab: Grab | null = null;
+  /** 拖耳上的把手时镜头推近到头部：要去的视图，和松手以后退回的视图。 */
+  let focus: { k: number; x: number; y: number } | null = null;
+  let focusBack: { k: number; x: number; y: number; hidden: boolean } | null = null;
+  /** 上一帧舞台的空地（推近时把耳放到空地中间偏上）。 */
+  let stageBox = { top: 0, h: 1 };
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const showHandles = (ms: number): void => {
+    handlesUntil = Math.max(handlesUntil, performance.now() + ms);
+  };
+  const isEar = (id: HandleId): boolean => id === 'earTip' || id === 'earWide';
+  const toView = (q: Pt): Pt => puppet.view.toLocal(q);
+  const onPuppet = (p: Pt, pad: number): boolean => {
+    const b = puppet.view.getBounds();
+    return p.x > b.x - pad && p.x < b.x + b.width + pad && p.y > b.y - pad && p.y < b.y + b.height + pad;
+  };
+  /** 离手指最近、够得着的把手（触屏的手指粗，够得远一些）；把手没显出来时不算。 */
+  const pickHandle = (p: Pt, pointerType: string): (typeof spots)[number] | null => {
+    if (handleAlpha < 0.3 && performance.now() > handlesUntil) return null;
+    const reach = pointerType === 'mouse' ? 14 : 26;
+    let best: (typeof spots)[number] | null = null;
+    let bd = reach;
+    for (const sp of spots) {
+      const d = Math.hypot(sp.at.x - p.x, sp.at.y - p.y);
+      if (d < bd) {
+        bd = d;
+        best = sp;
+      }
+    }
+    return best;
+  };
+  const hoverAt = (p: Pt): void => {
+    mouseInside = onPuppet(p, 24);
+    if (mouseInside) showHandles(1200);
+    hoverId = pickHandle(p, 'mouse')?.id ?? null;
+    canvas.style.cursor = hoverId ? 'grab' : '';
+  };
+  const valueOf = (id: HandleId): number => {
+    if (id === 'back') return design.bodyMassKg;
+    if (id === 'toe') return design.shape?.leg ?? 0;
+    if (id === 'tail') return design.shape?.tail ?? 0;
+    if (id === 'earTip') return design.appearance?.earLen ?? 1;
+    return design.appearance?.earWide ?? 1;
+  };
+  const valueText = (id: HandleId): string => {
+    const v = valueOf(id);
+    if (id === 'back') return kgText(v);
+    if (id === 'toe' || id === 'tail') return times(Math.pow(10, v));
+    if (id === 'earTip' && v <= EAR_ABSENT) return '没有';
+    return times(v);
+  };
+  function startGrab(sp: (typeof spots)[number], pointerId: number, p: Pt): void {
+    const ear = isEar(sp.id);
+    // 耳在纸偶的坐标里拖：推近镜头的时候手指和耳的关系不变。
+    const conv = ear ? toView : (q: Pt): Pt => q;
+    const at0 = conv(sp.at);
+    grab = { id: sp.id, pointerId, p0: conv(p), last: p, cur: at0, at0, from0: conv(sp.from), unit: ear ? sp.unit / puppet.view.scale.x : sp.unit, v0: valueOf(sp.id) };
+    canvas.style.cursor = 'grabbing';
+    showHandles(2500);
+    if (ear) {
+      // 局部放大：把耳根放到空地中间偏上，放大到头的半径约占空地高的 18%（已经够大就不再放大）。
+      const g = Math.min(12, Math.max(view.k, (stageBox.h * 0.18) / Math.max(1e-6, plan.headR * zoom))) / view.k;
+      const cx = stageX;
+      const cy = stageBox.top + stageBox.h * 0.42;
+      focusBack = { ...view, hidden: resetBtn.hidden === true };
+      focus = { k: view.k * g, x: cx - stageX - (sp.from.x - stageX - view.x) * g, y: cy - stageY - (sp.from.y - stageY - view.y) * g };
+    }
+  }
+  function endGrab(): void {
+    grab = null;
+    canvas.style.cursor = '';
+    showHandles(2500);
+    if (focusBack) {
+      focus = { k: focusBack.k, x: focusBack.x, y: focusBack.y };
+      resetBtn.hidden = focusBack.hidden;
+      focusBack = null;
+    }
+    refreshControls();
+  }
+  function dragHandle(p: Pt): void {
+    const g = grab!;
+    const ear = isEar(g.id);
+    // 把手跟着手指走到哪（按下时手指和把手中心的偏差保留）。
+    let q: Pt;
+    if (ear) {
+      const k = puppet.view.scale.x;
+      g.cur = { x: g.cur.x + (p.x - g.last.x) / k, y: g.cur.y + (p.y - g.last.y) / k };
+      g.last = p;
+      q = g.cur;
+    } else q = { x: g.at0.x + p.x - g.p0.x, y: g.at0.y + p.y - g.p0.y };
+    const dist = Math.hypot(q.x - g.from0.x, q.y - g.from0.y);
+    const d0 = Math.max(1e-6, Math.hypot(g.at0.x - g.from0.x, g.at0.y - g.from0.y));
+    const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+    const r2 = (v: number): number => Math.round(v * 100) / 100;
+    switch (g.id) {
+      case 'back': {
+        // 背往上拖：背离地多高 ∝ 体重的立方根（先当场长大，镜头慢一点再往后拉）。
+        const h0 = Math.max(10, g.from0.y - g.at0.y);
+        const h = Math.max(h0 * 0.05, g.from0.y - q.y);
+        design.bodyMassKg = Math.round(clamp(g.v0 * Math.pow(h / h0, 3), 0.01, 1000) * 1000) / 1000;
+        note.textContent = '';
+        break;
+      }
+      case 'toe': {
+        // 脚往下拖：肩到脚的高度变长多少倍，腿就长多少倍（腿长是对数刻度）。
+        const h0 = Math.max(10, g.at0.y - g.from0.y);
+        const h = Math.max(1, q.y - g.from0.y);
+        design.shape = { ...design.shape, leg: r2(clamp(g.v0 + Math.log10(h / h0), -0.2, 0.2)) };
+        break;
+      }
+      case 'tail':
+        design.shape = { ...design.shape, tail: r2(clamp(g.v0 + Math.log10(Math.max(1e-3, dist / d0)), -0.3, 0.3)) };
+        break;
+      case 'earTip': {
+        // 耳长拖到没有以后，再拖出来按"耳长 = 1 有多长"算。
+        const v = g.v0 > EAR_ABSENT ? (g.v0 * dist) / d0 : dist / Math.max(1e-6, g.unit);
+        design.appearance = { ...design.appearance, earLen: r2(clamp(v, 0, 3)) };
+        break;
+      }
+      case 'earWide':
+        design.appearance = { ...design.appearance, earWide: r2(clamp((g.v0 * dist) / d0, 0.5, 2)) };
+        break;
+    }
+    showHandles(2500);
+    rebuild();
+  }
+  /** 每帧：读把手的位置、淡入淡出、画墨点和拖动时的标注。 */
+  function drawHandles(dt: number): void {
+    const toScreen = (q: [number, number]): Pt => {
+      const g = puppet.view.toGlobal({ x: q[0], y: q[1] });
+      return { x: g.x, y: g.y };
+    };
+    const sc = puppet.view.scale.x;
+    spots = puppet.handles().map((h) => ({ id: h.id, at: toScreen(h.at), from: toScreen(h.from), unit: (h.unit ?? 0) * sc }));
+    const want = grab || mouseInside || performance.now() < handlesUntil ? 1 : 0;
+    handleAlpha += (want - handleAlpha) * (1 - Math.exp(-dt / (want ? 0.08 : 0.35)));
+    if (handleAlpha < 0.01) handleAlpha = want ? handleAlpha : 0;
+    handleInk.clear();
+    handleLabel.visible = false;
+    if (handleAlpha <= 0.01) return;
+    const a = handleAlpha;
+    const lead = grab?.id ?? hoverId;
+    for (const sp of spots) {
+      const on = sp.id === lead;
+      if (on && grab) {
+        // 拖着的时候：从参照点到把手画一条蓝图蓝的量线（背是离地多高，脚是腿多长，尾、耳是多长、多宽）。
+        handleInk.moveTo(sp.from.x, sp.from.y).lineTo(sp.at.x, sp.at.y).stroke({ color: BLUEPRINT, width: 1.5, alpha: 0.7 * a });
+        handleInk.circle(sp.from.x, sp.from.y, 2.5).fill({ color: BLUEPRINT, alpha: 0.7 * a });
+      }
+      // 触屏上大一点（手指比鼠标粗）。
+      const r = (on ? 7 : 5) + (coarse ? 2 : 0);
+      handleInk.circle(sp.at.x, sp.at.y, r + 3).fill({ color: 0xfbf6ea, alpha: 0.75 * a });
+      handleInk.circle(sp.at.x, sp.at.y, r).fill({ color: BLUEPRINT, alpha: a });
+    }
+    const ls = lead ? spots.find((sp) => sp.id === lead) : undefined;
+    if (ls) {
+      handleLabel.text = grab ? `${HANDLE_NAMES[ls.id]} ${valueText(ls.id)}` : `拖：${HANDLE_NAMES[ls.id]}`;
+      handleLabel.alpha = a;
+      handleLabel.position.set(Math.round(ls.at.x + 12), Math.round(ls.at.y - 22));
+      handleLabel.visible = true;
+    }
+  }
 
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
     const e = Object.assign(document.createElement(tag), attrs);
@@ -629,7 +880,9 @@ async function main(): Promise<void> {
     frame(dt);
     app.render();
   }
-  (window as unknown as { desk: { set: typeof set; step: typeof step } }).desk = { set, step };
+  /** 测试用：这一帧的把手（屏幕坐标）。 */
+  const handles = (): typeof spots => spots;
+  (window as unknown as { desk: { set: typeof set; step: typeof step; handles: typeof handles } }).desk = { set, step, handles };
 
   const q = new URLSearchParams(location.search);
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
