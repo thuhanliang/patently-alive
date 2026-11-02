@@ -20,6 +20,29 @@ const Fractions = z.object({ plant: z.number().min(0).max(1), vertebrate: z.numb
 /** 消化效率不能是 0：否则只吃这一类的设计胃口无穷大。 */
 const Efficiencies = z.object({ plant: z.number().min(0.05).max(1), vertebrate: z.number().min(0.05).max(1), invertebrate: z.number().min(0.05).max(1) });
 
+/** 外观（耳朵的五个参数，含义见 DesignSchema 的 appearance）；这里是完整的一组，设计里每项都可以不写。 */
+export const AppearanceSchema = z.strictObject({
+  earLen: z.number().min(0).max(3),
+  earWide: z.number().min(0.5).max(2),
+  earTip: z.number().min(0).max(1),
+  earStiff: z.number().min(0).max(1),
+  earPos: z.number().min(0).max(1),
+});
+
+/**
+ * 形状卡（设计台第 2 步 c，`docs/research/body-params.md` 第十节）：参数空间里一个有名字的点，不是"兔耳""猫耳"那样的特例。
+ * 扣上去就是把这一组参数整组写进设计（五个数都写，前一张卡留下的值不会混进来），之后照样能用把手、滑块微调。
+ * 设计里不记卡的 id，只记参数：存档、操作日志的写法不变。现在只有耳。
+ */
+export const MorphSchema = z.strictObject({
+  id: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  region: z.literal('ear'),
+  name: z.string(),
+  blurb: z.string(),
+  appearance: AppearanceSchema,
+});
+export type Morph = z.infer<typeof MorphSchema>;
+
 export const PartSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -76,10 +99,16 @@ export const PartsFileSchema = z
   .object({
     slots: z.array(z.object({ id: z.enum(SLOTS), name: z.string(), visible: z.boolean() })),
     parts: z.array(PartSchema),
+    morphs: z.array(MorphSchema),
   })
   .superRefine((f, ctx) => {
     const ids = f.slots.map((s) => s.id);
     if (ids.length !== SLOTS.length || SLOTS.some((s) => !ids.includes(s))) ctx.addIssue({ code: 'custom', message: `slots 要正好列出 ${SLOTS.join('、')} 各一次` });
+    const morphIds = new Set<string>();
+    for (const m of f.morphs) {
+      if (morphIds.has(m.id)) ctx.addIssue({ code: 'custom', message: `形状卡 id 重复：${m.id}` });
+      morphIds.add(m.id);
+    }
     const partIds = new Set<string>();
     for (const p of f.parts) {
       if (partIds.has(p.id)) ctx.addIssue({ code: 'custom', message: `部件 id 重复：${p.id}` });
@@ -133,16 +162,7 @@ export const DesignSchema = z.object({
    * - earStiff 耳的软硬，1 立着、0 整只垂下，不写就是 1；
    * - earPos 耳在头上的位置，0 头顶、1 头的两侧，不写就是 0。
    */
-  appearance: z
-    .strictObject({
-      earLen: z.number().min(0).max(3),
-      earWide: z.number().min(0.5).max(2),
-      earTip: z.number().min(0).max(1),
-      earStiff: z.number().min(0).max(1),
-      earPos: z.number().min(0).max(1),
-    })
-    .partial()
-    .optional(),
+  appearance: AppearanceSchema.partial().optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;

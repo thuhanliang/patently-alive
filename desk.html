@@ -77,6 +77,85 @@
         border-color: #2f5d8a;
         color: #f6eedb;
       }
+      /* 部件托盘：页签 + 一排卡片 + 现在这张卡的说明。 */
+      /* 网格里的子元素默认不比内容窄：一排卡片会把整个面板撑宽、面板被横着滚走。 */
+      #controls > * {
+        min-width: 0;
+      }
+      #tray .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      #tray .cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 0 2px;
+      }
+      .pcard {
+        flex: 0 0 auto;
+        width: 76px;
+        min-height: 40px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 3px;
+        background: #fbf6ea;
+        border: 1px solid #c9b48f;
+        border-radius: 3px;
+        box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.2);
+        font-size: 11px;
+        line-height: 1.25;
+        text-align: center;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      .pcard canvas {
+        width: 56px;
+        height: 36px;
+        pointer-events: none;
+      }
+      .pcard.on {
+        border-color: #2f5d8a;
+        box-shadow: inset 0 0 0 1.5px #2f5d8a;
+        color: #2f5d8a;
+        font-weight: 600;
+      }
+      .pcard.ghost {
+        position: fixed;
+        z-index: 10;
+        pointer-events: none;
+        opacity: 0.92;
+        transform: rotate(-5deg);
+        box-shadow: 3px 5px 0 rgba(60, 40, 20, 0.3);
+      }
+      #tray .blurb {
+        font-size: 11px;
+        color: #7a6248;
+        min-height: 2.5em;
+        line-height: 1.35;
+      }
+      #adv summary {
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        color: #8a6d4a;
+        padding: 4px 0;
+      }
+      #adv[open] {
+        display: grid;
+        gap: 6px;
+      }
+      .sect {
+        display: grid;
+        gap: 6px;
+      }
       #readout {
         right: 16px;
         bottom: 16px;
@@ -137,7 +216,21 @@
           overflow: hidden;
           padding-bottom: 0;
         }
-        #controls.collapsed > :not(#sheet) {
+        #controls.collapsed > :not(#sheet):not(#tray) {
+          display: none;
+        }
+        /* 手机：托盘一直露在抽屉顶上，卡片一排左右滑；往上拖卡片才是拖到纸偶身上。 */
+        #tray .cards {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          touch-action: pan-x;
+          padding-bottom: 6px;
+          scrollbar-width: none;
+        }
+        #tray .tabs button {
+          padding: 4px 10px;
+        }
+        #tray .blurb {
           display: none;
         }
         #sheet {
@@ -187,6 +280,32 @@
           max-width: none;
         }
         #controls:not(.collapsed) ~ #note {
+          display: none;
+        }
+      }
+      /* 横着拿的手机：屏幕矮，托盘压成一行（页签在左、卡片在右，卡片只写名字）。 */
+      @media (max-height: 499px) {
+        #sheet {
+          padding: 6px 0 4px;
+        }
+        #tray {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        #tray .tabs {
+          flex-wrap: nowrap;
+          flex: 0 0 auto;
+        }
+        #tray .cards {
+          flex: 1 1 auto;
+          min-width: 0;
+          padding: 4px 0;
+        }
+        .pcard {
+          min-height: 32px;
+        }
+        .pcard canvas {
           display: none;
         }
       }
