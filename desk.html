@@ -156,6 +156,45 @@
         display: grid;
         gap: 6px;
       }
+      /* 体征的小纸签（挂在纸偶身上）：最重的一个是朱红，其余是墨色。 */
+      .sign {
+        position: fixed;
+        transform: translate(-50%, -50%) rotate(-3deg);
+        padding: 2px 8px;
+        border: 1px solid #8a6d4a;
+        border-radius: 2px;
+        background: #f6eedb;
+        color: #4a3a28;
+        font-size: 12px;
+        box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.25);
+        z-index: 2;
+      }
+      .sign.loud {
+        background: #d2462e;
+        border-color: #a8321f;
+        color: #fff6ea;
+        font-weight: 600;
+      }
+      #signCard {
+        z-index: 5;
+        font-size: 13px;
+        line-height: 1.5;
+        border-left: 4px solid #8a6d4a;
+      }
+      #signCard.loud {
+        border-left-color: #d2462e;
+      }
+      #signCard p {
+        margin: 6px 0 0;
+      }
+      #signCard .margin {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #7a6248;
+      }
+      #signCard[hidden] {
+        display: none;
+      }
       #readout {
         right: 16px;
         bottom: 16px;
@@ -316,6 +355,8 @@
     <div id="readout" class="card"></div>
     <div id="note" class="card"></div>
     <button id="viewReset" type="button" hidden>复位视图</button>
+    <div id="signs"></div>
+    <div id="signCard" class="card" hidden></div>
     <script type="module" src="/src/proto/desk/main.ts"></script>
   </body>
 </html>
