@@ -495,6 +495,7 @@ async function main(): Promise<void> {
   canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'mouse' && !grab) {
+      mouseInside = false;
       hoverId = null;
       canvas.style.cursor = '';
     }
@@ -522,6 +523,8 @@ async function main(): Promise<void> {
   let handlesUntil = 0;
   let handleAlpha = 0;
   let hoverId: HandleId | null = null;
+  /** 鼠标停在纸偶身上：把手一直亮着（瞄准的时候不动，也不该淡掉）。 */
+  let mouseInside = false;
   interface Grab {
     id: HandleId;
     pointerId: number;
@@ -571,7 +574,8 @@ async function main(): Promise<void> {
     return best;
   };
   const hoverAt = (p: Pt): void => {
-    if (onPuppet(p, 24)) showHandles(1200);
+    mouseInside = onPuppet(p, 24);
+    if (mouseInside) showHandles(1200);
     hoverId = pickHandle(p, 'mouse')?.id ?? null;
     canvas.style.cursor = hoverId ? 'grab' : '';
   };
@@ -672,7 +676,7 @@ async function main(): Promise<void> {
     };
     const sc = puppet.view.scale.x;
     spots = puppet.handles().map((h) => ({ id: h.id, at: toScreen(h.at), from: toScreen(h.from), unit: (h.unit ?? 0) * sc }));
-    const want = grab || performance.now() < handlesUntil ? 1 : 0;
+    const want = grab || mouseInside || performance.now() < handlesUntil ? 1 : 0;
     handleAlpha += (want - handleAlpha) * (1 - Math.exp(-dt / (want ? 0.08 : 0.35)));
     if (handleAlpha < 0.01) handleAlpha = want ? handleAlpha : 0;
     handleInk.clear();
