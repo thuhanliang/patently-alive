@@ -15,7 +15,7 @@ import { ViabilityRulesSchema, type ViabilityRules } from './schema/viability';
 import viabilityJson from './scaling/viability.json';
 import { GaitRulesSchema, type GaitRules, type ReferenceAnimal } from './schema/gait';
 import gaitJson from './scaling/gait.json';
-import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema, type Design, type HintTemplates, type Part } from './schema/design';
+import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema, type Design, type HintTemplates, type Morph, type Part } from './schema/design';
 import partsJson from './design/parts.json';
 import hintsJson from './design/hints.json';
 import templatesJson from './design/templates.json';
@@ -147,13 +147,15 @@ export function worldFor(scenario: Scenario): WorldParams {
 export const grassland: WorldParams = worldLibrary.get('grassland')!;
 export const grasslandSpecies: SpeciesParams[] = speciesFor(grassland);
 
-export { DesignSchema, type Design, type Part, type HintTemplates };
+export { DesignSchema, type Design, type Morph, type Part, type HintTemplates };
 
 const partsFile = PartsFileSchema.parse(partsJson);
 /** 设计台的槽位（看得见的身体部件、看不见的性状），按显示顺序。 */
 export const designSlots = partsFile.slots;
 /** 设计台的部件，按 id 索引，按文件里的顺序。 */
 export const partLibrary: ReadonlyMap<string, Part> = new Map(partsFile.parts.map((p) => [p.id, p] as const));
+/** 设计台的形状卡（参数的预设，现在只有耳），按文件里的顺序。 */
+export const morphLibrary: readonly Morph[] = partsFile.morphs;
 for (const [table, slot] of [['limbLength', 'limbs'], ['tailLength', 'tail']] as const) {
   for (const id of Object.keys(gaitRules[table])) {
     if (id === '说明') continue;

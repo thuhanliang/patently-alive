@@ -1,9 +1,10 @@
 import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
-import { designTemplates, gaitRules, hintTemplates, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
+import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
+import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
 import { EAR_ABSENT, EAR_TIP_CAT, bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
@@ -33,7 +34,9 @@ const kit = makeDesignKit(partLibrary, scalingLaws, hintTemplates, viabilityRule
 const MAMMALS = designTemplates.filter((t) => t.design.parts.coat !== 'feathers');
 const SYSTEM_NAMES: Record<BodySystem, string> = { skeleton: '骨骼', muscle: '肌肉', gut: '消化道', heart: '心血管', fat: '脂肪' };
 const GAIT_NAMES: Record<Gait, string> = { stand: '站着', walk: '走', trot: '小跑', gallop: '奔跑', hop: '跳' };
-const SHOWN_SLOTS = ['coat', 'mouth', 'limbs', 'tail', 'digestion'] as const;
+/** 托盘里的部件槽（按托盘的顺序）。 */
+const SHOWN_SLOTS = ['mouth', 'limbs', 'tail', 'coat', 'digestion'] as const;
+const SLOT_NAMES: Record<(typeof SHOWN_SLOTS)[number], string> = { mouth: '嘴', limbs: '腿', tail: '尾', coat: '体表', digestion: '消化' };
 /** 比这窄、或者比这矮（横着拿的手机）就是手机的排法（和 desk.html 的 @media 一致）。 */
 const NARROW = 720;
 const SHORT = 500;
@@ -164,11 +167,13 @@ async function main(): Promise<void> {
   const puppetLayer = new Container();
   /** 长在纸偶身上的把手（蓝图蓝的墨点）和拖动时的标注。 */
   const handleInk = new Graphics();
+  /** 卡片扣上时的"咔"（一圈蓝图蓝的墨圈）和拖着卡片时纸偶四角的裁切角。 */
+  const snapInk = new Graphics();
   const handleLabel = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: BLUEPRINT, fontWeight: '600' } });
   handleLabel.visible = false;
   /** 体重分配纸饼（第 2 步 b）：画在屏幕上，不随镜头缩放。 */
   const pie = new AllocPie(SYSTEM_NAMES);
-  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, handleLabel, pie.view);
+  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, snapInk, handleLabel, pie.view);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[] };
@@ -379,9 +384,22 @@ async function main(): Promise<void> {
       prevLabel = r.label;
     }
     drawGround(W, gy, px, z);
+    // 卡片扣上的"咔"：纸偶从地面往上一弹（约 1 秒，下一次扣卡从头开始）；停下以后正好是 1，不影响截图。
+    snapT += dt;
+    if (snapT < 1.2) {
+      const a = 0.08 * Math.exp(-4.5 * snapT) * Math.cos(15 * snapT);
+      puppet.view.scale.x *= 1 - 0.5 * a;
+      puppet.view.scale.y *= 1 + a;
+    }
     drawHandles(dt);
+    drawSnap();
     // 纸饼：宽屏放在右上（提示条下面），手机放在读数下面的右上角（纸偶在空地的下半部分）。
-    if (narrow) {
+    if (narrow && H < SHORT) {
+      // 横着拿：空地矮，纸饼放在左边的空处（纸偶站在中间）。
+      pie.r0 = 24;
+      pie.cx = 70;
+      pie.cy = top + stageH * 0.45;
+    } else if (narrow) {
       pie.r0 = 31;
       pie.cx = W - 80;
       pie.cy = top + 84;
@@ -392,6 +410,8 @@ async function main(): Promise<void> {
     }
     pie.draw(compiled.body, design.bodyMassKg, pieGrab?.sys ?? pieHover, kgText);
     if (!resetBtn.hidden) resetBtn.style.top = `${Math.round(top + 12)}px`;
+    // 手机：提示条贴在抽屉上面（抽屉的高度随托盘、横竖屏变）。
+    note.style.bottom = narrow ? `${Math.round(H - bottom + 8)}px` : '';
 
     readoutLeft -= dt;
     if (readoutLeft <= 0) {
@@ -410,7 +430,7 @@ async function main(): Promise<void> {
   const sheet = document.getElementById('sheet')!;
   const setSheet = (open: boolean): void => {
     panel.classList.toggle('collapsed', !open);
-    sheet.textContent = open ? '▼ 收起参数' : '▲ 调参数';
+    sheet.textContent = open ? '▼ 收起' : '▲ 更多：动作、全部滑块';
   };
   setSheet(!isPhone(window.innerWidth, window.innerHeight));
   sheet.addEventListener('click', () => setSheet(panel.classList.contains('collapsed')));
@@ -754,6 +774,28 @@ async function main(): Promise<void> {
     }
   }
 
+  /** 卡片扣上以后过了多久、扣在哪（画布坐标）。 */
+  let snapT = Infinity;
+  let snapPt: Pt = { x: 0, y: 0 };
+  function drawSnap(): void {
+    snapInk.clear();
+    if (snapT < 0.6) {
+      const t = snapT / 0.6;
+      snapInk.circle(snapPt.x, snapPt.y, 14 + 56 * t).stroke({ color: BLUEPRINT, width: 2.5 * (1 - t) + 0.5, alpha: 0.85 * (1 - t) });
+    }
+    if (cardOver) {
+      // 纸偶四角的裁切角：手指到了纸偶身上，墨色变深，松手就扣上。
+      const b = puppet.view.getBounds();
+      const on = onPuppet(cardOver, 30);
+      const p = 10;
+      const L = Math.min(22, b.width / 4, b.height / 4);
+      const [x0, y0, x1, y1] = [b.x - p, b.y - p, b.x + b.width + p, b.y + b.height + p];
+      for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]] as const)
+        snapInk.moveTo(x + sx * L, y).lineTo(x, y).lineTo(x, y + sy * L);
+      snapInk.stroke({ color: BLUEPRINT, width: on ? 2.5 : 1.5, alpha: on ? 0.95 : 0.4 });
+    }
+  }
+
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
     const e = Object.assign(document.createElement(tag), attrs);
     e.append(...kids);
@@ -770,7 +812,7 @@ async function main(): Promise<void> {
       input.value = String(get());
       v.textContent = fmt(get());
     };
-    panel.append(el('label', {}, name, input, v));
+    adv.append(el('label', {}, name, input, v));
     return sync;
   };
   const kgText = (kg: number): string => (kg < 1 ? `${Math.round(kg * 1000)} 克` : kg < 10 ? `${kg.toFixed(1)} 千克` : `${Math.round(kg)} 千克`);
@@ -787,7 +829,72 @@ async function main(): Promise<void> {
   }
   panel.append(tplRow);
 
-  panel.append(el('h3', {}, '身体'));
+  // ---- 部件托盘（第 2 步 c）：每个部位一排卡片，点一下或拖到纸偶身上扣上。 ----
+  const tabs: TrayTab[] = [];
+  // 代码画的纸偶不认新的耳朵参数：没有切图零件时不放耳卡。
+  if (cutKit)
+    tabs.push({
+      id: 'ear',
+      name: '耳',
+      items: morphLibrary
+        .filter((m) => m.region === 'ear')
+        .map((m) => ({
+          key: m.id,
+          name: m.name,
+          blurb: m.blurb,
+          icon: (c) => drawEarIcon(c, m.appearance, EAR_TIP_CAT),
+          isOn: () => isMorph(design, m, EAR_TIP_CAT),
+        })),
+    });
+  for (const slot of SHOWN_SLOTS)
+    tabs.push({
+      id: slot,
+      name: SLOT_NAMES[slot],
+      items: [...partLibrary.values()].filter((p) => p.slot === slot && p.id !== 'wings').map((p) => ({ key: p.id, name: p.name, blurb: p.blurb, isOn: () => design.parts[slot] === p.id })),
+    });
+  /** 扣上一张卡：形状卡把五个数整组写进设计（和默认一样的不写，设计的写法和以前一样）；部件卡换这个槽的部件。 */
+  function applyCard(tab: TrayTab, item: TrayItem): void {
+    if (tab.id === 'ear') {
+      const a = appearanceFor(morphLibrary.find((x) => x.id === item.key)!, EAR_TIP_CAT);
+      const d = { ...design };
+      if (a) d.appearance = a;
+      else delete d.appearance;
+      design = d;
+    } else design.parts = { ...design.parts, [tab.id]: item.key } as Design['parts'];
+    rebuild();
+  }
+  /** 拖着卡片时手指在哪（画布坐标）。 */
+  let cardOver: Pt | null = null;
+  const toCanvas = (q: Pt): Pt => {
+    const r = canvas.getBoundingClientRect();
+    return { x: q.x - r.left, y: q.y - r.top };
+  };
+  const tray = new Tray(tabs, {
+    drop(tab, item, at) {
+      let pt: Pt;
+      if (at) {
+        pt = toCanvas(at);
+        if (!onPuppet(pt, 30)) return;
+      } else {
+        const b = puppet.view.getBounds();
+        pt = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      }
+      applyCard(tab, item);
+      snapT = 0;
+      snapPt = pt;
+    },
+    drag(at) {
+      cardOver = at ? toCanvas(at) : null;
+    },
+  });
+  panel.append(tray.el);
+  const modeBox = el('div', { className: 'sect' });
+  panel.append(modeBox);
+  // 滑块收进"高级"：卡片是形状，身上的把手是尺寸，这里是剩下的细节（body-params 第十节）。
+  const adv = el('details', { id: 'adv' }, el('summary', {}, '高级：全部滑块'));
+  panel.append(adv);
+
+  adv.append(el('h3', {}, '身体'));
   const syncs: (() => void)[] = [];
   syncs.push(
     slider('体重', -2, 3, 0.01, () => Math.log10(design.bodyMassKg), (v) => {
@@ -800,7 +907,7 @@ async function main(): Promise<void> {
   syncs.push(slider('尾长', -0.3, 0.3, 0.01, () => design.shape?.tail ?? 0, (v) => ((design.shape = { ...design.shape, tail: v }), rebuild()), (v) => times(Math.pow(10, v))));
 
   // 外观：只影响画面（DECISIONS"外观参数"）。
-  panel.append(el('h3', {}, '外观（只影响画面）'));
+  adv.append(el('h3', {}, '外观（只影响画面）'));
   const setLook = (k: 'earLen' | 'earWide' | 'earTip' | 'earStiff' | 'earPos', v: number): void => {
     design.appearance = { ...design.appearance, [k]: v };
     rebuild();
@@ -812,7 +919,7 @@ async function main(): Promise<void> {
   syncs.push(slider('耳软硬', 0, 1, 0.01, () => design.appearance?.earStiff ?? 1, (v) => setLook('earStiff', v), ends('垂', '立')));
   syncs.push(slider('耳位置', 0, 1, 0.01, () => design.appearance?.earPos ?? 0, (v) => setLook('earPos', v), ends('头顶', '两侧')));
 
-  panel.append(el('h3', {}, '体重分配（倍数，总量不变）'));
+  adv.append(el('h3', {}, '体重分配（倍数，总量不变）'));
   for (const s of BODY_SYSTEMS) {
     syncs.push(
       slider(SYSTEM_NAMES[s], -1, 1, 0.05, () => Math.log2(design.allocation?.[s] ?? 1), (v) => {
@@ -822,23 +929,7 @@ async function main(): Promise<void> {
     );
   }
 
-  panel.append(el('h3', {}, '部件'));
-  const selects = new Map<(typeof SHOWN_SLOTS)[number], HTMLSelectElement>();
-  for (const slot of SHOWN_SLOTS) {
-    const sel = el('select');
-    for (const p of partLibrary.values()) {
-      if (p.slot !== slot || p.id === 'wings') continue;
-      sel.append(el('option', { value: p.id, textContent: p.name }));
-    }
-    sel.addEventListener('change', () => {
-      design.parts = { ...design.parts, [slot]: sel.value };
-      rebuild();
-    });
-    selects.set(slot, sel);
-    panel.append(el('label', {}, slot === 'mouth' ? '口器' : slot === 'coat' ? '体表' : slot === 'limbs' ? '腿' : slot === 'tail' ? '尾' : '消化', sel, el('span')));
-  }
-
-  panel.append(el('h3', {}, '它在干什么'));
+  modeBox.append(el('h3', {}, '它在干什么'));
   const modeRow = el('div', { className: 'row' });
   const modeButtons = new Map<Mode, HTMLButtonElement>();
   for (const [m, name] of [['auto', '自己待着'], ['stand', '站'], ['walk', '走'], ['run', '跑'], ['eat', '吃'], ['lie', '趴']] as const) {
@@ -850,7 +941,7 @@ async function main(): Promise<void> {
     modeButtons.set(m, b);
     modeRow.append(b);
   }
-  panel.append(modeRow);
+  modeBox.append(modeRow);
   const speedInput = el('input', { type: 'range', min: '0', max: '1', step: '0.001' });
   const speedV = el('span', { className: 'v' });
   speedInput.addEventListener('input', () => {
@@ -862,11 +953,11 @@ async function main(): Promise<void> {
     targetSpeed = v;
     refreshControls();
   });
-  panel.append(el('label', {}, '速度', speedInput, speedV));
+  modeBox.append(el('label', {}, '速度', speedInput, speedV));
 
   function refreshControls(): void {
     for (const s of syncs) s();
-    for (const [slot, sel] of selects) sel.value = design.parts[slot];
+    tray.refresh();
     for (const [id, b] of tplButtons) b.classList.toggle('on', id === templateId);
     for (const [m, b] of modeButtons) b.classList.toggle('on', m === mode);
     const t = top();

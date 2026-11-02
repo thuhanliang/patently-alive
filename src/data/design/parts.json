@@ -243,5 +243,17 @@
         { "target": "energy", "factor": 1.06, "why": "每个后代都更大、更贵" }
       ]
     }
+  ],
+  "morphs": [
+    { "id": "ear_small_pointed", "region": "ear", "name": "小三角立耳", "blurb": "中等大小、直边的三角，立着。猫、野猫的耳。", "appearance": { "earLen": 1, "earWide": 1, "earTip": 0.6, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_big_pointed", "region": "ear", "name": "大尖耳", "blurb": "又高又尖，立着。狐、猞猁的耳（猞猁再加耳尖簇毛，还没做）。", "appearance": { "earLen": 1.4, "earWide": 1.15, "earTip": 0.85, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_wide_erect", "region": "ear", "name": "宽立耳", "blurb": "耳根宽、尖略圆的大立耳。德国牧羊犬、狼的耳。", "appearance": { "earLen": 1.6, "earWide": 1.4, "earTip": 0.75, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_long_erect", "region": "ear", "name": "长立耳", "blurb": "很长、窄、尖端稍圆，立着。兔的耳，散热用（耳的面积进推演排在第二位）。", "appearance": { "earLen": 2.6, "earWide": 0.9, "earTip": 0.4, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_round", "region": "ear", "name": "小圆耳", "blurb": "短而宽的圆耳。鼠、负鼠的耳。", "appearance": { "earLen": 0.8, "earWide": 1.4, "earTip": 0.1, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_short_round", "region": "ear", "name": "贴头的短圆耳", "blurb": "很短的圆耳，几乎贴着头。鼬、獴、水獭这样钻洞、下水的动物。", "appearance": { "earLen": 0.45, "earWide": 1.25, "earTip": 0.15, "earStiff": 1, "earPos": 0 } },
+    { "id": "ear_semi_erect", "region": "ear", "name": "半立耳", "blurb": "耳根立着，耳尖往前弯下来。柯利、梗犬的耳（真正折过来的折痕还没做）。", "appearance": { "earLen": 1.8, "earWide": 1.3, "earTip": 0.55, "earStiff": 0.75, "earPos": 0 } },
+    { "id": "ear_drop", "region": "ear", "name": "垂耳", "blurb": "又长又宽的圆耳，整片垂在脸侧。比格、垂耳兔的耳。", "appearance": { "earLen": 2.2, "earWide": 1.5, "earTip": 0.1, "earStiff": 0, "earPos": 0 } },
+    { "id": "ear_side", "region": "ear", "name": "侧耳", "blurb": "小耳长在头的两侧。人、灵长类的耳。", "appearance": { "earLen": 0.6, "earWide": 1.2, "earTip": 0.2, "earStiff": 1, "earPos": 1 } },
+    { "id": "ear_none", "region": "ear", "name": "没有耳廓", "blurb": "只剩耳孔。海豹、鲸、很多鸟就是这样。", "appearance": { "earLen": 0, "earWide": 1, "earTip": 0.6, "earStiff": 1, "earPos": 0 } }
   ]
 }
