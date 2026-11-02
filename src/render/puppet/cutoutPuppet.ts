@@ -3,7 +3,7 @@ import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
 import { boneWarp, compose, mapShape, reach, regionStretch, scale, type P, type Shape, type Warp } from './fit';
 import { earShape, fitEar, type EarModel } from './ear';
 import { fringe, inside, teethFor } from './fringe';
-import type { HandleSpot } from './handles';
+import type { HandleSpot, XrayBones } from './handles';
 import { pendulumOmega, springStep, type Spring } from './gait';
 import { TailChain, idleSwish } from './tail';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
@@ -86,6 +86,8 @@ export class CutoutPuppet {
   private readonly furMask = new Map<string, number[]>();
   /** 这一帧的把手（handles.ts），apply 里记下。 */
   private spots: HandleSpot[] = [];
+  /** 这一帧的骨架（view 坐标），X 光层用（第 3 步 c）。 */
+  private bones: XrayBones | null = null;
   private lastHead = 0;
   private time = 0;
   /** 站姿：成品图画的就是站姿，头和尾巴的角度都相对它算。 */
@@ -432,6 +434,11 @@ export class CutoutPuppet {
   }
 
   /** 这一帧的把手（view 的坐标）。 */
+  /** 这一帧的骨架：四条腿的关节（根 → 趾尖）、脊柱（髋 → 肩）、颈（肩 → 头的铆钉）、尾（尾根 → 尾尖）。 */
+  skeleton(): XrayBones | null {
+    return this.bones;
+  }
+
   handles(): HandleSpot[] {
     return this.spots;
   }
@@ -468,6 +475,7 @@ export class CutoutPuppet {
     // 腿：贴好的三节长度。
     let toe: P = [0, 0];
     let shoulder: P = [0, 0];
+    const legBones = {} as Record<LegKey, P[]>;
     for (const k of LEGS) {
       const leg = rig.legs[k];
       const ends = leg.parts.map((id) => so(id, 'end'));
@@ -495,6 +503,7 @@ export class CutoutPuppet {
         toe = j[3]!;
         shoulder = j[0]!;
       }
+      legBones[k] = j.slice();
       for (let i = 0; i < 3; i++) {
         const viewA = Math.atan2(j[i + 1]![1] - j[i]![1], j[i + 1]![0] - j[i]![0]);
         this.cut.place(leg.parts[i]!, ...j[i]!, viewA - angleOf(ends[i]!));
@@ -559,6 +568,7 @@ export class CutoutPuppet {
     // 坐标：这里 y 朝下、角度顺时针；动力学 y 朝上，所以位置的 y、角度都取反。
     let pos = at(midV, rHind, so(rig.hind, 'tail'));
     const tailRoot = pos;
+    const tailBones: P[] = [pos];
     const a0 = aHind + pose.tail - this.rest.tail;
     {
       const dirs: number[] = [];
@@ -592,7 +602,9 @@ export class CutoutPuppet {
       }
       this.cut.place(id, ...pos, p.angle + a);
       pos = at(pos, p.angle + a, end);
+      tailBones.push(pos);
     });
+    this.bones = { legs: legBones, spine: [hipAt, shoulderAt], neck: [shoulderAt, headV], tail: tailBones };
     spots.push({ id: 'toe', at: toe, from: shoulder }, { id: 'tail', at: pos, from: tailRoot });
     this.spots = spots;
     // 碰到地面的纸片压扁一点、往两边鼓，不穿过地面（趴下时的爪、肘、肚子，走路时踩实的脚掌）。

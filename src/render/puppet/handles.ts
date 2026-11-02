@@ -21,3 +21,14 @@ export interface HandleSpot {
   /** 耳长的把手：耳长 = 1 时露出头那一截有多长（view 里），耳长拖到 0 以后再拖出来时按它算。毛长的把手见上。 */
   unit?: number;
 }
+
+/**
+ * 纸偶这一帧的骨架（view 坐标），X 光层用（设计台第 3 步 c）：只是画面，粗细由设计台按体重分配算。
+ * legs：每条腿的关节，根（髋、肩）→ 膝、肘 → 踝、腕 → 趾尖；spine：髋 → 肩；neck：肩 → 头的铆钉；tail：尾根 → 每节的末端。
+ */
+export interface XrayBones {
+  legs: Record<'nearHind' | 'nearFore' | 'farHind' | 'farFore', P[]>;
+  spine: [P, P];
+  neck: [P, P];
+  tail: P[];
+}
