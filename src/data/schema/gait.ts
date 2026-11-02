@@ -48,6 +48,11 @@ export const GaitRulesSchema = z.strictObject({
   limbShape: z
     .object({ 说明: z.string() })
     .catchall(z.strictObject({ hindFore: z.number().positive(), hindSegs: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional() })),
+  /**
+   * 一天的饭量（第 3 步 c）：三类食物每克鲜重含多少千焦（总能），把能量收支换成"一天要吃多少克"摆在纸偶旁边。
+   * 植物分两种：能挑着吃的口器（种子、嫩芽、果）和整株吃草的。只是画面。
+   */
+  food: z.strictObject({ 说明: z.string(), plantGrass: ThresholdSchema, plantSelect: ThresholdSchema, vertebrate: ThresholdSchema, invertebrate: ThresholdSchema }),
   /** 尾巴的动力学。 */
   tail: z.strictObject({ 说明: z.string(), stiffness: ThresholdSchema, damping: ThresholdSchema, idle: ThresholdSchema }),
   references: z.strictObject({ 说明: z.string(), animals: z.array(Reference).min(2) }),

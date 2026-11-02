@@ -4,6 +4,7 @@ import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign, type EnvironmentProfile } from '../../sim';
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
+import { FoodPile, dailyFood, type DailyFood } from './food';
 import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thermalOf, thinOf, type Sign } from './signs';
 import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
@@ -183,7 +184,10 @@ async function main(): Promise<void> {
   handleLabel.visible = false;
   /** 体重分配纸饼（第 2 步 b）：画在屏幕上，不随镜头缩放。 */
   const pie = new AllocPie(SYSTEM_NAMES);
-  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, snapInk, handleLabel, pie.view);
+  // 一天的饭量（第 3 步 c）：按纸偶的比例尺堆在它前脚前面。
+  const foodPile = new FoodPile();
+  let food: DailyFood = dailyFood(compiled, partsOf(design, kit).mouth.selective === true, gaitRules.food);
+  app.stage.addChild(refLayer, ground, tapeLabels, foodPile.view, puppetLayer, handleInk, snapInk, handleLabel, pie.view);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[] };
@@ -215,6 +219,7 @@ async function main(): Promise<void> {
 
   function rebuild(): void {
     compiled = compileDesign(design, kit, envOf());
+    food = dailyFood(compiled, partsOf(design, kit).mouth.selective === true, gaitRules.food);
     plan = deskPlanOf(design, compiled);
     puppet.build(plan, look);
     signs = signsOf(compiled.viability);
@@ -418,6 +423,7 @@ async function main(): Promise<void> {
       prevLabel = r.label;
     }
     drawGround(W, gy, px, z);
+    foodPile.draw(food, px + 0.62 * plan.bodyLen * z, gy, z);
     // 卡片扣上的"咔"：纸偶从地面往上一弹（约 1 秒，下一次扣卡从头开始）；停下以后正好是 1，不影响截图。
     snapT += dt;
     if (snapT < 1.2) {
