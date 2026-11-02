@@ -4,6 +4,7 @@ import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
+import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thinOf, type Sign } from './signs';
 import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
@@ -47,7 +48,7 @@ let templateId = 'cat';
 let design: Design = structuredClone(MAMMALS.find((t) => t.species === templateId)!.design);
 let look: Look = lookOf(speciesColor(templateId).body);
 let compiled: CompiledDesign = compileDesign(design, kit);
-let plan: BodyPlan = planOf(design, compiled);
+let plan: BodyPlan = deskPlanOf(design, compiled);
 let mode: Mode = 'auto';
 let behavior: Behavior = 'stand';
 let targetSpeed = 0;
@@ -64,6 +65,12 @@ const rand = (): number => ((seed = (seed * 1103515245 + 12345) >>> 0) / 0x1_000
 
 function planOf(d: Design, c: CompiledDesign): BodyPlan {
   return bodyPlan(d, partsOf(d, kit), c.bird, viabilityRules, gaitRules);
+}
+/** 设计台上的纸偶：体征（第 3 步 a）让它瘦一点——躯干的纸片变薄、肚子收进去。只是画面，推演不读。 */
+function deskPlanOf(d: Design, c: CompiledDesign): BodyPlan {
+  const p = planOf(d, c);
+  const k = thinOf(c.viability);
+  return k === 1 ? p : { ...p, chestH: p.chestH * k, hindH: p.hindH * k, belly: p.belly * k * k };
 }
 const speedFactor = (): number => compiled.params.body?.speed ?? 1;
 const top = (): number => topSpeed(gaitRules, design.bodyMassKg, speedFactor());
@@ -205,8 +212,10 @@ async function main(): Promise<void> {
 
   function rebuild(): void {
     compiled = compileDesign(design, kit);
-    plan = planOf(design, compiled);
+    plan = deskPlanOf(design, compiled);
     puppet.build(plan, look);
+    signs = signsOf(compiled.viability);
+    renderSigns();
     gen = makeGen(gen.key);
     prev = null;
     if (mode === 'run') targetSpeed = runSpeed();
@@ -311,6 +320,11 @@ async function main(): Promise<void> {
     const W = app.screen.width;
     const H = app.screen.height;
     if (mode === 'auto') autoStep(dt);
+    // 体征：骨头撑不起这身体重，只能趴着。
+    if (cannotStand(compiled.viability)) {
+      targetSpeed = 0;
+      behavior = 'lie';
+    }
 
     // 速度平滑地追目标（大动物加减速慢一点）。
     const tau = 0.5 * Math.sqrt(plan.legLen / 0.25);
@@ -330,6 +344,14 @@ async function main(): Promise<void> {
       pose = blendPose(prev.f(), pose, 1 - prev.w);
       prev.w -= dt / blendSeconds();
       if (prev.w <= 0) prev = null;
+    }
+
+    // 体征：跛。前腿（近侧）着地时头往上一扬、肩往下一沉，抬起来时恢复（前肢跛行的样子）。只是画面。
+    const lame = limpOf(compiled.viability, gs.gait === 'trot' || gs.gait === 'gallop' || gs.gait === 'hop', gs.gait !== 'stand');
+    if (lame > 0) {
+      const lift = Math.min(1, pose.feet.nearFore.y / Math.max(1e-6, 0.06 * plan.legLen));
+      const load = 1 - lift;
+      pose = { ...pose, neck: pose.neck + lame * (0.5 * load - 0.18), head: pose.head + lame * 0.2 * load, shoulderY: pose.shoulderY - lame * 0.08 * plan.legLen * load };
     }
 
     // 呼吸：静息按体重；走、跑时加快；奔跑时一步一口气（跑步和呼吸同步，Bramble & Carrier 1983，未核对）。
@@ -393,6 +415,7 @@ async function main(): Promise<void> {
     }
     drawHandles(dt);
     drawSnap();
+    placeSigns();
     // 纸饼：宽屏放在右上（提示条下面），手机放在读数下面的右上角（纸偶在空地的下半部分）。
     if (narrow && H < SHORT) {
       // 横着拿：空地矮，纸饼放在左边的空处（纸偶站在中间）。
@@ -774,6 +797,89 @@ async function main(): Promise<void> {
     }
   }
 
+  // ---- 体征（第 3 步 a）：可行性检查的结果长在身上，挂一张小纸签；点签看是哪一项检查、余量多少。 ----
+  let signs: Sign[] = [];
+  const signLayer = document.getElementById('signs')!;
+  const signCard = document.getElementById('signCard')!;
+  const signTags = new Map<string, HTMLButtonElement>();
+  function renderSigns(): void {
+    signLayer.replaceChildren();
+    signTags.clear();
+    for (const sg of signs) {
+      const b = document.createElement('button');
+      b.className = `sign${sg.loudest ? ' loud' : ''}`;
+      b.textContent = sg.label;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSign(sg, b);
+      });
+      signTags.set(sg.id, b);
+      signLayer.append(b);
+    }
+    if (!signs.some((sg) => signCard.dataset.id === sg.id)) signCard.hidden = true;
+  }
+  function openSign(sg: Sign, tag: HTMLElement): void {
+    const texts = compiled.hints.filter((h) => sg.hintIds.includes(h.id)).map((h) => h.text);
+    const margin = Number.isFinite(sg.margin) ? `余量 ×${sg.margin.toFixed(2)}（1 以上才够用）` : '';
+    signCard.replaceChildren();
+    const h = document.createElement('b');
+    h.textContent = `${CHECK_NAMES[sg.id]}：${GRADE_NAMES[sg.grade]}`;
+    signCard.append(h);
+    for (const t of texts) {
+      const p = document.createElement('p');
+      p.textContent = t;
+      signCard.append(p);
+    }
+    if (margin) {
+      const m = document.createElement('div');
+      m.className = 'margin';
+      m.textContent = margin;
+      signCard.append(m);
+    }
+    signCard.dataset.id = sg.id;
+    signCard.classList.toggle('loud', sg.loudest);
+    signCard.hidden = false;
+    const r = tag.getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 16);
+    signCard.style.width = `${w}px`;
+    signCard.style.left = `${Math.round(Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2)))}px`;
+    signCard.style.top = `${Math.round(Math.max(8, r.top - signCard.offsetHeight - 8))}px`;
+  }
+  document.addEventListener('pointerdown', (e) => {
+    if (!signCard.hidden && !signCard.contains(e.target as Node) && !(e.target as HTMLElement).classList?.contains('sign')) signCard.hidden = true;
+  });
+  /** 每帧：纸签挂在对应的部位旁边（骨骼在前腿上，消化在肚子上，繁殖在后腹）。 */
+  function placeSigns(): void {
+    if (!signs.length) return;
+    const at = (id: HandleId): (typeof spots)[number] | undefined => spots.find((sp) => sp.id === id);
+    const back = at('back');
+    const toe = at('toe');
+    const tail = at('tail');
+    if (!back || !toe) return;
+    const ground = toe.at.y;
+    // 骨骼挂在肩下（前腿的上端，走路时不跟着脚甩），消化挂在肚子上，繁殖挂在后腹。
+    const pos: Record<Sign['id'], Pt> = {
+      skeleton: { x: toe.from.x, y: toe.from.y + (ground - toe.from.y) * 0.35 },
+      digestion: { x: back.at.x, y: back.at.y + (ground - back.at.y) * 0.3 },
+      reproduction: { x: tail ? (tail.from.x + back.at.x) / 2 : back.at.x - 30, y: back.at.y + (ground - back.at.y) * 0.2 },
+    };
+    // 挤在一起的签错开：后一张往下挪，直到不和前面的重叠。
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    for (const [id, b] of signTags) {
+      const q = { ...pos[id as Sign['id']] };
+      const w = b.offsetWidth + 6;
+      const h = b.offsetHeight + 4;
+      for (let k = 0; k < 4; k++) {
+        const hit = placed.find((o) => Math.abs(o.x - q.x) < (o.w + w) / 2 && Math.abs(o.y - q.y) < (o.h + h) / 2);
+        if (!hit) break;
+        q.y = hit.y + (hit.h + h) / 2;
+      }
+      placed.push({ x: q.x, y: q.y, w, h });
+      b.style.left = `${Math.round(q.x)}px`;
+      b.style.top = `${Math.round(q.y)}px`;
+    }
+  }
+
   /** 卡片扣上以后过了多久、扣在哪（画布坐标）。 */
   let snapT = Infinity;
   let snapPt: Pt = { x: 0, y: 0 };
@@ -1022,7 +1128,8 @@ async function main(): Promise<void> {
   }
   /** 测试用：这一帧的把手（屏幕坐标）。 */
   const handles = (): typeof spots => spots;
-  (window as unknown as { desk: { set: typeof set; step: typeof step; handles: typeof handles } }).desk = { set, step, handles };
+  const signList = (): Sign[] => signs;
+  (window as unknown as { desk: { set: typeof set; step: typeof step; handles: typeof handles; signs: typeof signList } }).desk = { set, step, handles, signs: signList };
 
   const q = new URLSearchParams(location.search);
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);
