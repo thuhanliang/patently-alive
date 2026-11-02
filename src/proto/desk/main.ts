@@ -591,8 +591,8 @@ async function main(): Promise<void> {
 
 
   // ---- 长在纸偶身上的把手（第 2 步；docs/feel/desk.md）----
-  // 背 → 体重，脚 → 腿长，尾尖 → 尾长，耳尖 → 耳长，耳根后缘 → 耳宽。每个把手只改一件事。
-  const HANDLE_NAMES: Record<HandleId, string> = { back: '体重', toe: '腿长', tail: '尾长', earTip: '耳长', earWide: '耳宽' };
+  // 背 → 体重，脚 → 腿长，尾尖 → 尾长，耳尖 → 耳长，耳根后缘 → 耳宽，肚子底下的毛尖 → 毛长。每个把手只改一件事。
+  const HANDLE_NAMES: Record<HandleId, string> = { back: '体重', toe: '腿长', tail: '尾长', earTip: '耳长', earWide: '耳宽', fur: '毛长' };
   type Pt = { x: number; y: number };
   /** 这一帧的把手（屏幕坐标）。 */
   let spots: { id: HandleId; at: Pt; from: Pt; unit: number }[] = [];
@@ -630,6 +630,8 @@ async function main(): Promise<void> {
     handlesUntil = Math.max(handlesUntil, performance.now() + ms);
   };
   const isEar = (id: HandleId): boolean => id === 'earTip' || id === 'earWide';
+  /** 拖的时候镜头推近、按纸偶的 view 坐标拖的把手：耳（推近到头）和毛长（推近到肚子）。 */
+  const isLocal = (id: HandleId): boolean => isEar(id) || id === 'fur';
   const toView = (q: Pt): Pt => puppet.view.toLocal(q);
   const onPuppet = (p: Pt, pad: number): boolean => {
     const b = puppet.view.getBounds();
@@ -675,6 +677,7 @@ async function main(): Promise<void> {
     if (id === 'back') return design.bodyMassKg;
     if (id === 'toe') return design.shape?.leg ?? 0;
     if (id === 'tail') return design.shape?.tail ?? 0;
+    if (id === 'fur') return furNow();
     if (id === 'earTip') return design.appearance?.earLen ?? 1;
     return design.appearance?.earWide ?? 1;
   };
@@ -682,22 +685,26 @@ async function main(): Promise<void> {
     const v = valueOf(id);
     if (id === 'back') return kgText(v);
     if (id === 'toe' || id === 'tail') return times(Math.pow(10, v));
+    if (id === 'fur') return furText(v);
     if (id === 'earTip' && v <= EAR_ABSENT) return '没有';
     return times(v);
   };
   function startGrab(sp: (typeof spots)[number], pointerId: number, p: Pt): void {
-    const ear = isEar(sp.id);
-    // 耳在纸偶的坐标里拖：推近镜头的时候手指和耳的关系不变。
+    const ear = isLocal(sp.id);
+    // 耳、毛长在纸偶的坐标里拖：推近镜头的时候手指和把手的关系不变。
     const conv = ear ? toView : (q: Pt): Pt => q;
     const at0 = conv(sp.at);
     grab = { id: sp.id, pointerId, p0: conv(p), last: p, cur: at0, at0, from0: conv(sp.from), unit: ear ? sp.unit / puppet.view.scale.x : sp.unit, v0: valueOf(sp.id) };
     canvas.style.cursor = 'grabbing';
     showHandles(2500);
     if (ear) {
-      // 局部放大：把耳根放到空地中间偏上，放大到头的半径约占空地高的 18%（已经够大就不再放大）。
-      const g = Math.min(12, Math.max(view.k, (stageBox.h * 0.18) / Math.max(1e-6, plan.headR * zoom))) / view.k;
+      // 局部放大：耳——把耳根放到空地中间偏上，放大到头的半径约占空地高的 18%；
+      // 毛长——把肚子放到空地中间偏下，放大到体长约占空地高的六成（整个身子的毛边都看得见，手指拖得开）。已经够大就不再放大。
+      const fur = sp.id === 'fur';
+      const want = fur ? (stageBox.h * 0.6) / Math.max(1e-6, plan.bodyLen * zoom) : (stageBox.h * 0.18) / Math.max(1e-6, plan.headR * zoom);
+      const g = Math.min(12, Math.max(view.k, want)) / view.k;
       const cx = stageX;
-      const cy = stageBox.top + stageBox.h * 0.42;
+      const cy = stageBox.top + stageBox.h * (fur ? 0.6 : 0.42);
       focusBack = { ...view, hidden: resetBtn.hidden === true };
       focus = { k: view.k * g, x: cx - stageX - (sp.from.x - stageX - view.x) * g, y: cy - stageY - (sp.from.y - stageY - view.y) * g };
     }
@@ -715,7 +722,7 @@ async function main(): Promise<void> {
   }
   function dragHandle(p: Pt): void {
     const g = grab!;
-    const ear = isEar(g.id);
+    const ear = isLocal(g.id);
     // 把手跟着手指走到哪（按下时手指和把手中心的偏差保留）。
     let q: Pt;
     if (ear) {
@@ -756,6 +763,12 @@ async function main(): Promise<void> {
       case 'earWide':
         design.appearance = { ...design.appearance, earWide: r2(clamp((g.v0 * dist) / d0, 0.5, 2)) };
         break;
+      case 'fur': {
+        // 毛尖往下拖：毛长倍数和把手离轮廓多远成正比（倍数 1 时把手在轮廓上，往上推进身体里是毛短）。
+        const k = 1 + (q.y - g.from0.y) / Math.max(1e-6, g.unit);
+        design.shape = { ...design.shape, fur: r2(clamp(Math.log10(Math.max(1e-3, k)), FUR_MIN, FUR_MAX)) };
+        break;
+      }
     }
     showHandles(2500);
     rebuild();
@@ -923,6 +936,11 @@ async function main(): Promise<void> {
   };
   const kgText = (kg: number): string => (kg < 1 ? `${Math.round(kg * 1000)} 克` : kg < 10 ? `${kg.toFixed(1)} 千克` : `${Math.round(kg)} 千克`);
   const times = (x: number): string => `×${x.toFixed(2)}`;
+  // 毛长（第 3 步 b）：设计写了用设计的，不写用体表卡的点（短毛 0、厚绒毛 0.301）。
+  const FUR_MIN = viabilityRules.shape.furMin.value;
+  const FUR_MAX = viabilityRules.shape.furMax.value;
+  const furNow = (): number => design.shape?.fur ?? partLibrary.get(design.parts.coat)?.fur ?? 0;
+  const furText = (v: number): string => (v <= FUR_MIN + 0.05 ? '裸' : times(Math.pow(10, v)));
 
   panel.append(el('h3', {}, '从现有技术开始'));
   const tplRow = el('div', { className: 'row' });
@@ -966,7 +984,17 @@ async function main(): Promise<void> {
       if (a) d.appearance = a;
       else delete d.appearance;
       design = d;
-    } else design.parts = { ...design.parts, [tab.id]: item.key } as Design['parts'];
+    } else {
+      design.parts = { ...design.parts, [tab.id]: item.key } as Design['parts'];
+      // 体表卡是毛长轴上的预设点：扣上去就是卡的毛长，之前拖出来的毛长清掉（腿长、尾长是相对部件的，换卡以后还在）。
+      if (tab.id === 'coat' && design.shape?.fur !== undefined) {
+        const { fur: _, ...rest } = design.shape;
+        const d = { ...design };
+        if (Object.keys(rest).length) d.shape = rest;
+        else delete d.shape;
+        design = d;
+      }
+    }
     rebuild();
   }
   /** 拖着卡片时手指在哪（画布坐标）。 */
@@ -1011,6 +1039,7 @@ async function main(): Promise<void> {
   );
   syncs.push(slider('腿长', -0.2, 0.2, 0.01, () => design.shape?.leg ?? 0, (v) => ((design.shape = { ...design.shape, leg: v }), rebuild()), (v) => times(Math.pow(10, v))));
   syncs.push(slider('尾长', -0.3, 0.3, 0.01, () => design.shape?.tail ?? 0, (v) => ((design.shape = { ...design.shape, tail: v }), rebuild()), (v) => times(Math.pow(10, v))));
+  syncs.push(slider('毛长', FUR_MIN, FUR_MAX, 0.01, furNow, (v) => ((design.shape = { ...design.shape, fur: v }), rebuild()), furText));
 
   // 外观：只影响画面（DECISIONS"外观参数"）。
   adv.append(el('h3', {}, '外观（只影响画面）'));
@@ -1104,6 +1133,7 @@ async function main(): Promise<void> {
     speed?: number;
     leg?: number;
     tail?: number;
+    fur?: number;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
     appearance?: Design['appearance'];
@@ -1113,6 +1143,7 @@ async function main(): Promise<void> {
     if (p.mass !== undefined) design.bodyMassKg = p.mass;
     if (p.leg !== undefined || p.tail !== undefined) design.shape = { ...design.shape, ...(p.leg !== undefined ? { leg: p.leg } : {}), ...(p.tail !== undefined ? { tail: p.tail } : {}) };
     if (p.parts) design.parts = { ...design.parts, ...p.parts } as Design['parts'];
+    if (p.fur !== undefined) design.shape = { ...design.shape, fur: p.fur };
     if (p.allocation) design.allocation = { ...design.allocation, ...p.allocation };
     if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;
