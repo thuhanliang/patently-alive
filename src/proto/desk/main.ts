@@ -2,6 +2,8 @@ import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Textu
 import { designTemplates, gaitRules, hintTemplates, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
+import { requestedOf } from '../../sim/body';
+import { AllocPie, requestFor } from './pie';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
 import { EAR_ABSENT, EAR_TIP_CAT, bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
@@ -164,7 +166,9 @@ async function main(): Promise<void> {
   const handleInk = new Graphics();
   const handleLabel = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: BLUEPRINT, fontWeight: '600' } });
   handleLabel.visible = false;
-  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, handleLabel);
+  /** 体重分配纸饼（第 2 步 b）：画在屏幕上，不随镜头缩放。 */
+  const pie = new AllocPie(SYSTEM_NAMES);
+  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, handleInk, handleLabel, pie.view);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[] };
@@ -376,6 +380,17 @@ async function main(): Promise<void> {
     }
     drawGround(W, gy, px, z);
     drawHandles(dt);
+    // 纸饼：宽屏放在右上（提示条下面），手机放在读数下面的右上角（纸偶在空地的下半部分）。
+    if (narrow) {
+      pie.r0 = 31;
+      pie.cx = W - 80;
+      pie.cy = top + 84;
+    } else {
+      pie.r0 = 50;
+      pie.cx = W - 130;
+      pie.cy = 185;
+    }
+    pie.draw(compiled.body, design.bodyMassKg, pieGrab?.sys ?? pieHover, kgText);
     if (!resetBtn.hidden) resetBtn.style.top = `${Math.round(top + 12)}px`;
 
     readoutLeft -= dt;
@@ -431,9 +446,17 @@ async function main(): Promise<void> {
   };
   canvas.addEventListener('pointerdown', (e) => {
     const p = local(e);
-    // 手指先按到把手就归把手；拖把手的时候别的手指不管。
-    if (grab) return;
+    // 手指先按到纸饼或把手就归它们；拖着的时候别的手指不管。没按到才是拖动、缩放画面。
+    if (grab || pieGrab) return;
     if (pointers.size === 0) {
+      const sys = pie.hit(p.x, p.y);
+      if (sys) {
+        const r = pie.r0 * Math.sqrt(compiled.body.relative[sys]);
+        pieGrab = { pointerId: e.pointerId, sys, d0: Math.hypot(p.x - pie.cx, p.y - pie.cy), r0: r };
+        canvas.style.cursor = 'grabbing';
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       const hit = pickHandle(p, e.pointerType);
       if (hit) {
         startGrab(hit, e.pointerId, p);
@@ -454,6 +477,10 @@ async function main(): Promise<void> {
   });
   canvas.addEventListener('pointermove', (e) => {
     const p = local(e);
+    if (pieGrab) {
+      if (e.pointerId === pieGrab.pointerId) dragPie(p);
+      return;
+    }
     if (grab) {
       if (e.pointerId === grab.pointerId) dragHandle(p);
       return;
@@ -481,6 +508,12 @@ async function main(): Promise<void> {
     pointers.set(e.pointerId, p);
   });
   const up = (e: PointerEvent): void => {
+    if (pieGrab && e.pointerId === pieGrab.pointerId) {
+      pieGrab = null;
+      canvas.style.cursor = '';
+      refreshControls();
+      return;
+    }
     if (grab && e.pointerId === grab.pointerId) {
       endGrab();
       return;
@@ -497,6 +530,7 @@ async function main(): Promise<void> {
     if (e.pointerType === 'mouse' && !grab) {
       mouseInside = false;
       hoverId = null;
+      pieHover = null;
       canvas.style.cursor = '';
     }
   });
@@ -574,11 +608,26 @@ async function main(): Promise<void> {
     return best;
   };
   const hoverAt = (p: Pt): void => {
-    mouseInside = onPuppet(p, 24);
+    pieHover = pie.hit(p.x, p.y);
+    mouseInside = !pieHover && onPuppet(p, 24);
     if (mouseInside) showHandles(1200);
-    hoverId = pickHandle(p, 'mouse')?.id ?? null;
-    canvas.style.cursor = hoverId ? 'grab' : '';
+    hoverId = pieHover ? null : (pickHandle(p, 'mouse')?.id ?? null);
+    canvas.style.cursor = hoverId || pieHover ? 'grab' : '';
   };
+  // ---- 体重分配纸饼（第 2 步 b）：按住一瓣往外拖，多给它；总量不变，别的瓣一起缩。 ----
+  /** 按下时手指离中心多远、那一瓣多大（拖的时候保持手指和瓣边的距离）。 */
+  let pieGrab: { pointerId: number; sys: BodySystem; d0: number; r0: number } | null = null;
+  let pieHover: BodySystem | null = null;
+  function dragPie(p: Pt): void {
+    const g = pieGrab!;
+    const r = Math.max(1, g.r0 + Math.hypot(p.x - pie.cx, p.y - pie.cy) - g.d0);
+    const target = Math.min(4, Math.max(0.2, (r / pie.r0) ** 2));
+    const lo = viabilityRules.body.minRelative.value;
+    const hi = viabilityRules.body.maxRelative.value;
+    const v = requestFor(g.sys, target, compiled.body.base, requestedOf(design, viabilityRules), lo, hi);
+    design.allocation = { ...design.allocation, [g.sys]: Math.round(v * 100) / 100 };
+    rebuild();
+  }
   const valueOf = (id: HandleId): number => {
     if (id === 'back') return design.bodyMassKg;
     if (id === 'toe') return design.shape?.leg ?? 0;
