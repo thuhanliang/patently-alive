@@ -191,7 +191,8 @@ async function main(): Promise<void> {
   // X 光层（第 3 步 c）：纸偶淡下去，画骨头和肌肉。只有切图纸偶报得出骨架。
   const xrayInk = new Graphics();
   let xrayOn = false;
-  app.stage.addChild(refLayer, ground, tapeLabels, foodPile.view, puppetLayer, xrayInk, handleInk, snapInk, handleLabel, pie.view);
+  // 饭量画在纸偶上面：手机上纸偶小、标签常压在它身上，底下垫了一小块纸。
+  app.stage.addChild(refLayer, ground, tapeLabels, puppetLayer, foodPile.view, xrayInk, handleInk, snapInk, handleLabel, pie.view);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
   let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[]; skeleton?(): XrayBones | null };
@@ -427,7 +428,7 @@ async function main(): Promise<void> {
       prevLabel = r.label;
     }
     drawGround(W, gy, px, z);
-    foodPile.draw(food, px + 0.62 * plan.bodyLen * z, gy, z);
+    foodPile.draw(food, px + 0.62 * plan.bodyLen * z, gy, z, W, narrow && H < SHORT);
     // 卡片扣上的"咔"：纸偶从地面往上一弹（约 1 秒，下一次扣卡从头开始）；停下以后正好是 1，不影响截图。
     snapT += dt;
     if (snapT < 1.2) {

@@ -50,13 +50,18 @@ export class FoodPile {
   readonly view = new Container();
   private readonly g = new Graphics();
   private readonly label = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44, align: 'center' } });
+  /** 标签底下的一小块纸（压在纸偶上面时也读得清）。 */
+  private readonly plate = new Graphics();
 
   constructor() {
-    this.view.addChild(this.g, this.label);
+    this.view.addChild(this.g, this.plate, this.label);
   }
 
-  /** x：第一堆的左边（屏幕）；gy：地面；z：每米多少像素。份额不到 3% 的不画。 */
-  draw(f: DailyFood, x: number, gy: number, z: number): void {
+  /**
+   * x：第一堆的左边（屏幕）；gy：地面；z：每米多少像素；W：屏幕宽。份额不到 3% 的不画。
+   * 窄屏（手机竖着）上标签一类一行；beside（手机横着，空地矮）时标签放在小堆右边、贴着地面，不压在纸偶身上。标签夹在屏幕里面。
+   */
+  draw(f: DailyFood, x: number, gy: number, z: number, W: number, beside = false): void {
     const g = this.g.clear();
     const parts: string[] = [];
     let cx = x;
@@ -81,7 +86,13 @@ export class FoodPile {
       top = Math.min(top, gy - r);
       parts.push(`${FOOD_NAMES[k]} ${gramText(grams)}`);
     }
-    this.label.text = `一天要吃\n${parts.join(' · ')}${f.cold > 0.005 ? `\n（冷，多吃 ${Math.round(f.cold * 100)}%）` : ''}`;
-    this.label.position.set(Math.round((x + cx - 4) / 2 - this.label.width / 2), Math.round(top - this.label.height - 6));
+    const narrow = W < 520;
+    this.label.text = `一天要吃\n${parts.join(narrow ? '\n' : ' · ')}${f.cold > 0.005 ? `\n（冷，多吃 ${Math.round(f.cold * 100)}%）` : ''}`;
+    const lw = this.label.width;
+    const lh = this.label.height;
+    const lx = Math.round(Math.min(W - lw - 8, Math.max(8, beside ? cx + 4 : (x + cx - 4) / 2 - lw / 2)));
+    const ly = Math.round(beside ? gy - lh - 4 : top - lh - 6);
+    this.label.position.set(lx, ly);
+    this.plate.clear().roundRect(lx - 4, ly - 2, lw + 8, lh + 4, 3).fill({ color: 0xf6eedc, alpha: 0.82 });
   }
 }
