@@ -5,6 +5,7 @@ import { compileDesign, makeDesignKit, partsOf, type CompiledDesign, type Enviro
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
 import { FoodPile, dailyFood, type DailyFood } from './food';
+import { drawXray } from './xray';
 import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thermalOf, thinOf, type Sign } from './signs';
 import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
@@ -14,7 +15,7 @@ import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
 import type { CutData } from '../../render/puppet/cutout';
 import { CutoutPuppet } from '../../render/puppet/cutoutPuppet';
-import type { HandleId, HandleSpot } from '../../render/puppet/handles';
+import type { HandleId, HandleSpot, XrayBones } from '../../render/puppet/handles';
 import { bracket, drawReference, referenceHead, referenceHeightM, referenceLabel } from '../../render/puppet/ruler';
 
 /**
@@ -187,10 +188,13 @@ async function main(): Promise<void> {
   // 一天的饭量（第 3 步 c）：按纸偶的比例尺堆在它前脚前面。
   const foodPile = new FoodPile();
   let food: DailyFood = dailyFood(compiled, partsOf(design, kit).mouth.selective === true, gaitRules.food);
-  app.stage.addChild(refLayer, ground, tapeLabels, foodPile.view, puppetLayer, handleInk, snapInk, handleLabel, pie.view);
+  // X 光层（第 3 步 c）：纸偶淡下去，画骨头和肌肉。只有切图纸偶报得出骨架。
+  const xrayInk = new Graphics();
+  let xrayOn = false;
+  app.stage.addChild(refLayer, ground, tapeLabels, foodPile.view, puppetLayer, xrayInk, handleInk, snapInk, handleLabel, pie.view);
   // ?cut=<名字>：用成品图切出来的零件（白模）代替代码画的纸偶，检验真零件演同一套动作的效果（开发用）。
   const cut = new URLSearchParams(location.search).get('cut');
-  let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[] };
+  let puppet: { view: Container; build(plan: BodyPlan, look: Look): void; apply(pose: Pose, dt: number, breath?: number): void; setScale(pxPerM: number): void; handles(): HandleSpot[]; skeleton?(): XrayBones | null };
   /** 切图零件（参照动物也用它拼）。 */
   let cutKit: { data: CutData; paper: Texture; ref: BodyPlan } | null = null;
   if (cut) {
@@ -431,6 +435,15 @@ async function main(): Promise<void> {
       puppet.view.scale.x *= 1 - 0.5 * a;
       puppet.view.scale.y *= 1 + a;
     }
+    const bones = xrayOn ? (puppet.skeleton?.() ?? null) : null;
+    puppetLayer.alpha = bones ? 0.28 : 1;
+    if (bones) {
+      const sc = (q: [number, number]): [number, number] => {
+        const g = puppet.view.toGlobal({ x: q[0], y: q[1] });
+        return [g.x, g.y];
+      };
+      drawXray(xrayInk, { legs: { nearHind: bones.legs.nearHind.map(sc), nearFore: bones.legs.nearFore.map(sc), farHind: bones.legs.farHind.map(sc), farFore: bones.legs.farFore.map(sc) }, spine: [sc(bones.spine[0]), sc(bones.spine[1])], neck: [sc(bones.neck[0]), sc(bones.neck[1])], tail: bones.tail.map(sc) }, plan, z);
+    } else xrayInk.clear();
     drawHandles(dt);
     drawSnap();
     placeSigns();
@@ -1109,6 +1122,13 @@ async function main(): Promise<void> {
     refreshControls();
   });
   modeBox.append(el('label', {}, '速度', speedInput, speedV));
+  // X 光（第 3 步 c）：看里面的骨头和肌肉，粗细按体重分配。
+  const xrayBtn = el('button', { textContent: 'X 光：看骨头和肌肉' });
+  xrayBtn.addEventListener('click', () => {
+    xrayOn = !xrayOn;
+    refreshControls();
+  });
+  if (puppet.skeleton) modeBox.append(el('div', { className: 'row' }, xrayBtn));
   // 冷热试验（第 3 步 b）：拖一下气温就开始试，只给设计台预览（EnvironmentProfile.climate），不进情景。
   const climateInput = el('input', { type: 'range', min: '-40', max: '45', step: '1', value: '20' });
   const climateV = el('span', { className: 'v' });
@@ -1127,6 +1147,7 @@ async function main(): Promise<void> {
 
   function refreshControls(): void {
     for (const s of syncs) s();
+    xrayBtn.classList.toggle('on', xrayOn);
     climateV.textContent = climateC === null ? '不试（拖一下开始）' : `${climateC} °C`;
     climateOff.hidden = climateC === null;
     if (climateC !== null) climateInput.value = String(climateC);
@@ -1174,6 +1195,7 @@ async function main(): Promise<void> {
     fur?: number;
     /** 冷热试验的气温（°C），null 不试。 */
     climate?: number | null;
+    xray?: boolean;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
     appearance?: Design['appearance'];
@@ -1185,6 +1207,7 @@ async function main(): Promise<void> {
     if (p.parts) design.parts = { ...design.parts, ...p.parts } as Design['parts'];
     if (p.fur !== undefined) design.shape = { ...design.shape, fur: p.fur };
     if (p.climate !== undefined) climateC = p.climate;
+    if (p.xray !== undefined) xrayOn = p.xray;
     if (p.allocation) design.allocation = { ...design.allocation, ...p.allocation };
     if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;
