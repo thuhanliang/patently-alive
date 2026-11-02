@@ -3,6 +3,7 @@ import { pendulumOmega, springStep, type Spring } from './gait';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { skeletonOf, type Pose, type Vec } from './pose';
 import { TailChain, idleSwish } from './tail';
+import type { HandleSpot } from './handles';
 import { anchors, drawChest, drawEar, drawHead, drawHind, drawJaw, drawLegSegment, drawNeck, drawTailSegment, partCtx, type Look } from './parts';
 
 export { lookOf, type Look } from './parts';
@@ -55,6 +56,9 @@ export class Puppet {
   private tailRest: { droop: number; curl: number } = { droop: 0.8, curl: 0.1 };
   private tailChain = new TailChain([], [], { stiffness: 1, damping: 1 });
   private tailRootAt: [number, number] = [0, 0];
+  private tailSegL = 0;
+  /** 这一帧的骨架（把手用）。 */
+  private sk: ReturnType<typeof skeletonOf> | null = null;
   private earSprings: Spring[] = [];
   private lastHead = 0;
   private time = 0;
@@ -122,6 +126,7 @@ export class Puppet {
       this.tail.push(c);
     }
     this.tailRootAt = a.tailRoot;
+    this.tailSegL = a.tailSegL;
     const segM = (a.tailSegL * 0.92) / k;
     this.tailChain = new TailChain(
       this.tail.map(() => segM),
@@ -151,12 +156,32 @@ export class Puppet {
     }
   }
 
+  /** 这一帧的把手（view 的坐标；handles.ts）。代码画的纸偶不认新的耳朵参数，没有耳上的把手。 */
+  handles(): HandleSpot[] {
+    const sk = this.sk;
+    if (!sk) return [];
+    const k = this.k;
+    const v = (p: Vec): [number, number] => [p.x * k, -p.y * k];
+    const local = (c: Container, x: number, y: number): [number, number] => {
+      const q = this.view.toLocal({ x, y }, c);
+      return [q.x, q.y];
+    };
+    const fore = sk.legs.nearFore;
+    const tipC = this.tail[this.tail.length - 1];
+    const tailRoot = this.tail[0] ? local(this.tail[0], 0, 0) : v(sk.mid);
+    return [
+      { id: 'back', at: v(sk.mid), from: [sk.mid.x * k, 0] },
+      { id: 'toe', at: v(fore[3]!), from: v(fore[0]!) },
+      { id: 'tail', at: tipC ? local(tipC, this.tailSegL, 0) : tailRoot, from: tailRoot },
+    ];
+  }
+
   /** 摆姿态。dt 秒：弹簧（尾巴、耳朵）按真实时间跟随。breath 是呼吸的起伏（−1–1），胸片跟着一鼓一收。 */
   apply(pose: Pose, dt: number, breath = 0): void {
     const plan = this.plan;
     const k = this.k;
     this.time += dt;
-    const sk = skeletonOf(plan, pose);
+    const sk = (this.sk = skeletonOf(plan, pose));
     for (const key of LEGS) {
       const pts = sk.legs[key];
       const segs = this.legs[key].segs;
