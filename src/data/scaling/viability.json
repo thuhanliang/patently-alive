@@ -86,6 +86,9 @@
     "costLegExp": { "value": 1, "basis": "law", "confidence": "1", "source": "Pontzer 2007 J Exp Biol 210:1752：陆生动物每走一米的能量和有效腿长成反比（腿长解释 98% 的差异，体重没有独立作用）；指数取 LiMb 模型的 1（Pontzer 2005 J Exp Biol 208:1513），原文的拟合指数未核对" },
     "speedLegExp": { "value": 0.5, "basis": "law", "confidence": "2+", "source": "动力相似（Alexander & Jayes 1983 J Zool 201:135）：弗劳德数相同时步态相似，速度 ∝ 腿长^0.5；Garland & Janis 1993 J Zool：按体型校正后的后腿长能预测最高速度" },
     "boneLegExp": { "value": 1, "basis": "law", "confidence": "1", "source": "Biewener 1989/1990：骨的弯曲应力随力臂（腿长）上升；同样粗细的腿长一倍，安全系数约减半" },
-    "tailMassShare": { "value": 0.02, "basis": "data", "confidence": "1", "source": "猎豹的尾巴约占体重的 2%（Patel 等 2018 引用的测量）；尾长加一倍按多带这么多体重算" }
+    "tailMassShare": { "value": 0.02, "basis": "data", "confidence": "1", "source": "猎豹的尾巴约占体重的 2%（Patel 等 2018 引用的测量）；尾长加一倍按多带这么多体重算" },
+    "furMin": { "value": -1, "basis": "assumption", "confidence": "unverified", "source": "毛长最短到短毛的 10^-1 = 0.1 倍：再短就是裸的（裸鼹鼠、河马），保温只剩皮肤和贴身的空气层" },
+    "furMax": { "value": 0.6, "basis": "assumption", "confidence": "unverified", "source": "最长到短毛的 10^0.6 ≈ 4 倍（厚绒毛约 2 倍）：麝牛、北极狐这类长毛兽和同体型短毛兽的差距大致在这个范围（未核对）" },
+    "furSkinShare": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "短毛兽的保温里，皮肤、皮下和贴身的空气层占约三成，其余是毛层（Scholander 等 1950 Biol. Bull. 99:225：保温大致随毛厚线性增加，毛很薄时只剩这一份；比例未核对）。和厚绒毛卡的 0.93 一起反解出保温开销的份额" }
   }
 }

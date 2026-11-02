@@ -8,13 +8,14 @@
     { "id": "rearing", "name": "育幼", "visible": false }
   ],
   "parts": [
-    { "id": "short_fur", "slot": "coat", "name": "短毛", "blurb": "贴身的短毛，兽类的标准装备。", "bodyPlan": "mammal" },
+    { "id": "short_fur", "slot": "coat", "name": "短毛", "blurb": "贴身的短毛，兽类的标准装备。", "bodyPlan": "mammal", "fur": 0 },
     {
       "id": "dense_fur",
       "slot": "coat",
       "name": "厚绒毛",
       "blurb": "两层毛，底绒很密。",
       "bodyPlan": "mammal",
+      "fur": 0.301,
       "effects": [{ "target": "energy", "factor": 0.93, "why": "保暖好，烧掉的热少一些" }]
     },
     {

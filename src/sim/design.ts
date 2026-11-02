@@ -7,6 +7,7 @@ import { allocateBody, shapeOf, type BodyAllocation } from './body';
 import { detExp, detLog, detPow } from './detmath';
 import { applyLaw, scaleTraits, trophicLevel, type ScaledTraits } from './scaling';
 import { DAYS_PER_MONTH, DAYS_PER_YEAR } from './time';
+import { furAnchors, furEnergyFactor, furOf } from './fur';
 import { gutEffects, runChecks, skeletonEffects, type CheckResult, type EnvironmentProfile } from './viability';
 
 /**
@@ -86,10 +87,16 @@ function effectFactor(p: Part, factor: number, tailScale: number): number {
 /**
  * 各部件的钩子合起来。能量的各项是分开列在收支上的开销（"翅膀 +15%""早成 +6%"），所以相加；
  * 其余的钩子作用在同一个量上，相乘。
+ * furFactor：设计写了毛长时，体表卡的能量效果换成毛长的能量倍数，加在体表卡原来的位置上（浮点加法的顺序不变）。
  */
-function multipliersOf(parts: readonly Part[], tailScale = 1): Record<EffectTarget, number> {
+function multipliersOf(parts: readonly Part[], tailScale = 1, furFactor?: number): Record<EffectTarget, number> {
   const m: Record<EffectTarget, number> = { energy: 1, dailyRange: 1, mortality: 1, gestation: 1, nestDays: 1, maturity: 1 };
   for (const p of parts) {
+    if (p.slot === 'coat' && furFactor !== undefined) {
+      m.energy += furFactor - 1;
+      for (const e of p.effects) if (e.target !== 'energy') m[e.target] *= e.factor;
+      continue;
+    }
     for (const e of p.effects) {
       const f = effectFactor(p, e.factor, tailScale);
       if (e.target === 'energy') m.energy += f - 1;
@@ -160,7 +167,10 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   const climbs = all.some((p) => p.climbs === true);
   const scaled = scaleTraits(kit.laws, { bodyMassKg: design.bodyMassKg, litterSize: design.litterSize, diet, bird, flies: hasWings });
   const shape = shapeOf(design, kit.viability);
-  const m = multipliersOf(all, shape.tailScale);
+  // 毛长（2026-11-02）：写了才换掉体表卡的能量效果；不写和以前逐位相同。
+  const fur = furOf(design, parts.coat, kit.viability);
+  const furFactor = fur === undefined ? undefined : furEnergyFactor(fur, furAnchors(kit.parts.values()), kit.viability);
+  const m = multipliersOf(all, shape.tailScale, furFactor);
 
   // 繁殖节奏。
   const gestationDays = Math.max(1, Math.round(scaled.gestationDays * m.gestation));
@@ -189,6 +199,10 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
   // 设计出来的鸻和真实的鸻要吃得一样多。鸟兽之差体现在缩放公式（寿命、繁殖）上。
   const lines: EnergyLine[] = [{ label: bird ? '日常代谢（鸟）' : '日常代谢（兽）', kjPerDay: base }];
   for (const p of all) {
+    if (p.slot === 'coat' && furFactor !== undefined) {
+      if (furFactor !== 1) lines.push({ label: furFactor < 1 ? '毛长：保暖好，烧掉的热少一些' : '毛短：散热多，烧掉的热多一些', kjPerDay: base * (furFactor - 1) });
+      continue;
+    }
     for (const e of p.effects) {
       const f = effectFactor(p, e.factor, shape.tailScale);
       if (e.target === 'energy' && f !== 1) lines.push({ label: `${p.name}：${e.why}`, kjPerDay: base * (f - 1) });

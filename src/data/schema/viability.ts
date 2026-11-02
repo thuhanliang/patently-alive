@@ -101,6 +101,10 @@ export const ViabilityRulesSchema = z.strictObject({
     speedLegExp: ThresholdSchema,
     boneLegExp: ThresholdSchema,
     tailMassShare: ThresholdSchema,
+    /** 毛长（2026-11-02）：范围，和短毛的保温里皮肤、贴身空气层占的那一份（sim/fur.ts）。 */
+    furMin: ThresholdSchema,
+    furMax: ThresholdSchema,
+    furSkinShare: ThresholdSchema,
   }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;

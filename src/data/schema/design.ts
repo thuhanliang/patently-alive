@@ -81,6 +81,11 @@ export const PartSchema = z
      * 只有 limbs 槽的部件写；数是假设，见 viability.json 的骨骼一节。
      */
     posture: z.number().min(0.5).max(2).optional(),
+    /**
+     * 兽的体表卡：这张卡在毛长轴上的点（以 10 为底的对数，短毛 = 0），是设计没写 shape.fur 时的毛长。
+     * 毛长的推导见 sim/fur.ts 和 MODEL.md"形状：毛长"。
+     */
+    fur: z.number().finite().optional(),
   })
   .superRefine((p, ctx) => {
     const need: Partial<Record<Slot, readonly (keyof typeof p)[]>> = { coat: ['bodyPlan'], mouth: ['diet'], digestion: ['digest', 'gut'] };
@@ -150,8 +155,11 @@ export const DesignSchema = z.object({
   /**
    * 形状（2026-10-22）：腿、尾比"同体重、同部件的一般长度"长多少，以 10 为底的对数（0 = 一般，0.1 ≈ 长 26%）。
    * 范围见 viability.json 的 shape（编译时夹进范围）。不写就是 0：老设计不受影响，id 也不变。
+   *
+   * 毛长（2026-11-02）fur 不一样：是绝对的轴（以 10 为底的对数，短毛 = 0），不写就用体表卡的点（部件的 fur）；
+   * 只对兽有用，长羽毛的不看。见 sim/fur.ts。
    */
-  shape: z.strictObject({ leg: z.number().finite(), tail: z.number().finite() }).partial().optional(),
+  shape: z.strictObject({ leg: z.number().finite(), tail: z.number().finite(), fur: z.number().finite() }).partial().optional(),
   /**
    * 外观（2026-10-25）：只影响画面，推演不读。耳长、耳宽是相对"一般的耳朵"（猫）的倍数。
    * 不写就是 1。耳朵的真实后果（散热、听力）以后再定，见 DECISIONS"外观参数"。
