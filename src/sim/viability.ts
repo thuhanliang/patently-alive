@@ -4,6 +4,7 @@ import type { PlantType } from '../data/schema/plant';
 import type { ViabilityRules } from '../data/schema/viability';
 import { shapeOf, type BodyAllocation } from './body';
 import { detExp, detLog, detPow } from './detmath';
+import { thermalLoad } from './thermal';
 
 /**
  * 身体可行性检查（阶段 3.5）。
@@ -18,17 +19,17 @@ import { detExp, detLog, detPow } from './detmath';
  */
 
 /** 引擎定义的检查（会逐步加：体温、循环……）。 */
-export const CHECK_IDS = ['skeleton', 'digestion', 'reproduction'] as const;
+export const CHECK_IDS = ['skeleton', 'digestion', 'reproduction', 'thermal'] as const;
 export type CheckId = (typeof CHECK_IDS)[number];
 
 /** 等级：正常 / 吃力 / 不行 / 致命（骨骼就是：能跑 / 跑不动 / 走不动 / 站不住）。 */
 export const GRADES = ['ok', 'strained', 'failing', 'fatal'] as const;
 export type Grade = (typeof GRADES)[number];
 
-/** 环境输入（只给设计台预览）。现在没有字段；以后加植物（第 6 步）、气候（降雨、季节、气温……）。 */
+/** 环境输入（只给设计台预览）。以后加植物（第 6 步）；气候现在只有气温（冷热试验，2026-11-02），以后加降雨、季节……。 */
 export interface EnvironmentProfile {
   readonly forage?: unknown;
-  readonly climate?: unknown;
+  readonly climate?: { readonly temperatureC: number };
 }
 export type EnvironmentInput = keyof EnvironmentProfile;
 
@@ -290,8 +291,27 @@ const digestion: ViabilityCheck = {
   },
 };
 
-/** 按固定顺序跑的检查。 */
-export const CHECKS: readonly ViabilityCheck[] = [skeleton, digestion, reproduction];
+/** 冷热（设计台的冷热试验，2026-11-02）：要气候，没有就跳过——推演和编译结果都不受影响。公式见 thermal.ts。 */
+const thermal: ViabilityCheck = {
+  id: 'thermal',
+  needs: ['climate'],
+  evaluate(ctx) {
+    const t = thermalLoad(ctx, ctx.env!.climate!.temperatureC);
+    const vars = { temp: Math.round(t.tempC), load: round2(t.cold ? t.coldLoad : Math.max(0, t.heatLoad)) };
+    const hints: { id: HintId; vars: Record<string, string | number> }[] = [];
+    if (t.grade !== 'ok') hints.push({ id: t.cold ? 'tooCold' : 'tooHot', vars });
+    return {
+      id: 'thermal',
+      grade: t.grade,
+      margin: t.margin,
+      evidence: { tempC: t.tempC, cold: t.cold ? 1 : 0, coldLoad: t.coldLoad, heatLoad: t.heatLoad, extraHeat: t.extraHeat, delta: t.delta },
+      hints,
+    };
+  },
+};
+
+/** 按固定顺序跑的检查（新的检查加在最后）。 */
+export const CHECKS: readonly ViabilityCheck[] = [skeleton, digestion, reproduction, thermal];
 
 export function runChecks(ctx: ViabilityContext): CheckResult[] {
   return CHECKS.map((c) => {

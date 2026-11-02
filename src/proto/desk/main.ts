@@ -1,10 +1,10 @@
 import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
 import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
-import { compileDesign, makeDesignKit, partsOf, type CompiledDesign } from '../../sim';
+import { compileDesign, makeDesignKit, partsOf, type CompiledDesign, type EnvironmentProfile } from '../../sim';
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
-import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thinOf, type Sign } from './signs';
+import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thermalOf, thinOf, type Sign } from './signs';
 import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
@@ -47,6 +47,9 @@ const isPhone = (W: number, H: number): boolean => W < NARROW || H < SHORT;
 let templateId = 'cat';
 let design: Design = structuredClone(MAMMALS.find((t) => t.species === templateId)!.design);
 let look: Look = lookOf(speciesColor(templateId).body);
+/** 冷热试验的气温（°C）；null 是不试（默认）：不给气候，冷热这一项检查跳过，和以前一模一样。 */
+let climateC: number | null = null;
+const envOf = (): EnvironmentProfile | undefined => (climateC === null ? undefined : { climate: { temperatureC: climateC } });
 let compiled: CompiledDesign = compileDesign(design, kit);
 let plan: BodyPlan = deskPlanOf(design, compiled);
 let mode: Mode = 'auto';
@@ -211,7 +214,7 @@ async function main(): Promise<void> {
   let refs: { view: Container; label: Text; head: { x: number; y: number }; earM: number; setZoom(z: number): void }[] = [];
 
   function rebuild(): void {
-    compiled = compileDesign(design, kit);
+    compiled = compileDesign(design, kit, envOf());
     plan = deskPlanOf(design, compiled);
     puppet.build(plan, look);
     signs = signsOf(compiled.viability);
@@ -354,10 +357,19 @@ async function main(): Promise<void> {
       pose = { ...pose, neck: pose.neck + lame * (0.5 * load - 0.18), head: pose.head + lame * 0.2 * load, shoulderY: pose.shoulderY - lame * 0.08 * plan.legLen * load };
     }
 
-    // 呼吸：静息按体重；走、跑时加快；奔跑时一步一口气（跑步和呼吸同步，Bramble & Carrier 1983，未核对）。
+    // 冷热试验（第 3 步 b）：冷了缩着脖子发抖（时间按帧的 dt 走，逐帧截图也一样）；热了张着嘴喘，呼吸快很多。只是画面。
+    const th = thermalOf(compiled.viability);
+    if (th.shiver > 0) {
+      const q = th.shiver * Math.sin(time * Math.PI * 2 * 11);
+      pose = { ...pose, neck: pose.neck - 0.15 * th.shiver, shoulderY: pose.shoulderY + q * 0.008 * plan.legLen, hipY: pose.hipY - q * 0.006 * plan.legLen, head: pose.head + q * 0.04 };
+    }
+
+    // 呼吸：静息按体重；走、跑时加快；奔跑时一步一口气（跑步和呼吸同步，Bramble & Carrier 1983，未核对）。喘的时候快到三倍。
     const rest = breathsPerMin(gaitRules, design.bodyMassKg) / 60;
-    const bHz = gs.gait === 'gallop' || gs.gait === 'hop' ? gs.strideHz : gs.gait === 'trot' ? rest * 2.5 : gs.gait === 'walk' ? rest * 1.5 : behavior === 'lie' ? rest * 0.85 : rest;
+    const bHz0 = gs.gait === 'gallop' || gs.gait === 'hop' ? gs.strideHz : gs.gait === 'trot' ? rest * 2.5 : gs.gait === 'walk' ? rest * 1.5 : behavior === 'lie' ? rest * 0.85 : rest;
+    const bHz = bHz0 * (1 + 2 * th.pant);
     breathPhase += bHz * dt;
+    if (th.pant > 0) pose = { ...pose, jaw: Math.max(pose.jaw, th.pant * 0.3 * (0.75 + 0.25 * Math.sin(breathPhase * Math.PI * 2))) };
     puppet.apply(pose, dt, Math.sin(breathPhase * Math.PI * 2));
 
     // 舞台的空地：宽屏左边让给参数面板；手机上参数在底部的抽屉里，上面是一条读数。
@@ -861,7 +873,7 @@ async function main(): Promise<void> {
   document.addEventListener('pointerdown', (e) => {
     if (!signCard.hidden && !signCard.contains(e.target as Node) && !(e.target as HTMLElement).classList?.contains('sign')) signCard.hidden = true;
   });
-  /** 每帧：纸签挂在对应的部位旁边（骨骼在前腿上，消化在肚子上，繁殖在后腹）。 */
+  /** 每帧：纸签挂在对应的部位旁边（骨骼在前腿上，消化在肚子上，繁殖在后腹，冷热在背上方）。 */
   function placeSigns(): void {
     if (!signs.length) return;
     const at = (id: HandleId): (typeof spots)[number] | undefined => spots.find((sp) => sp.id === id);
@@ -875,6 +887,8 @@ async function main(): Promise<void> {
       skeleton: { x: toe.from.x, y: toe.from.y + (ground - toe.from.y) * 0.35 },
       digestion: { x: back.at.x, y: back.at.y + (ground - back.at.y) * 0.3 },
       reproduction: { x: tail ? (tail.from.x + back.at.x) / 2 : back.at.x - 30, y: back.at.y + (ground - back.at.y) * 0.2 },
+      // 冷热是整个身子的事（发抖、喘）：挂在背上方。
+      thermal: { x: back.at.x, y: back.at.y - (ground - back.at.y) * 0.7 },
     };
     // 挤在一起的签错开：后一张往下挪，直到不和前面的重叠。
     const placed: { x: number; y: number; w: number; h: number }[] = [];
@@ -1089,9 +1103,27 @@ async function main(): Promise<void> {
     refreshControls();
   });
   modeBox.append(el('label', {}, '速度', speedInput, speedV));
+  // 冷热试验（第 3 步 b）：拖一下气温就开始试，只给设计台预览（EnvironmentProfile.climate），不进情景。
+  const climateInput = el('input', { type: 'range', min: '-40', max: '45', step: '1', value: '20' });
+  const climateV = el('span', { className: 'v' });
+  const climateOff = el('button', { textContent: '不试', className: 'mini' });
+  climateInput.addEventListener('input', () => {
+    climateC = Number(climateInput.value);
+    rebuild();
+    refreshControls();
+  });
+  climateOff.addEventListener('click', () => {
+    climateC = null;
+    rebuild();
+    refreshControls();
+  });
+  modeBox.append(el('label', { className: 'climate' }, '气温', climateInput, climateV, climateOff));
 
   function refreshControls(): void {
     for (const s of syncs) s();
+    climateV.textContent = climateC === null ? '不试（拖一下开始）' : `${climateC} °C`;
+    climateOff.hidden = climateC === null;
+    if (climateC !== null) climateInput.value = String(climateC);
     tray.refresh();
     for (const [id, b] of tplButtons) b.classList.toggle('on', id === templateId);
     for (const [m, b] of modeButtons) b.classList.toggle('on', m === mode);
@@ -1134,6 +1166,8 @@ async function main(): Promise<void> {
     leg?: number;
     tail?: number;
     fur?: number;
+    /** 冷热试验的气温（°C），null 不试。 */
+    climate?: number | null;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
     appearance?: Design['appearance'];
@@ -1144,6 +1178,7 @@ async function main(): Promise<void> {
     if (p.leg !== undefined || p.tail !== undefined) design.shape = { ...design.shape, ...(p.leg !== undefined ? { leg: p.leg } : {}), ...(p.tail !== undefined ? { tail: p.tail } : {}) };
     if (p.parts) design.parts = { ...design.parts, ...p.parts } as Design['parts'];
     if (p.fur !== undefined) design.shape = { ...design.shape, fur: p.fur };
+    if (p.climate !== undefined) climateC = p.climate;
     if (p.allocation) design.allocation = { ...design.allocation, ...p.allocation };
     if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;

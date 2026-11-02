@@ -201,6 +201,8 @@ export const HINT_IDS = [
   'gutFailing',
   'insectivoreTooBig',
   'carnivoreTooBig',
+  'tooCold',
+  'tooHot',
 ] as const;
 
 /** 设计台提醒的模板：{占位符} 由编译器填。每个提醒都必须有，不能多。 */

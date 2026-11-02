@@ -94,7 +94,12 @@ describe('骨骼检查', () => {
 
   it('环境输入只给预览，不影响物种参数', () => {
     const d = template('rabbit');
-    expect(compileDesign(d, kit, { forage: [], climate: {} }).params).toEqual(compileDesign(d, kit).params);
+    for (const temperatureC of [-40, 0, 45]) {
+      const a = compileDesign(d, kit, { forage: [], climate: { temperatureC } });
+      const b = compileDesign(d, kit);
+      expect(a.params).toEqual(b.params);
+      expect(a.energy).toEqual(b.energy);
+    }
   });
 });
 
