@@ -53,6 +53,13 @@
     "说明": "腿型部件自带的前后腿比例（只是画面）。hindFore：后腿总长 ÷ 前腿总长，相对步行腿；hindSegs：后腿三节（大腿、小腿、跖）的比例，不写用步行腿的。跳不跳由这个几何推出来（hopIntermembral），不看部件名。",
     "leaping_legs": { "hindFore": 1.5, "hindSegs": [0.36, 0.44, 0.42] }
   },
+  "food": {
+    "说明": "每克鲜重的总能（千焦）。设计台把一天的能量开销 ÷ 消化率 ÷ 它，换成一天要吃多少克，按纸偶的比例尺堆在脚边。只是画面。",
+    "plantGrass": { "value": 4, "basis": "assumption", "confidence": "unverified", "source": "鲜草：干物质约两成、每克干物质约 18.5 千焦（饲料的总能，常用值，未核对）" },
+    "plantSelect": { "value": 12, "basis": "assumption", "confidence": "unverified", "source": "能挑着吃的（种子、嫩芽、果实混在一起）：种子干重每克约 20 千焦、含水少，嫩芽、果实含水多；取 12（假设）" },
+    "vertebrate": { "value": 7, "basis": "assumption", "confidence": "unverified", "source": "整只小型脊椎动物（鼠、鸟）每克鲜重约 6–8 千焦（未核对）" },
+    "invertebrate": { "value": 5.5, "basis": "assumption", "confidence": "unverified", "source": "昆虫、蚯蚓等每克鲜重约 4–7 千焦（干物质三成左右，未核对）" }
+  },
   "tail": {
     "说明": "尾巴的动力学（只是画面）：每节是绕上一节转的阻尼弹簧，外侧那一截的惯性、重力让它跟不上身体，甩起来一节晚一节。肌肉按姿态预先抵消重力，所以静止时尾巴就是画的样子。",
     "stiffness": { "value": 2.0, "basis": "assumption", "confidence": "unverified", "source": "每个关节的固有角频率 = stiffness × √(g ÷ 外侧那一截的长度)：长尾巴晃得慢（单摆），系数按家猫走路时尾巴的摆动看着自然调的" },
