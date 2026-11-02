@@ -90,5 +90,21 @@
     "furMin": { "value": -1, "basis": "assumption", "confidence": "unverified", "source": "毛长最短到短毛的 10^-1 = 0.1 倍：再短就是裸的（裸鼹鼠、河马），保温只剩皮肤和贴身的空气层" },
     "furMax": { "value": 0.6, "basis": "assumption", "confidence": "unverified", "source": "最长到短毛的 10^0.6 ≈ 4 倍（厚绒毛约 2 倍）：麝牛、北极狐这类长毛兽和同体型短毛兽的差距大致在这个范围（未核对）" },
     "furSkinShare": { "value": 0.3, "basis": "assumption", "confidence": "unverified", "source": "短毛兽的保温里，皮肤、皮下和贴身的空气层占约三成，其余是毛层（Scholander 等 1950 Biol. Bull. 99:225：保温大致随毛厚线性增加，毛很薄时只剩这一份；比例未核对）。和厚绒毛卡的 0.93 一起反解出保温开销的份额" }
+  },
+  "thermal": {
+    "bodyTempMammal": { "value": 37.5, "basis": "data", "confidence": "2+", "source": "有胎盘类兽的体温多在 36–39 °C（Clarke & Rothery 2008 J Anim Ecol 77:1093 的汇总，未核对原表）" },
+    "bodyTempBird": { "value": 40, "basis": "data", "confidence": "2+", "source": "鸟的体温多在 39–42 °C（同上）" },
+    "delta0": { "value": 23.4, "basis": "assumption", "confidence": "unverified", "source": "4 千克、短毛的兽，体温和\"不用多产热也保得住体温\"的气温之差（°C）。Scholander 等 1950 Biol. Bull. 99:259 的模型：静息产热 = 热导 × (体温 − 气温)；按两条定：短毛的猫在 −30 °C 以下才发抖得厉害，17 条现有技术在 0–25 °C 都没问题（最紧的是小家鼠在 0 °C，余量约 1.02）" },
+    "massExp": { "value": 0.08, "basis": "assumption", "confidence": "unverified", "source": "δ 随体重的指数。只按面积体积比（基础代谢 ∝ M^0.75、热导 ∝ M^0.5，Herreid & Kessel 1967）是 0.25，那样 20 克的小鼠在 20 °C 就冻得受不了；真实的小兽靠窝、挤在一起、蛰伏和更高的产热上限补回大半。取 0.08，按 17 条现有技术校准" },
+    "birdInsulation": { "value": 1.5, "basis": "assumption", "confidence": "unverified", "source": "羽毛的保温按短毛的 1.5 倍算（鸟的羽毛层一般比同体型兽的毛厚，未核对）；羽毛还不能调" },
+    "activeHeat": { "value": 2, "basis": "assumption", "confidence": "unverified", "source": "动起来时的产热是基础代谢的 2 倍（野外代谢率约为基础代谢的 2–3 倍，Nagy 1987；取偏低的值，热的一头看的是白天活动时）" },
+    "vasoFactor": { "value": 4, "basis": "assumption", "confidence": "unverified", "source": "热的时候血管扩张、摊开身子、贴凉地，干散热最多能到静息时的 4 倍（耳、腹这些毛薄的地方；耳的面积进推演以后从这里分出去）" },
+    "coldStrained": { "value": 2.5, "basis": "assumption", "confidence": "unverified", "source": "静息时保体温要产基础代谢 2.5 倍以上的热：一直在发抖，吃的要多很多（\"吃力\"）" },
+    "coldFailing": { "value": 4, "basis": "assumption", "confidence": "unverified", "source": "4 倍以上：接近能持续的产热上限，撑不了多久（\"不行\"）" },
+    "coldFatal": { "value": 5.5, "basis": "assumption", "confidence": "unverified", "source": "5.5 倍以上：超过多数兽的最大产热（summit metabolism 约为基础代谢的 4–7 倍，未核对），体温掉下去（\"致命\"）" },
+    "heatStrained": { "value": 1, "basis": "assumption", "confidence": "unverified", "source": "动起来时要靠喘、出汗带走的热超过基础代谢的 1 倍：喘得厉害（\"吃力\"）" },
+    "heatFailing": { "value": 1.75, "basis": "assumption", "confidence": "unverified", "source": "1.75 倍：蒸发散热快到头了，只能停下来躲阴凉（\"不行\"）" },
+    "heatFatal": { "value": 2.5, "basis": "assumption", "confidence": "unverified", "source": "2.5 倍：散不掉，会中暑（\"致命\"）" }
   }
+
 }

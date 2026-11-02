@@ -390,7 +390,8 @@ export class DesignDesk {
       ...(p.body?.speed !== undefined ? [['最高速度', `一般的 ${p.body.speed.toFixed(2)} 倍（追捕、逃跑）`] as [string, string]] : []),
       ['家域', `${p.movement.homeRangeKm2} 平方公里`],
       ['移动', move || '—'],
-      ...c.viability.map((r): [string, string] => [CHECK_NAMES[r.id], viabilityText(r)]),
+      // 跳过的检查（要环境输入、这里没给的：冷热）不列。
+      ...c.viability.filter((r) => !r.skipped).map((r): [string, string] => [CHECK_NAMES[r.id], viabilityText(r)]),
     ];
     for (const [k, v] of rows) dl.append(textEl('dt', k), textEl('dd', v));
     const near = nearest(traitsOf(p), this.priorArt.values(), 1)[0];
@@ -411,7 +412,7 @@ export class DesignDesk {
   }
 }
 
-const CHECK_NAMES: Record<CheckId, string> = { skeleton: '骨骼', digestion: '消化', reproduction: '繁殖' };
+const CHECK_NAMES: Record<CheckId, string> = { skeleton: '骨骼', digestion: '消化', reproduction: '繁殖', thermal: '冷热' };
 const SKELETON_GRADES: Record<Grade, string> = { ok: '能跑', strained: '跑不动', failing: '走不动', fatal: '站不住' };
 
 /** 推导属性里的一行：骨骼写安全系数和等级（只说情况，提醒在批注里）。 */

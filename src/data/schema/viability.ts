@@ -106,5 +106,25 @@ export const ViabilityRulesSchema = z.strictObject({
     furMax: ThresholdSchema,
     furSkinShare: ThresholdSchema,
   }),
+  /**
+   * 冷热（2026-11-02，设计台的冷热试验，只给预览、不进情景）：Scholander–Irving 的体温调节模型。
+   * 体温和下临界温度之差 δ = delta0 × (体重 / 4 千克)^massExp × 保温；冷的一头看静息时要产多少热（体温 − 气温）/ δ，
+   * 热的一头看动起来的产热 activeHeat 减去最多能干散掉的 vasoFactor × (体温 − 气温) / δ。都以基础代谢为单位。见 sim/thermal.ts。
+   */
+  thermal: z.strictObject({
+    bodyTempMammal: ThresholdSchema,
+    bodyTempBird: ThresholdSchema,
+    delta0: ThresholdSchema,
+    massExp: ThresholdSchema,
+    birdInsulation: ThresholdSchema,
+    activeHeat: ThresholdSchema,
+    vasoFactor: ThresholdSchema,
+    coldStrained: ThresholdSchema,
+    coldFailing: ThresholdSchema,
+    coldFatal: ThresholdSchema,
+    heatStrained: ThresholdSchema,
+    heatFailing: ThresholdSchema,
+    heatFatal: ThresholdSchema,
+  }),
 });
 export type ViabilityRules = z.infer<typeof ViabilityRulesSchema>;
