@@ -2,6 +2,7 @@ import type { Container, Texture } from 'pixi.js';
 import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
 import { boneWarp, compose, mapShape, reach, regionStretch, scale, type P, type Shape, type Warp } from './fit';
 import { earShape, fitEar, type EarModel } from './ear';
+import { fringe, inside, teethFor } from './fringe';
 import type { HandleSpot } from './handles';
 import { pendulumOmega, springStep, type Spring } from './gait';
 import { TailChain, idleSwish } from './tail';
@@ -78,6 +79,11 @@ export class CutoutPuppet {
   private readonly earModels = new Map<string, EarModel>();
   /** 近侧耳上把手的位置（零件自己的坐标）：耳尖、耳根中点、耳根后缘；unit 是耳长 = 1 时露出头那一截的长度。 */
   private earSpots: { tip: P; root: P; back: P; unit: number } | null = null;
+  /** 毛长的把手：肚子底下那一点和朝下的方向（胸片的零件坐标）、毛长倍数每多 1 毛尖往外多长（零件坐标里的长度），现在的毛长倍数。 */
+  private belly: { from: P; dir: P; unit: number; k: number } | null = null;
+  /** 每片长毛的零件有几簇毛（按原样的周长定，零件拉伸时不变）、每个顶点长不长毛簇（压在别的长毛零件上的不长）。 */
+  private readonly teeth = new Map<string, number>();
+  private readonly furMask = new Map<string, number[]>();
   /** 这一帧的把手（handles.ts），apply 里记下。 */
   private spots: HandleSpot[] = [];
   private lastHead = 0;
@@ -348,8 +354,75 @@ export class CutoutPuppet {
       if (i === 0) pin(id, rig.hind, so(rig.hind, 'tail'), lapW(id, kW));
       else pin(id, this.tail[i - 1]!, so(this.tail[i - 1]!, 'end'), lapW(id, kW));
     });
+    // 毛边（第 3 步 b）：躯干、头、尾长毛（腿是细长的纸片，长了毛簇关节处很乱，不长）。
+    // 毛簇最长 = 毛长倍数多出来的那截 × 体长的 2%，轮廓整体再胀出它的三成。短毛和更短的不长毛边。
+    const bodyPx = plan.bodyLen / this.s;
+    const kFur = Math.pow(10, plan.fur);
+    const unit = 0.02 * bodyPx;
+    const amp = Math.max(0, kFur - 1) * unit;
+    // 毛长的把手：胸片在铆钉附近最低的那一点（成品图的"下"），在长毛边以前的轮廓上找。
+    const chestPart = this.part(rig.chest);
+    const chestSh = shapes.get(rig.chest)!;
+    let bellyAt: P | null = null;
+    let lowest = -Infinity;
+    for (let k = 0; k < chestSh.outline.length; k += 2) {
+      const q: P = [chestSh.outline[k]!, chestSh.outline[k + 1]!];
+      const [X, Y] = rot(q, chestPart.angle);
+      if (Math.abs(X) < 0.06 * bodyPx && Y > lowest) {
+        lowest = Y;
+        bellyAt = q;
+      }
+    }
+    // 把手在肚子底下：毛长倍数 k 时离轮廓 (k − 1) × 单位；往下拖是毛长，往上推进身体里是毛短。
+    // 单位是毛簇的 2.5 倍（把手比毛尖走得远）：毛簇只有体长的几个百分点，按毛尖算，手指一动就到头了。
+    const down = rot([0, 1], -chestPart.angle);
+    this.belly = bellyAt ? { from: bellyAt, dir: down, unit: unit * 2.5, k: kFur } : null;
+    if (amp > 0) {
+      const step = (0.035 * ref.bodyLen) / this.s;
+      const furry = [rig.hind, rig.chest, rig.head, ...this.tail];
+      for (const id of furry) {
+        const sh = shapes.get(id);
+        if (!sh) continue;
+        let n = this.teeth.get(id);
+        if (n === undefined) this.teeth.set(id, (n = teethFor(this.part(id).outline, step)));
+        const p = this.part(id);
+        // 脸上的毛短一些（头上的毛簇只有身上的六成），不然毛一长就像鬃毛。
+        const a = id === rig.head ? amp * 0.6 : amp;
+        shapes.set(id, { ...sh, outline: fringe(sh.outline, a, a * 0.3, { teeth: n, flow: rot([-1, 0], -p.angle), weights: this.maskOf(id, furry) }) });
+      }
+    }
     for (const [id, sh] of shapes) this.cut.setShape(id, sh, rivets.get(id) ?? []);
     this.setScale(this.pxPerM);
+  }
+
+  /**
+   * 零件的每个顶点长不长毛簇：在成品图上，落在别的长毛零件里面的顶点是接缝（躯干中间、尾节之间），不长；
+   * 前后各几个顶点平滑过渡，接缝两头不出台阶。按原样算一次（贴骨头只挪顶点，不改顶点的顺序）。
+   */
+  private maskOf(id: string, furry: readonly string[]): number[] {
+    const key = `${id}|${furry.join(',')}`;
+    const hit = this.furMask.get(key);
+    if (hit) return hit;
+    const img = (q: string): number[] => {
+      const p = this.part(q);
+      const out: number[] = [];
+      for (let k = 0; k < p.outline.length; k += 2) out.push(...add(p.pivot, rot([p.outline[k]!, p.outline[k + 1]!], p.angle)));
+      return out;
+    };
+    const mine = img(id);
+    const others = furry.filter((q) => q !== id).map(img);
+    const n = mine.length / 2;
+    const raw: number[] = [];
+    for (let k = 0; k < n; k++) raw.push(others.some((o) => inside(o, mine[2 * k]!, mine[2 * k + 1]!)) ? 0 : 1);
+    const R = 3;
+    const w: number[] = [];
+    for (let k = 0; k < n; k++) {
+      let m = 1;
+      for (let j = -R; j <= R; j++) m = Math.min(m, raw[(k + j + n) % n]! + Math.abs(j) / (R + 1));
+      w.push(Math.min(1, m));
+    }
+    this.furMask.set(key, w);
+    return w;
   }
 
   /** 近侧的耳（rig.ears 里名字带 near 的那片，没有就取最后一片）。 */
@@ -462,6 +535,11 @@ export class CutoutPuppet {
       this.lastHead = headAng;
     }
     const spots: HandleSpot[] = [{ id: 'back', at: midV, from: [midV[0], 0] }];
+    const bl = this.belly;
+    if (bl && !plan.bird) {
+      const off = (bl.k - 1) * bl.unit;
+      spots.push({ id: 'fur', at: at(midV, rChest, add(bl.from, [bl.dir[0] * off, bl.dir[1] * off])), from: at(midV, rChest, bl.from), unit: bl.unit });
+    }
     rig.ears.forEach((id, i) => {
       const earAt = at(headV, rHead, so(rig.head, id));
       const earRot = this.part(id).angle + aHead + this.earTurn[i]! + this.earHinge[i]! + this.earSprings[i]!.x;

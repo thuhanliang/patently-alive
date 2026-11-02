@@ -61,6 +61,8 @@ export interface BodyPlan {
   /** 尾巴的动力学参数（gait.json 的 tail）。 */
   tailMotion: { stiffness: number; damping: number; idle: number };
   parts: { coat: string; mouth: string; limbs: string; tail: string; digestion: string };
+  /** 毛长（以 10 为底的对数，短毛 = 0；sim/fur.ts）：设计写了用设计的，不写用体表卡的点；鸟是 0。画毛边用。 */
+  fur: number;
   relative: Readonly<Record<BodySystem, number>>;
 }
 
@@ -96,7 +98,7 @@ const BELLY: Record<string, number> = { ruminant: 1.25, hindgut_fermenter: 1.15,
 
 export function bodyPlan(
   design: Design,
-  parts: Readonly<Record<'coat' | 'mouth' | 'limbs' | 'tail' | 'digestion', Pick<Part, 'id'>>>,
+  parts: Readonly<Record<'coat' | 'mouth' | 'limbs' | 'tail' | 'digestion', Pick<Part, 'id' | 'fur'>>>,
   bird: boolean,
   viability: ViabilityRules,
   gait: GaitRules,
@@ -148,6 +150,7 @@ export function bodyPlan(
     tailSegs: tail.length < 0.2 ? 1 : parts.tail.id === 'bushy_tail' ? 2 : tail.length < 0.5 ? 3 : 5,
     tailMotion: { stiffness: gait.tail.stiffness.value, damping: gait.tail.damping.value, idle: gait.tail.idle.value },
     parts: { coat: parts.coat.id, mouth: parts.mouth.id, limbs: parts.limbs.id, tail: parts.tail.id, digestion: parts.digestion.id },
+    fur: bird ? 0 : Math.min(viability.shape.furMax.value, Math.max(viability.shape.furMin.value, design.shape?.fur ?? parts.coat.fur ?? 0)),
     relative: rel,
   };
 }
