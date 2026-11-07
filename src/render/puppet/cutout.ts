@@ -86,6 +86,11 @@ export class Cutout {
   readonly view = new Container();
   private readonly pieces = new Map<string, Piece>();
   private readonly byZ: Piece[] = [];
+  /**
+   * 细节的比例：白边、影子的偏移、纸纹、铆钉的描边按原图的像素画，零件缩小（10 克的小兽）时它们要一起缩，
+   * 不然白边和铆钉比身体还粗。1 是原图的大小；setDetail 以后下一次 setShape 生效。
+   */
+  private detail = 1;
 
   constructor(
     readonly data: CutData,
@@ -156,7 +161,13 @@ export class Cutout {
     piece.grain.height = b.height + 40;
     piece.grain.position.set(b.x - 20, b.y - 20);
     piece.rivets.clear();
-    if (!this.flat) for (const [x, y, r] of rivets) drawRivet(piece.rivets, x, y, r);
+    if (!this.flat) for (const [x, y, r] of rivets) drawRivet(piece.rivets, x, y, r, this.detail);
+  }
+
+  /** 细节的比例（见 detail）：零件按原图缩放了多少倍就给多少。 */
+  setDetail(k: number): void {
+    this.detail = k;
+    for (const piece of this.byZ) piece.grain.tileScale.set(k);
   }
 
   /** 显示或藏起一片零件（尾巴节数比成品图少时，多出来的藏起来）。 */
@@ -182,7 +193,7 @@ export class Cutout {
     piece.shadow.clear().poly(outline).fill({ color: 0x000000, alpha: SHADOW.alpha });
     // 白边：轮廓描粗。
     const rim = this.flat ? dye.main : k === 1 ? RIM : darken(RIM, k);
-    piece.rim.clear().poly(outline).fill(rim).stroke({ width: RIM_W * 2, color: rim, join: 'round' });
+    piece.rim.clear().poly(outline).fill(rim).stroke({ width: RIM_W * 2 * this.detail, color: rim, join: 'round' });
     piece.body.clear().poly(outline).fill(dye.main);
     for (const s of stripe) piece.body.poly(s).fill(dye.stripe);
     for (const s of pale) piece.body.poly(s).fill(dye.pale);
@@ -274,7 +285,7 @@ export class Cutout {
     piece.view.position.set(x, y);
     piece.view.rotation = rotation;
     piece.view.scale.set(1, sy);
-    piece.shadow.position.set(x + SHADOW.x, y + SHADOW.y);
+    piece.shadow.position.set(x + SHADOW.x * this.detail, y + SHADOW.y * this.detail);
     piece.shadow.rotation = rotation;
   }
 
@@ -313,7 +324,7 @@ export class Cutout {
       const rot = piece.part.angle + w.acc;
       piece.view.position.set(w.x, w.y);
       piece.view.rotation = rot;
-      piece.shadow.position.set(w.x + SHADOW.x, w.y + SHADOW.y);
+      piece.shadow.position.set(w.x + SHADOW.x * this.detail, w.y + SHADOW.y * this.detail);
       piece.shadow.rotation = rot;
     }
   }
@@ -332,15 +343,15 @@ function darken(c: number, k: number): number {
   return (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
 }
 
-/** 黄铜铆钉：铜圈 + 白色的钉头高光。r 是铜圈的半径。 */
-function drawRivet(g: Graphics, x: number, y: number, r: number): Graphics {
+/** 黄铜铆钉：铜圈 + 白色的钉头高光。r 是铜圈的半径；k 是细节的比例（描边、影子跟着缩放）。 */
+function drawRivet(g: Graphics, x: number, y: number, r: number, k = 1): Graphics {
   return g
-    .circle(x + 1, y + 1.5, r)
+    .circle(x + 1 * k, y + 1.5 * k, r)
     .fill({ color: 0x000000, alpha: 0.3 })
     .circle(x, y, r)
     .fill(BRAD)
-    .stroke({ width: 1.5, color: 0x6b5222 })
+    .stroke({ width: 1.5 * k, color: 0x6b5222 })
     .circle(x, y, r * 0.45)
     .fill(0xfbf8f0)
-    .stroke({ width: 1, color: 0x8a6d2e });
+    .stroke({ width: 1 * k, color: 0x8a6d2e });
 }
