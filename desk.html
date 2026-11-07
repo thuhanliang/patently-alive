@@ -196,6 +196,81 @@
       #signCard[hidden] {
         display: none;
       }
+      /* 能量小票（第 4 步 a）：一条米白的收银纸，数字对齐，底边撕开的锯齿；点它收起来。 */
+      #receipt {
+        z-index: 4;
+        box-sizing: border-box;
+        padding: 10px 12px 16px;
+        border-radius: 0;
+        background: #fbf7ec;
+        color: #4a3a28;
+        font-size: 12px;
+        line-height: 1.55;
+        cursor: pointer;
+        -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - 6px) no-repeat, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 10px 6px repeat-x;
+        mask: linear-gradient(#000 0 0) top / 100% calc(100% - 6px) no-repeat, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 10px 6px repeat-x;
+      }
+      #receipt[hidden] {
+        display: none;
+      }
+      #receipt .rhead {
+        text-align: center;
+        letter-spacing: 1px;
+        color: #7a6248;
+        padding-bottom: 4px;
+        border-bottom: 1px dashed #b8a27f;
+        margin-bottom: 4px;
+      }
+      #receipt .rrow {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 6px;
+        align-items: baseline;
+        border-radius: 2px;
+        transition: background 0.4s;
+      }
+      #receipt .rl {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #receipt .rv {
+        font-variant-numeric: tabular-nums;
+        min-width: 3.2em;
+        text-align: right;
+      }
+      #receipt .rd {
+        font-size: 11px;
+        color: #2f5d8c;
+        font-variant-numeric: tabular-nums;
+      }
+      #receipt .rrow.moved {
+        background: rgba(47, 93, 140, 0.1);
+      }
+      #receipt .rrow.total {
+        font-weight: 600;
+      }
+      #receipt .rrow.note,
+      #receipt .rnote {
+        color: #7a6248;
+        font-size: 11px;
+      }
+      #receipt .rrule {
+        border-top: 1px dashed #b8a27f;
+        margin: 4px 0;
+      }
+      #receipt.printing .rrow,
+      #receipt.printing .rnote,
+      #receipt.printing .rrule {
+        animation: print 0.18s both;
+        animation-delay: calc(var(--i, 0) * 25ms);
+      }
+      @keyframes print {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+      }
       #readout {
         right: 16px;
         bottom: 16px;
@@ -358,6 +433,7 @@
     <button id="viewReset" type="button" hidden>复位视图</button>
     <div id="signs"></div>
     <div id="signCard" class="card" hidden></div>
+    <div id="receipt" class="card" hidden title="点一下收起来"></div>
     <script type="module" src="/src/proto/desk/main.ts"></script>
   </body>
 </html>

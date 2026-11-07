@@ -13,7 +13,7 @@ import type { CompiledDesign } from '../../sim';
 
 export type FoodKind = 'plant' | 'vertebrate' | 'invertebrate';
 export const FOOD_KINDS: readonly FoodKind[] = ['plant', 'vertebrate', 'invertebrate'];
-const FOOD_NAMES: Record<FoodKind, string> = { plant: '植物', vertebrate: '肉', invertebrate: '虫' };
+export const FOOD_NAMES: Record<FoodKind, string> = { plant: '植物', vertebrate: '肉', invertebrate: '虫' };
 /** 田野笔记的平涂色：植物草绿、肉赭红、虫深褐（不用朱红，朱红留给警报）。 */
 const FOOD_COLORS: Record<FoodKind, number> = { plant: 0xa9b67a, vertebrate: 0xb9796a, invertebrate: 0x7b6650 };
 const INK = 0x5a4632;
@@ -52,6 +52,10 @@ export class FoodPile {
   private readonly label = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44, align: 'center' } });
   /** 标签底下的一小块纸（压在纸偶上面时也读得清）。 */
   private readonly plate = new Graphics();
+  /** 这一帧的小堆和标签占的地方（屏幕坐标）：点它打开能量小票。 */
+  box = { x: 0, y: 0, w: 0, h: 0 };
+  /** 标签的位置（小票从它上面打出来）。 */
+  labelBox = { x: 0, y: 0, w: 0, h: 0 };
 
   constructor() {
     this.view.addChild(this.g, this.plate, this.label);
@@ -94,5 +98,15 @@ export class FoodPile {
     const ly = Math.round(beside ? gy - lh - 4 : top - lh - 6);
     this.label.position.set(lx, ly);
     this.plate.clear().roundRect(lx - 4, ly - 2, lw + 8, lh + 4, 3).fill({ color: 0xf6eedc, alpha: 0.82 });
+    this.labelBox = { x: lx - 4, y: ly - 2, w: lw + 8, h: lh + 4 };
+    const x0 = Math.min(x, lx - 4);
+    const y0 = Math.min(top, ly - 2);
+    this.box = { x: x0, y: y0, w: Math.max(cx, lx + lw + 4) - x0, h: gy - y0 };
+  }
+
+  /** 点在小堆或标签上吗（pad 是手指的余量）。 */
+  hit(px: number, py: number, pad = 6): boolean {
+    const b = this.box;
+    return px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad;
   }
 }

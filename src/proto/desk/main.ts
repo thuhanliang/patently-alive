@@ -5,6 +5,7 @@ import { compileDesign, makeDesignKit, partsOf, type CompiledDesign, type Enviro
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
 import { FoodPile, dailyFood, type DailyFood } from './food';
+import { Receipt, receiptRows } from './receipt';
 import { drawXray } from './xray';
 import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thermalOf, thinOf, type Sign } from './signs';
 import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
@@ -187,6 +188,10 @@ async function main(): Promise<void> {
   const pie = new AllocPie(SYSTEM_NAMES);
   // 一天的饭量（第 3 步 c）：按纸偶的比例尺堆在它前脚前面。
   const foodPile = new FoodPile();
+  // 能量小票（第 4 步 a）：点饭堆打开，开着时改什么都当场重打。
+  const receipt = new Receipt(document.getElementById('receipt')!);
+  const toggleReceipt = (on = !receipt.open): void => (on ? receipt.show(receiptRows(compiled, food), performance.now()) : receipt.hide());
+  receipt.el.addEventListener('click', () => toggleReceipt(false));
   let food: DailyFood = dailyFood(compiled, partsOf(design, kit).mouth.selective === true, gaitRules.food);
   // X 光层（第 3 步 c）：纸偶淡下去，画骨头和肌肉。只有切图纸偶报得出骨架。
   const xrayInk = new Graphics();
@@ -225,6 +230,7 @@ async function main(): Promise<void> {
   function rebuild(): void {
     compiled = compileDesign(design, kit, envOf());
     food = dailyFood(compiled, partsOf(design, kit).mouth.selective === true, gaitRules.food);
+    if (receipt.open) receipt.update(receiptRows(compiled, food), performance.now());
     plan = deskPlanOf(design, compiled);
     puppet.build(plan, look);
     signs = signsOf(compiled.viability);
@@ -450,6 +456,7 @@ async function main(): Promise<void> {
     drawHandles(dt);
     drawSnap();
     placeSigns();
+    placeReceipt(gy);
     // 纸饼：宽屏放在右上（提示条下面），手机放在读数下面的右上角（纸偶在空地的下半部分）。
     if (narrow && H < SHORT) {
       // 横着拿：空地矮，纸饼放在左边的空处（纸偶站在中间）。
@@ -599,7 +606,13 @@ async function main(): Promise<void> {
     // 触屏没有悬停：点一下纸偶，把手亮出来，一会儿不动就淡掉。
     const t = tapStart;
     tapStart = null;
-    if (t && e.type === 'pointerup' && e.pointerType !== 'mouse' && t.moved < 10 && performance.now() - t.t < 400 && onPuppet(local(e), 12)) showHandles(4000);
+    const tapped = t && e.type === 'pointerup' && t.moved < 10 && performance.now() - t.t < 400;
+    // 点一下饭堆：打开 / 收起能量小票。
+    if (tapped && foodPile.hit(local(e).x, local(e).y, e.pointerType === 'mouse' ? 4 : 12)) {
+      toggleReceipt();
+      return;
+    }
+    if (tapped && e.pointerType !== 'mouse' && onPuppet(local(e), 12)) showHandles(4000);
   };
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', up);
@@ -691,7 +704,7 @@ async function main(): Promise<void> {
     mouseInside = !pieHover && onPuppet(p, 24);
     if (mouseInside) showHandles(1200);
     hoverId = pieHover ? null : (pickHandle(p, 'mouse')?.id ?? null);
-    canvas.style.cursor = hoverId || pieHover ? 'grab' : '';
+    canvas.style.cursor = hoverId || pieHover ? 'grab' : foodPile.hit(p.x, p.y, 4) ? 'pointer' : '';
   };
   // ---- 体重分配纸饼（第 2 步 b）：按住一瓣往外拖，多给它；总量不变，别的瓣一起缩。 ----
   /** 按下时手指离中心多远、那一瓣多大（拖的时候保持手指和瓣边的距离）。 */
@@ -904,6 +917,37 @@ async function main(): Promise<void> {
   document.addEventListener('pointerdown', (e) => {
     if (!signCard.hidden && !signCard.contains(e.target as Node) && !(e.target as HTMLElement).classList?.contains('sign')) signCard.hidden = true;
   });
+  /** 每帧：小票从饭堆的标签上方打出来；上面放不下就放在地面底下。手停下来够久了，▲ ▼ 淡掉。 */
+  function placeReceipt(gy: number): void {
+    if (!receipt.open) return;
+    receipt.tick(performance.now());
+    const el = receipt.el;
+    const cr = canvas.getBoundingClientRect();
+    const w = Math.min(280, window.innerWidth - 16);
+    el.style.width = `${w}px`;
+    const lb = foodPile.labelBox;
+    const h = el.offsetHeight;
+    const pb = puppet.view.getBounds();
+    const pRight = cr.left + pb.maxX;
+    const pTop = cr.top + pb.minY;
+    const labelTop = cr.top + lb.y;
+    const centred = Math.min(window.innerWidth - w - 8, Math.max(8, cr.left + lb.x + lb.w / 2 - w / 2));
+    // 不盖住纸偶：先放在纸偶右边、压着饭堆的标签上方（电脑）；放不下就放在纸偶头顶上面（手机竖着）；再不行放在地面底下。
+    let left: number;
+    let top: number;
+    if (pRight + 8 + w <= window.innerWidth - 8 && labelTop - h - 6 >= 8) {
+      left = Math.max(pRight + 8, centred);
+      top = labelTop - h - 6;
+    } else if (pTop - h - 8 >= 8) {
+      left = centred;
+      top = pTop - h - 8;
+    } else {
+      left = centred;
+      top = Math.max(8, Math.min(window.innerHeight - h - 8, cr.top + gy + 30));
+    }
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
   /** 每帧：纸签挂在对应的部位旁边（骨骼在前腿上，消化在肚子上，繁殖在后腹，冷热在背上方）。 */
   function placeSigns(): void {
     if (!signs.length) return;
@@ -1208,6 +1252,8 @@ async function main(): Promise<void> {
     /** 冷热试验的气温（°C），null 不试。 */
     climate?: number | null;
     xray?: boolean;
+    /** 能量小票开着吗。 */
+    receipt?: boolean;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
     appearance?: Design['appearance'];
@@ -1224,6 +1270,7 @@ async function main(): Promise<void> {
     if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;
     rebuild();
+    if (p.receipt !== undefined) toggleReceipt(p.receipt);
     if (p.mode) applyMode(p.mode);
     refreshControls();
   }
