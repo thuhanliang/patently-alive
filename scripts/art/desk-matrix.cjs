@@ -1,7 +1,7 @@
-// handoff/008 的现状图：设计台在一组参数下的截图（先 npx vite --port 5179）。用法：node scripts/art/desk-matrix.cjs <输出目录> desk|phone
+// handoff/008 的现状图：设计台在一组参数下的截图（先 npx vite --port 5179）。用法：node scripts/art/desk-matrix.cjs <输出目录> desk|phone [只截名字匹配这个正则的]
 const { chromium, devices } = require('playwright');
 (async () => {
-  const [out, kind] = process.argv.slice(2);
+  const [out, kind, only] = process.argv.slice(2);
   const phone = kind === 'phone';
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const ctx = await b.newContext(phone ? { ...devices['iPhone 13'], deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
@@ -44,6 +44,7 @@ const { chromium, devices } = require('playwright');
         ['S03-fatal-weight', { mass: 1000, leg: 0.2, allocation: { skeleton: 0.4 } }],
       ];
   for (const [name, s, how] of shots) {
+    if (only && !new RegExp(only).test(name)) continue;
     await p.evaluate(([B, s]) => { window.desk.set({ ...B, ...s, allocation: { ...B.allocation, ...(s.allocation || {}) }, appearance: { ...B.appearance, ...(s.appearance || {}) }, parts: { mouth: 'carnassials', limbs: 'climbing_claws', tail: 'balance_tail', ...(s.parts || {}) } }); for (let i = 0; i < 150; i++) window.desk.step(1 / 30); }, [BASE, s]);
     if (!how && !phone) { await p.mouse.move(100, 100); await p.evaluate(() => { for (let i = 0; i < 60; i++) window.desk.step(1 / 30); }); }
     if (how === 'handles' || how === 'drag') {

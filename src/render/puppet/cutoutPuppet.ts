@@ -358,9 +358,11 @@ export class CutoutPuppet {
     });
     // 毛边（第 3 步 b）：躯干、头、尾长毛（腿是细长的纸片，长了毛簇关节处很乱，不长）。
     // 毛簇最长 = 毛长倍数多出来的那截 × 体长的 2%，轮廓整体再胀出它的三成。短毛和更短的不长毛边。
+    // 毛的长短不跟着体长成正比：小兽的毛相对长、大兽的相对短（鼠的毛约体长的一成，猫约 7%，野牛约 3%），
+    // 按体长的 −0.4 次方修一下，夹在 0.4–1.6 倍之间；不然 1000 千克的长毛兽身上是一圈尖刺。只是画面。
     const bodyPx = plan.bodyLen / this.s;
     const kFur = Math.pow(10, plan.fur);
-    const unit = 0.02 * bodyPx;
+    const unit = 0.02 * bodyPx * Math.min(1.6, Math.max(0.4, Math.pow(kb, -0.4)));
     const amp = Math.max(0, kFur - 1) * unit;
     // 毛长的把手：胸片在铆钉附近最低的那一点（成品图的"下"），在长毛边以前的轮廓上找。
     const chestPart = this.part(rig.chest);
@@ -393,6 +395,8 @@ export class CutoutPuppet {
         shapes.set(id, { ...sh, outline: fringe(sh.outline, a, a * 0.3, { teeth: n, flow: rot([-1, 0], -p.angle), weights: this.maskOf(id, furry) }) });
       }
     }
+    // 白边、影子、纸纹、铆钉的描边跟着零件一起缩放（10 克的小兽不被白边淹没）。
+    this.cut.setDetail(kb);
     for (const [id, sh] of shapes) this.cut.setShape(id, sh, rivets.get(id) ?? []);
     this.setScale(this.pxPerM);
   }

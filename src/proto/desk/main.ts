@@ -417,12 +417,14 @@ async function main(): Promise<void> {
     puppet.view.position.set(px, gy);
     rebuildRefs();
     let prevLabel: Text | null = null;
+    const pBox = puppet.view.getBounds();
     for (const r of refs) {
       r.setZoom(z);
       r.view.position.set(px, gy);
-      // 名字签挂在剪影的头上方；和前一张的签挤在一起时往上挪。
+      // 名字签挂在剪影的头上方；会压到纸偶身上时挪到纸偶头顶上面；和前一张的签挤在一起时往上挪。
       let y = gy - (r.head.y + r.earM) * z - 18;
       const x = px + r.head.x * z - r.label.width / 2;
+      if (x < pBox.maxX && x + r.label.width > pBox.minX && y + r.label.height > pBox.minY && y < pBox.maxY) y = pBox.minY - r.label.height - 4;
       if (prevLabel && Math.abs(prevLabel.y - y) < 16 && Math.abs(prevLabel.x - x) < prevLabel.width) y = prevLabel.y - 16;
       r.label.position.set(x, y);
       prevLabel = r.label;
@@ -887,8 +889,17 @@ async function main(): Promise<void> {
     const r = tag.getBoundingClientRect();
     const w = Math.min(300, window.innerWidth - 16);
     signCard.style.width = `${w}px`;
-    signCard.style.left = `${Math.round(Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2)))}px`;
-    signCard.style.top = `${Math.round(Math.max(8, r.top - signCard.offsetHeight - 8))}px`;
+    // 卡片有内边距：按量出来的实际宽度夹在屏幕里（手机上不然会出右边）。
+    const cw = signCard.offsetWidth;
+    signCard.style.left = `${Math.round(Math.min(window.innerWidth - cw - 8, Math.max(8, r.left + r.width / 2 - cw / 2)))}px`;
+    // 说明卡不盖住纸偶：先放在纸偶头顶上面，放不下就放在脚下面，都放不下才贴着签（手机上 1000 千克的纸偶很矮，卡会把它整个盖住）。
+    const ch = signCard.offsetHeight;
+    const cr = canvas.getBoundingClientRect();
+    const pb = puppet.view.getBounds();
+    const pTop = cr.top + pb.minY;
+    const pBottom = cr.top + pb.maxY;
+    const top = pTop - ch - 8 >= 8 ? pTop - ch - 8 : pBottom + 8 + ch <= window.innerHeight - 8 ? pBottom + 8 : Math.max(8, r.top - ch - 8);
+    signCard.style.top = `${Math.round(top)}px`;
   }
   document.addEventListener('pointerdown', (e) => {
     if (!signCard.hidden && !signCard.contains(e.target as Node) && !(e.target as HTMLElement).classList?.contains('sign')) signCard.hidden = true;
