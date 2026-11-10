@@ -10,8 +10,15 @@ import { CaseSchema } from './case';
  * 委托目标：情景只能选用引擎定义的指标、给目标值（铁律 4），评分公式在 src/sim/score.ts。
  */
 export const GoalSchema = z.object({
-  /** 要恢复的物种。 */
+  /** 要恢复的物种；"立足"型的委托（见 establish）写 'designs'：考核的是事务所投放的设计物种。 */
   target: z.string(),
+  /**
+   * "立足"型的委托（2026-11-10）：业主要的是事务所设计的动物在这里住下来。写了它，target 必须是 'designs'。
+   * - 恢复分换成"立足"：委托期内各种设计物种加起来的只数 / settle，一只都没有 0 分，够数 100 分；
+   * - 稳定度换成"不泛滥"：只数不超过 ceiling 是 100 分，到两倍时 0 分。
+   * 公式在 src/sim/score.ts（铁律 4）。
+   */
+  establish: z.object({ settle: z.number().int().min(1), ceiling: z.number().int().min(1) }).optional(),
   /** 恢复目标：和第一年同一季比，达到几倍算"完全恢复"（恢复分 100；持平是 50 分，见 src/sim/score.ts）。 */
   recovery: z.number().min(1),
   /** 本地物种（其余算外来）：多样性看本地物种是否都还在，稳定度看外来物种有没有暴涨。 */
@@ -42,6 +49,11 @@ export const ScenarioSchema = z.object({
   client: z.object({
     name: z.string(),
     letter: z.array(z.string()).min(1),
+    /**
+     * 委托结束时的回信，按结果挑一封（2026-11-10）。哪一封由引擎算出的结果决定（见 src/ui/verdict.ts），这里只是文字：
+     * success 全部做到；gone 设计的动物一只不剩；few 还在但不够数；swarm 泛滥；natives 本地物种少了一半以上；habitat 灌丛被啃掉一半以上。
+     */
+    replies: z.record(z.enum(['success', 'gone', 'few', 'swarm', 'natives', 'habitat']), z.array(z.string()).min(1)).optional(),
   }),
   /**
    * 委托人对扑杀的在意程度：每移除一只该物种，满意度降多少。没列出的物种不扣。
@@ -68,6 +80,11 @@ export const ScenarioSchema = z.object({
     staff: z.number().int().min(0),
     satisfaction: z.number().min(0).max(100),
   }),
+  /**
+   * 这份委托的工具箱：下方工具栏放哪几类兽医工具（不写就是全部）。委托一份份解锁工具箱。
+   * 现在只管界面上放不放（2026-11-10）；操作接口还没有按它拒绝。
+   */
+  toolbox: z.array(z.enum(['trap', 'cull', 'sample', 'necropsy', 'fence'])).optional(),
   /** 个案动物（2026-10-22）：情景里单独记着的几只（见 schema/case.ts）。不写就没有。 */
   cases: z.array(CaseSchema).optional(),
 });

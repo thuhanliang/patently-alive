@@ -1,7 +1,7 @@
 import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
 import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
-import { compileDesign, makeDesignKit, partsOf, type CompiledDesign, type EnvironmentProfile } from '../../sim';
+import { compileDesign, makeDesignKit, partsOf, withRelativeLitter, type CompiledDesign, type EnvironmentProfile } from '../../sim';
 import { requestedOf } from '../../sim/body';
 import { AllocPie, requestFor } from './pie';
 import { FoodPile, dailyFood, type DailyFood } from './food';
@@ -48,7 +48,8 @@ const isPhone = (W: number, H: number): boolean => W < NARROW || H < SHORT;
 
 // ---- 状态 ----
 let templateId = 'cat';
-let design: Design = structuredClone(MAMMALS.find((t) => t.species === templateId)!.design);
+// 仔数记成"比同体型的一般多多少"：把猫拖成虎，仔数跟着变（和游戏里的设计一样）。
+let design: Design = withRelativeLitter(structuredClone(MAMMALS.find((t) => t.species === templateId)!.design), kit);
 let look: Look = lookOf(speciesColor(templateId).body);
 /** 冷热试验的气温（°C）；null 是不试（默认）：不给气候，冷热这一项检查跳过，和以前一模一样。 */
 let climateC: number | null = null;
@@ -470,7 +471,7 @@ async function main(): Promise<void> {
     } else {
       pie.r0 = 50;
       pie.cx = W - 130;
-      pie.cy = 185;
+      pie.cy = 185 + (document.body.classList.contains('embed') ? 28 : 0);
     }
     pie.draw(compiled.body, design.bodyMassKg, pieGrab?.sys ?? pieHover, kgText);
     if (!resetBtn.hidden) resetBtn.style.top = `${Math.round(top + 12)}px`;
@@ -1235,7 +1236,7 @@ async function main(): Promise<void> {
     const t = MAMMALS.find((x) => x.species === id);
     if (!t) return;
     templateId = id;
-    design = structuredClone(t.design);
+    design = withRelativeLitter(structuredClone(t.design), kit);
     look = lookOf(speciesColor(id).body);
     chosenRunSpeed = null;
     rebuild();
@@ -1284,6 +1285,27 @@ async function main(): Promise<void> {
   const handles = (): typeof spots => spots;
   const signList = (): Sign[] => signs;
   (window as unknown as { desk: { set: typeof set; step: typeof step; handles: typeof handles; signs: typeof signList } }).desk = { set, step, handles, signs: signList };
+
+  // ---- 嵌在游戏里（?embed=1，2026-11-10）：上方一条委托的便签，"带去岛上"把设计和这只纸偶的样子交给外面的游戏。 ----
+  if (new URLSearchParams(location.search).has('embed')) {
+    const bar = document.getElementById('embed')!;
+    bar.hidden = false;
+    document.body.classList.add('embed');
+    const brief = bar.querySelector<HTMLElement>('.brief')!;
+    const origin = location.origin;
+    window.addEventListener('message', (e) => {
+      if (e.origin !== origin) return;
+      const m = e.data as { type?: string; text?: string };
+      if (m?.type === 'pa-desk-brief') brief.textContent = m.text ?? '';
+    });
+    document.getElementById('embedBack')!.addEventListener('click', () => parent.postMessage({ type: 'pa-desk-close' }, origin));
+    document.getElementById('embedGo')!.addEventListener('click', () => {
+      // 画像：此刻桌上这只纸偶的样子（瘦了、跛了也照样），现场就画成它。
+      const shot = app.renderer.extract.canvas({ target: puppet.view, resolution: 2 }) as HTMLCanvasElement;
+      parent.postMessage({ type: 'pa-desk-release', design: structuredClone(design), portrait: shot.toDataURL('image/png') }, origin);
+    });
+    parent.postMessage({ type: 'pa-desk-ready' }, origin);
+  }
 
   const q = new URLSearchParams(location.search);
   const num = (k: string): number | undefined => (q.has(k) ? Number(q.get(k)) : undefined);

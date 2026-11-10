@@ -153,6 +153,19 @@ export function biasOfLitter(laws: ScalingLaws, bodyMassKg: number, diet: Specie
 }
 
 /**
+ * 仔数换成"比同体型、同食性的一般多多少"（litterBias）：在它自己的体型下正好推回原来的数，体型变了仔数跟着变
+ * （DECISIONS"仔数写成比一般多多少"：猫放大还是猫的生法）。已经是这种写法的原样返回；写了"自动"的就是一般。
+ */
+export function withRelativeLitter(design: Design, kit: Pick<DesignKit, 'parts' | 'laws'>): Design {
+  if (design.litterBias !== undefined) return design;
+  const { litterAuto, ...rest } = design;
+  if (litterAuto) return { ...rest, litterBias: 0 };
+  const parts = partsOf(rest, kit);
+  const b = biasOfLitter(kit.laws, rest.bodyMassKg, parts.mouth.diet!, parts.coat.bodyPlan === 'bird', rest.litterSize);
+  return { ...rest, litterBias: Math.min(1.5, Math.max(-1.5, b)) };
+}
+
+/**
  * env 只给设计台预览用（这片地的食物、以后的气候）：只影响可行性检查的结果和提醒，从不影响物种参数。
  */
 export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentProfile): CompiledDesign {
@@ -244,8 +257,10 @@ export function compileDesign(design: Design, kit: DesignKit, env?: EnvironmentP
     maxLifespanYears: round1(scaled.maxLifespanYears),
     movement: {
       dailyRangeM: Math.round(scaled.dailyRangeM * m.dailyRange),
-      homeRangeKm2: Number(scaled.homeRangeKm2.toPrecision(3)),
-      ...(design.territorial ? { territorial: true } : {}),
+      // 家域只给守领地的写（2026-11-10）：写了家域，拥挤上限就按"一块家域住两只"算（physiology.ts 的 crowdingPerKm2），
+      // 那是领地动物的规矩。不守领地的设计按体重的典型密度封顶（和没写家域的真实物种一样，例如穴兔），
+      // 否则设计出来的兔子每平方公里只能住五十来只，放上岛永远长不起来，也说不出为什么。
+      ...(design.territorial ? { homeRangeKm2: Number(scaled.homeRangeKm2.toPrecision(3)), territorial: true as const } : {}),
       ...(hasWings && !tooHeavyToFly ? { flies: true } : {}),
       ...(climbs ? { climbs: true } : {}),
     },

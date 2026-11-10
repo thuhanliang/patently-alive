@@ -11,6 +11,7 @@ import { fenceLengthCells } from './fence';
 import { isLand } from './terrain';
 import { baselineOf, QUARTER_DAYS, QUARTERS_PER_YEAR, satisfactionChange, score, type ScoreBaseline, type ScoreDetail, type ScoreGoal, type Scores } from './score';
 import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
+import { CAUSE } from './ledger';
 import { caseLocation, caseStatus, type CaseStatus } from './cases';
 import { MAX_SPECIES } from './individuals';
 
@@ -32,7 +33,31 @@ export interface Quarter {
   satisfaction: number;
   /** 委托期的最后一季。 */
   final: boolean;
+  /** 这一季各物种的账目（验收单用，2026-11-10）；旧存档里没有。 */
+  species?: SpeciesQuarter[] | undefined;
 }
+
+/** 一个物种一季的账目：季初、季末各多少只，生了、放了、移走了多少，死了多少、各是什么死因。 */
+export interface SpeciesQuarter {
+  id: string;
+  start: number;
+  end: number;
+  births: number;
+  released: number;
+  removed: number;
+  /** [死因编号, 只数]，只列有的（编号见 ledger.ts 的 CAUSE；人为移除不在这里，在 removed）。 */
+  deaths: Array<[number, number]>;
+}
+
+/** 这一季到目前为止的账（每天累加，结算时写进 Quarter.species 再清零）。 */
+interface Tally {
+  start: number;
+  births: number;
+  released: number;
+  removed: number;
+  deaths: number[];
+}
+const emptyTally = (start: number): Tally => ({ start, births: 0, released: 0, removed: 0, deaths: [] });
 
 export type SubmitResult = { ok: true } | { ok: false; reason: string };
 
@@ -66,6 +91,8 @@ export class Session {
   private received: number;
   private readonly settled: Quarter[] = [];
   private readonly removedBySpecies: number[];
+  /** 这一季各物种到目前为止的账（有委托目标时才记）。 */
+  private tally: Tally[] = [];
 
   constructor(config: SimConfig, rules: Rules = SANDBOX_RULES) {
     this.config = SimConfigSchema.parse(config);
@@ -82,13 +109,14 @@ export class Session {
     if (goal) {
       const ids = this.config.species.map((s) => s.id);
       const target = ids.indexOf(goal.target);
-      if (target < 0) throw new Error(`委托目标「${goal.target}」不是这片世界的物种`);
+      if (goal.establish ? goal.target !== 'designs' : target < 0) throw new Error(`委托目标「${goal.target}」不是这片世界的物种`);
       const unknown = goal.native.find((id) => !ids.includes(id));
       if (unknown !== undefined) throw new Error(`本地物种「${unknown}」不是这片世界的物种`);
       this.scoring = {
-        goal: { target, recovery: goal.recovery, native: ids.map((id) => goal.native.includes(id)) },
+        goal: { target, recovery: goal.recovery, native: ids.map((id) => goal.native.includes(id)), ...(goal.establish ? { establish: goal.establish } : {}) },
         base: baselineOf(this.simulation.state),
       };
+      this.tally = this.simulation.state.lastDay.map((d) => emptyTally(d.total));
     } else {
       this.scoring = null;
     }
@@ -152,7 +180,27 @@ export class Session {
     const index = Math.ceil(day / QUARTER_DAYS);
     const ref = index > QUARTERS_PER_YEAR ? this.settled[(index - 1) % QUARTERS_PER_YEAR] : undefined;
     const sameSeason = ref ? ref.targetCount : null;
-    return score(this.simulation.state, this.scoring.goal, this.scoring.base, { spent: this.spent, received: this.received }, sameSeason);
+    return score(this.simulation.state, this.scoring.goal, this.scoring.base, { spent: this.spent, received: this.received }, sameSeason, this.designTotal());
+  }
+
+  /** 事务所投放的各种设计物种（id 以 d_ 开头）现在一共多少只。 */
+  designTotal(): number {
+    const ids = this.speciesIds();
+    return this.simulation.state.lastDay.reduce((a, d, s) => a + (ids[s]!.startsWith('d_') ? d.total : 0), 0);
+  }
+
+  /** 这一季到目前为止各物种的账目（验收单随时看用）；没有委托目标为空。 */
+  quarterSoFar(): SpeciesQuarter[] {
+    const ids = this.speciesIds();
+    return this.tally.map((t, s) => ({
+      id: ids[s]!,
+      start: t.start,
+      end: this.simulation.state.lastDay[s]!.total,
+      births: t.births,
+      released: t.released,
+      removed: t.removed,
+      deaths: t.deaths.flatMap((n, cause) => (n > 0 ? [[cause, n] as [number, number]] : [])),
+    }));
   }
 
   /** 推演的只读入口（状态、物种参数、总数）。不要直接调用它的修改方法。 */
@@ -219,8 +267,27 @@ export class Session {
       if (d.removed > 0) loss += d.removed * (sentiment[ids[s]!] ?? 0);
     });
     if (loss > 0) this.res.satisfaction = Math.max(0, this.res.satisfaction - loss);
+    if (this.scoring) this.tallyDay();
     const day = this.simulation.tick / TICKS_PER_DAY;
     if (this.scoring && !this.ended && day % QUARTER_DAYS === 0) this.settle(day);
+  }
+
+  /** 把今天各物种的出生、投放、移除和死因加进这一季的账。 */
+  private tallyDay(): void {
+    const { lastDay, deaths } = this.simulation.state;
+    lastDay.forEach((d, s) => {
+      const t = this.tally[s]!;
+      t.births += d.births;
+      t.released += d.released;
+      t.removed += d.removed;
+      for (let cause = 0; cause < deaths.causes; cause++) {
+        const n = deaths.lastDay[s * deaths.causes + cause]!;
+        if (n > 0 && cause !== CAUSE.removed) {
+          while (t.deaths.length <= cause) t.deaths.push(0);
+          t.deaths[cause] = t.deaths[cause]! + n;
+        }
+      }
+    });
   }
 
   /**
@@ -242,13 +309,15 @@ export class Session {
       day,
       scores,
       detail,
-      targetCount: this.simulation.state.lastDay[this.scoring!.goal.target]!.total,
+      targetCount: this.scoring!.goal.establish ? this.designTotal() : this.simulation.state.lastDay[this.scoring!.goal.target]!.total,
+      species: this.quarterSoFar(),
       satisfactionDelta: delta,
       grant,
       budget: this.res.budget,
       satisfaction: this.res.satisfaction,
       final,
     });
+    this.tally = this.simulation.state.lastDay.map((d) => emptyTally(d.total));
   }
 
   /** 统一操作接口。 */
@@ -295,6 +364,7 @@ export class Session {
         received: this.received,
         quarters: cloneData(this.settled),
         removed: [...this.removedBySpecies],
+        tally: cloneData(this.tally),
       },
       state: this.simulation.snapshot() as unknown as Record<string, unknown>,
     };
@@ -335,6 +405,8 @@ export class Session {
     session.received = s.received;
     for (const q of cloneData(s.quarters)) session.settled.push(q);
     session.removedBySpecies.splice(0, n, ...s.removed);
+    // 旧存档没有这一季的账：从读档这天重新记起。
+    if (session.scoring) session.tally = s.tally && s.tally.length === n ? cloneData(s.tally) : session.simulation.state.lastDay.map((d) => emptyTally(d.total));
     return session;
   }
 
@@ -510,6 +582,7 @@ export class Session {
     if (this.scoring) {
       (this.scoring.goal.native as boolean[]).push(false);
       this.scoring.base.totals.push(0);
+      this.tally.push(emptyTally(0));
     }
     return index;
   }

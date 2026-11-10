@@ -56,6 +56,8 @@ export function bindDock(
     archive: () => void;
     desk: () => void;
   },
+  /** 这份委托的工具箱里有哪几类兽医工具（不传就是全部；委托一份份解锁工具箱，见 DECISIONS"愿景校准"）。 */
+  toolbox?: readonly FieldKind[],
 ): DockHandle {
   let kind: FieldKind | null = null;
   const make = (key: FieldKind | 'archive' | 'desk', label: string, title: string, onClick: () => void): HTMLButtonElement => {
@@ -74,7 +76,7 @@ export function bindDock(
     for (const [, b] of toolButtons) b.classList.remove('active');
     handlers.stop();
   };
-  const toolButtons = (['trap', 'cull', 'sample', 'necropsy', 'fence'] as const).map(
+  const toolButtons = (['trap', 'cull', 'sample', 'necropsy', 'fence'] as const).filter((k) => !toolbox || toolbox.includes(k)).map(
     (k) =>
       [
         k,
