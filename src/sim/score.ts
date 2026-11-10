@@ -16,6 +16,7 @@ import { DAYS_PER_YEAR, TICKS_PER_DAY } from './time';
  *   一年前不到 STABILITY_MIN_COUNT 只的按这么多算。
  *   第一年（前 4 季）不评（null）：开局数量离平衡远，和开局比没有意义。
  * - 多样性：本地物种都还在（每种不少于开局的一半算满分）、栖息地（灌丛）没被啃光，两半各占一半。
+ * - "立足"型的委托（goal.establish）：恢复换成设计物种的只数够不够，稳定度换成有没有超过上限，见 score() 里的说明。
  * - 花费：花掉的钱占拿到的钱（开局预算 + 各季拨款）的比例越小越高。
  * - 福利：近期死亡里饿死的和被人处死的比例（各物种平均）越小越高。
  */
@@ -50,12 +51,14 @@ export interface ScoreGoal {
   recovery: number;
   /** 各物种是不是本地物种。 */
   native: boolean[];
+  /** "立足"型委托的目标值（见情景的 goal.establish）；有它时 target 不用（-1）。 */
+  establish?: { settle: number; ceiling: number };
 }
 
 export interface ScoreDetail {
   /** 目标物种现在 / 第一年同季；第一年为 null。 */
   targetRatio: number | null;
-  /** 涨得最猛的外来物种（下标）和它和去年同期的比；第一年为 null。 */
+  /** 涨得最猛的外来物种（下标）和它和去年同期的比；第一年为 null。"立足"型：species 为 -1，ratio 是设计物种的只数 / 上限。 */
   boom: { species: number; ratio: number } | null;
   /** 本地物种里现在不到开局一半的（下标）。 */
   nativesLow: number[];
@@ -110,21 +113,29 @@ export function score(
   money: { spent: number; received: number },
   /** 目标物种第一年同一季的数量；还在第一年时为 null。 */
   sameSeasonLastYear: number | null,
+  /** "立足"型委托：各种设计物种现在一共多少只。 */
+  designTotal = 0,
 ): ScoreResult {
   const now = state.lastDay.map((d) => d.total);
   const start = base.totals;
 
   // 恢复
   // 第一年同季一只都没有时按 1 只算，回来多少都看得见。
-  const targetRatio = sameSeasonLastYear === null ? null : now[goal.target]! / Math.max(1, sameSeasonLastYear);
-  const recovery = targetRatio === null ? null : recoveryPoints(targetRatio, goal.recovery);
+  // "立足"型：设计物种的只数 / 要住下的只数，从第一季就评。
+  const est = goal.establish;
+  const targetRatio = est ? designTotal / est.settle : sameSeasonLastYear === null ? null : now[goal.target]! / Math.max(1, sameSeasonLastYear);
+  const recovery = est ? pts(targetRatio!) : targetRatio === null ? null : recoveryPoints(targetRatio, goal.recovery);
 
   // 稳定度：和一年前最近的一次普查比。
   const today = Math.floor(state.tick / TICKS_PER_DAY);
   const yearAgo = today > DAYS_PER_YEAR ? [...state.census].reverse().find((c) => c.day <= today - DAYS_PER_YEAR) : undefined;
   let boom: ScoreDetail['boom'] = null;
   let stability: number | null = null;
-  if (yearAgo) {
+  if (est) {
+    // "不泛滥"：设计物种不超过上限满分，到两倍 0 分（按 log2 线性）。
+    boom = { species: -1, ratio: designTotal / est.ceiling };
+    stability = pts(1 - detLog(Math.max(1, boom.ratio)) / LN2);
+  } else if (yearAgo) {
     for (let s = 0; s < now.length; s++) {
       if (goal.native[s]) continue;
       const before = yearAgo.totals[s]!;

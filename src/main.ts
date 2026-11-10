@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -7,7 +7,10 @@ import type { PaperView } from './render/paper/view';
 import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
-import { DesignDesk } from './ui/designDesk';
+import { DeskFrame } from './ui/deskFrame';
+import { Guide } from './ui/guide';
+import { showOffice, writeRecord } from './ui/office';
+import { deadOf } from './ui/verdict';
 import { bindCameraControls } from './ui/cameraControls';
 import { CommissionCards } from './ui/commission';
 import { PopulationChart } from './ui/chart';
@@ -64,7 +67,24 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
   return { world: worldFor(scenario), seed: scenario.seed, rules, problem, scenario: rules.goal ? scenario : null };
 }
 
+/** 事务所桌上摆的委托，按这个顺序。 */
+const OFFICE_SCENARIOS = ['garden-island', 'bird-island'];
+
 async function main(): Promise<void> {
+  // 没指定情景：先到事务所，从桌上的信里挑一份委托。
+  const query = new URLSearchParams(location.search);
+  if (!query.has('scenario') && !query.has('world')) {
+    document.body.classList.add('office');
+    showOffice(
+      el('modal'),
+      OFFICE_SCENARIOS.map((id) => scenarioLibrary.get(id)!),
+      (id) => {
+        query.set('scenario', id);
+        location.search = query.toString();
+      },
+    );
+    return;
+  }
   const { world, seed: defaultSeed, rules, problem, scenario } = chosenWorld();
   const species = speciesFor(world);
   // 设计编译的数据：设计台用它，也放进配置，让操作接口能重新编译、核对投放的设计物种（存档、日志自带一份）。
@@ -121,7 +141,25 @@ async function main(): Promise<void> {
     view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
   );
   // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
-  const cards = scenario ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id)) : null;
+  /** "立足"型的委托（花园岛）：考核的是事务所设计的动物，界面上多一张引导便签。 */
+  const establish = scenario?.goal.establish !== undefined;
+  const backToOffice = (): void => {
+    location.search = '';
+  };
+  // 岛上有什么：写给设计的人看（吃的从哪来、有没有别的动物）。
+  const facts = [
+    `岛上长着${world.plants.map((p) => p.type.name).join('和')}，草里有虫子。`,
+    `住着${species.map((s) => s.name).join('、')}：${species.some((s) => s.reproduction.nest === 'ground') ? '在地面的浅坑里下蛋，' : ''}开局大约 ${session.sim.state.lastDay.map((d) => d.total).join('、')} 只。`,
+    '没有别的动物：没有会来抓它的，也没有可以给它抓的小兽。',
+  ];
+  const cards = scenario
+    ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id), {
+        facts,
+        desk: () => desk.show(),
+        office: backToOffice,
+        ended: (reply, count) => writeRecord(scenario.id, { reply, count }),
+      })
+    : null;
   let shownQuarters = 0;
   // 个案动物（无牙小猫等）：第一次在野外被看见时弹卡片；"带回事务所"走统一操作接口。开着时推演暂停。
   const caseCards = new CaseCards(el('case'), el('cases'), async (id) => {
@@ -132,7 +170,7 @@ async function main(): Promise<void> {
   caseCards.reset(session.rules.cases ?? [], session.cases);
   // 自然档案馆：翻看现有技术；情景允许引种时，条目上有"引进到这里"。开着时推演暂停。
   /** 选好了要引进的物种（档案馆的真实物种，或设计台的设计）和数量、等着在地图上点地点；null 表示没在引进。 */
-  let introducing: { species: SpeciesParams; design?: Design; count: number } | null = null;
+  let introducing: { species: SpeciesParams; design?: Design; count: number; portrait?: string } | null = null;
   const startIntroducing = (choice: NonNullable<typeof introducing>): void => {
     tools.stopReleasing();
     field.stop();
@@ -179,21 +217,25 @@ async function main(): Promise<void> {
       status.textContent = '取消了引进';
     }
   });
-  // 设计台：拼部件、看推导和能量收支；情景允许时可以把设计投放到地图上。开着时推演暂停。
-  const desk = new DesignDesk(
+  // 设计台（2026-11-10 起是整屏嵌入的设计台玩具）：拼身体，"带去岛上"；情景允许时可以把设计投放到地图上。开着时推演暂停。
+  const desk = new DeskFrame(
     el('design'),
     kit,
-    designSlots,
-    designTemplates,
-    speciesLibrary,
+    establish
+      ? '委托：一种小动物，三年后还在，不泛滥，不伤鸟，不啃秃岛。岛上有草、灌丛和草里的虫子，没有可以抓的小兽。'
+      : scenario
+        ? `委托 · ${scenario.client.name}：${scenario.client.letter[1] ?? ''}`
+        : '沙盒：随便设计，放上去看看。',
     rules.introduction.designs && intro
       ? {
           maxAnimals: intro.maxAnimals,
           quote: (species, count) => {
             const c = costOf({ type: 'introduce', species, x: 0, y: 0, count }, toolData, world.cellSizeM);
-            return `${c.budget.toLocaleString('zh-CN')} 元（繁育、运输），${c.staff} 支队伍 ${c.days} 天；投放后收不回来`;
+            const have = Math.round(session.resources.budget);
+            const ok = c.budget <= have;
+            return { text: `${c.budget.toLocaleString('zh-CN')} 元（繁育、运输；越重越贵），预算还有 ${have.toLocaleString('zh-CN')} 元${ok ? '；放出去就收不回来' : '：不够，少放几只，或者做小一点'}`, ok };
           },
-          start: (design, species, count) => startIntroducing({ species, design, count }),
+          start: (design, species, count, portrait) => startIntroducing({ species, design, count, portrait }),
         }
       : undefined,
   );
@@ -312,18 +354,32 @@ async function main(): Promise<void> {
   );
 
   // 下方工具栏：兽医箱的五类工具、档案馆、设计台。
-  const dock = bindDock(el('dock'), el('tool-pop'), {
-    choose: (kind) => field.choose(kind),
-    stop: () => field.stop(),
-    archive: () => {
-      desk.close();
-      archive.toggle();
+  const dock = bindDock(
+    el('dock'),
+    el('tool-pop'),
+    {
+      choose: (kind) => field.choose(kind),
+      stop: () => field.stop(),
+      archive: () => {
+        desk.close();
+        archive.toggle();
+      },
+      desk: () => {
+        archive.close();
+        desk.toggle();
+      },
     },
-    desk: () => {
-      archive.close();
-      desk.toggle();
-    },
-  });
+    scenario?.toolbox,
+  );
+  // 引导便签（只有"立足"型的委托）：现在该做什么，或者正在等什么。
+  const guide = establish
+    ? new Guide(el('guide'), {
+        desk: () => desk.show(),
+        play: () => void submit({ type: 'setSpeed', speed: 10 }),
+        fast: () => void submit({ type: 'setSpeed', speed: 100 }),
+      })
+    : null;
+  document.body.classList.toggle('establish', establish);
   // 左边的笔记本：记录、死因、曲线、文件（种子、存档、校验和）。
   bindNotebook(el('nb-tabs'), el('nb-page'), [
     ['记录', el('nb-log')],
@@ -347,12 +403,16 @@ async function main(): Promise<void> {
       // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
       const chosen = introducing;
       introducing = null;
-      const { species, design, count } = chosen;
+      const { species, design, count, portrait } = chosen;
       void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count, ...(design ? { design } : {}) }).then((ok) => {
         if (!ok) {
           introducing = chosen;
           return;
         }
+        // 现场就画成设计台上那只纸偶的样子。
+        if (portrait) void view.setPortrait(species.id, portrait);
+        // "立足"型的委托：放出去以后时间自己走起来（10 倍，一季十来秒），不用玩家再找按钮。
+        if (establish && session.speed < 10) void submit({ type: 'setSpeed', speed: 10 });
         status.textContent = `在 (${cell.x}, ${cell.y}) 放出了${design ? '设计的' : '引进的'} ${count} 只${species.name}`;
       });
       return;
@@ -430,6 +490,19 @@ async function main(): Promise<void> {
     view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
+    if (guide) {
+      const mine = session.species.map((sp, s) => ({ id: sp.params.id, name: sp.params.name, count: state.lastDay[s]?.total ?? 0 })).filter((m) => m.id.startsWith('d_'));
+      const rows = session.soFar.filter((q) => q.id.startsWith('d_'));
+      guide.update({
+        placing: introducing ? { count: introducing.count, name: introducing.species.name } : null,
+        mine,
+        season: { released: rows.reduce((a, q) => a + q.released, 0), births: rows.reduce((a, q) => a + q.births, 0), dead: rows.reduce((a, q) => a + deadOf(q), 0) },
+        arrivingInDays: null,
+        paused: session.speed === 0,
+        daysToQuarter: QUARTER_DAYS - (session.sim.day % QUARTER_DAYS),
+        ended: session.ended,
+      });
+    }
     deaths.update(state);
     captures.update(state);
     chart.draw();

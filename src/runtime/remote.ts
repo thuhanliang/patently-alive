@@ -1,4 +1,4 @@
-import { TICKS_PER_DAY, speciesOf, type Op, type Quarter, type Resources, type Rules, type SimConfig, type SimState, type SubmitResult, type DerivedSpecies, type Alert, type CaseStatus } from '../sim';
+import { TICKS_PER_DAY, speciesOf, type Op, type Quarter, type SpeciesQuarter, type Resources, type Rules, type SimConfig, type SimState, type SubmitResult, type DerivedSpecies, type Alert, type CaseStatus } from '../sim';
 import { deriveAll } from '../sim/physiology';
 import type { DayRecord, FromHost, Reply, SessionView, ToHost } from './host';
 
@@ -18,6 +18,7 @@ export interface SessionReadout {
   readonly totalQuarters: number;
   readonly money: { spent: number; received: number };
   readonly removed: readonly number[];
+  readonly soFar: readonly SpeciesQuarter[];
   readonly alerts: readonly Alert[];
   readonly cases: readonly CaseStatus[];
   readonly dayChecksum: number;
@@ -192,6 +193,9 @@ export class RemoteSession implements SessionReadout {
   }
   get removed(): readonly number[] {
     return this.v.removed;
+  }
+  get soFar(): readonly SpeciesQuarter[] {
+    return this.v.soFar;
   }
   get alerts(): readonly Alert[] {
     return this.v.alerts;

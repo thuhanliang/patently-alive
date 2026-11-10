@@ -204,6 +204,15 @@ export class PaperView {
     old?.dispose();
   }
 
+  /** 设计物种在现场画成设计台上那只纸偶的样子（url 是设计台截下来的图）。 */
+  async setPortrait(id: string, url: string): Promise<void> {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    this.animals.setPortrait(id, Texture.from(img));
+    this.redraw();
+  }
+
   setSpecies(species: readonly DerivedSpecies[]): void {
     this.grid.speciesColors = species.map((sp) => colorOf(sp.params).chart);
     // 构造时 animals 还没建好（它自己在构造时就拿到了物种）。

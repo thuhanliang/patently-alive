@@ -8,6 +8,7 @@ import { hash2 } from './noise';
 import type { PaperScene } from './scene';
 import { PX } from './terrain';
 import { drawPuppet, tokenLengthCells, type PuppetKind } from './tokens';
+import { colorOf } from '../palette';
 
 /** 幼体的剪纸缩小到这个比例。 */
 const JUVENILE_SCALE = 0.65;
@@ -21,6 +22,14 @@ export function sizeInCells(massKg: number): number {
  * 比代表单位小得多：代表单位是地图图标，个体要和格子、和别的个体比得出疏密。
  */
 const INDIVIDUAL_SCALE = 2.4;
+/** 事务所设计的动物在现场画得比别的大一些：它是这一局的主角，要一眼找得到。 */
+const PORTRAIT_BOOST = 1.6;
+/** 画像的染色：设计的主色掺四分之一的白（画像本身是浅米色的纸，直接乘主色偏暗）。 */
+function portraitTint(p: { id: string; appearance?: { color: string } | undefined }): number {
+  const c = colorOf(p).body;
+  const mix = (v: number): number => Math.round(v * 0.75 + 255 * 0.25);
+  return (mix((c >> 16) & 255) << 16) | (mix((c >> 8) & 255) << 8) | mix(c & 255);
+}
 /** 代表单位最快多久重新聚一次（毫秒）：高倍速时每天都重聚太费。 */
 const TOKEN_INTERVAL_MS = 1000;
 
@@ -39,6 +48,8 @@ interface Look {
   anchorX: number;
   anchorY: number;
   len: number;
+  /** 贴图的染色（设计物种的画像是中性纸色，染成设计的主色；其余不染）。 */
+  tint?: number;
 }
 
 /**
@@ -57,7 +68,7 @@ export class AnimalLayer {
   private tokenDay = -1;
   private tokenAt = -Infinity;
   /** 近景个体：每只一个小容器，里面是脚下的影子和剪纸本身（影子跟着它走，不用每个 tick 重画一层影子）。 */
-  private readonly pool: { box: Container; body: Sprite; shadow: Sprite }[] = [];
+  private readonly pool: { box: Container; body: Sprite; shadow: Sprite; len: number }[] = [];
   private shadowTex: Texture | null = null;
   private readonly people: Mover[] = [];
   /** 个案动物（不在推演的数量里）：一只小剪纸，拉远拉近都画。 */
@@ -78,6 +89,19 @@ export class AnimalLayer {
   ) {
     this.shadows.alpha = 0.3;
     this.setSpecies(species);
+  }
+
+  /** 设计物种的画像（设计台上那只纸偶的样子，2026-11-10）：有画像的物种在现场就画成它，不用通用木偶。 */
+  private readonly portraits = new Map<string, Texture>();
+
+  setPortrait(id: string, tex: Texture): void {
+    this.portraits.set(id, tex);
+    this.setSpecies(this.species);
+  }
+
+  /** 画像按身长缩放：画像的宽度里有尾巴，比身长宽一些；再放大一点（PORTRAIT_BOOST）。 */
+  private portraitScale(tex: Texture, len: number): number {
+    return (len * 1.35 * PORTRAIT_BOOST) / tex.width;
   }
 
   setSpecies(species: readonly DerivedSpecies[]): void {
@@ -103,6 +127,8 @@ export class AnimalLayer {
   private lookOf(sp: DerivedSpecies): Look {
     const kind = puppetKindOf(sp.params.id);
     const len = sizeInCells(sp.params.bodyMassKg) * INDIVIDUAL_SCALE * PX;
+    const portrait = this.portraits.get(sp.params.id);
+    if (portrait) return { tex: [portrait], scale: this.portraitScale(portrait, len), anchorX: 0.5, anchorY: 1, len, tint: portraitTint(sp.params) };
     const rowI = P7_ROW[kind] ?? -1;
     const row = this.P7?.tex[rowI];
     if (row) {
@@ -185,7 +211,18 @@ export class AnimalLayer {
           const poses = P7_POSES[k] ?? [0];
           // 鸟：多数趴在巢里（P7 自带巢），少数站着。
           const pose = id === 'dotterel' ? ((j + m) % 3 === 2 ? 0 : 3) : poses[Math.floor(rnd(j * 7 + m, si(id), 9) * poses.length)]!;
-          const unit = makeAnimal(this.P7, k, len, pose, (j + m) % 3 === 2 && id !== 'dotterel');
+          const portrait = this.portraits.get(id);
+          const flip = (j + m) % 3 === 2 && id !== 'dotterel';
+          let unit: Container;
+          if (portrait) {
+            const spr = new Sprite(portrait);
+            spr.anchor.set(0.5, 1);
+            const kk = this.portraitScale(portrait, len);
+            spr.tint = portraitTint(this.species.find((x) => x.params.id === id)!.params);
+            spr.scale.set(flip ? -kk : kk, kk);
+            unit = new Container();
+            unit.addChild(spr);
+          } else unit = makeAnimal(this.P7, k, len, pose, flip);
           this.add(this.tokens, unit, cx + ox * len, cy + oy * len, 0.5);
           this.icons.push(unit);
           if (m > 0) this.companions.push(unit);
@@ -214,7 +251,7 @@ export class AnimalLayer {
       shadow.alpha = 0.32;
       const body = new Sprite();
       box.addChild(shadow, body);
-      this.pool.push({ box, body, shadow });
+      this.pool.push({ box, body, shadow, len: 1 });
       this.add(this.people, box, 0, 0, 0.5);
     }
     for (let i = 0; i < ind.count; i++) {
@@ -230,12 +267,14 @@ export class AnimalLayer {
       const pose = look.tex[Math.floor(hash2(ind.born[i]!, s * 7 + ind.female[i]!, this.seed + 3000) * look.tex.length)]!;
       const k = look.scale * (isJuvenileAt(sp, ind.born[i]!, day) ? JUVENILE_SCALE : 1);
       spr.texture = pose;
+      spr.tint = look.tint ?? 0xffffff;
       spr.anchor.set(look.anchorX, look.anchorY);
       // 朝向跟着移动方向（剪纸默认头朝右）。
       spr.scale.set(ind.vx[i]! < 0 ? -k : k, k);
       box.visible = true;
       // 脚下的影子：光从左上来，往右偏一点；宽约身长的 0.8。
       const len = look.len * (k / look.scale);
+      this.pool[i]!.len = len;
       shadow.width = len * 0.85;
       shadow.height = len * 0.2;
       shadow.position.set(len * 0.06, 0);
@@ -265,6 +304,15 @@ export class AnimalLayer {
     for (const u of this.icons) u.scale.set(k);
     for (const m of this.cases) m.obj.scale.set(this.closeUp ? m.near : k);
     for (const u of this.companions) u.visible = !this.closeUp && k < 1.05;
+    // 近景的个体在屏幕上不能小得看不见（小岛上全图就是近景，20 克的小兽只有几个像素）：身长不到 minPx 的放大到 minPx。
+    // 只数很多时放大得少一些，免得糊成一片。
+    if (this.closeUp) {
+      const minPx = this.used > 400 ? 16 : this.used > 150 ? 22 : 30;
+      for (let i = 0; i < this.used; i++) {
+        const p = this.pool[i]!;
+        p.box.scale.set(Math.max(1, minPx / (p.len * cam.s)));
+      }
+    }
     const ct = Math.cos(cam.t);
     const list = [...(this.closeUp ? this.people.slice(0, this.used) : this.tokens), ...this.cases];
     for (const m of list) {

@@ -15,7 +15,7 @@ import {
   type Alert,
   type CaseStatus,
   type Op,
-  type Quarter,
+  type Quarter, type SpeciesQuarter,
   type Resources,
   type Rules,
   type SimConfig,
@@ -53,6 +53,8 @@ export interface SessionView {
   totalQuarters: number;
   money: { spent: number; received: number };
   removed: number[];
+  /** 这一季到目前为止各物种的账目（验收单）。 */
+  soFar: SpeciesQuarter[];
   alerts: Alert[];
   /** 个案动物（2026-10-22）：情景里单独记着的几只现在怎么样。 */
   cases: CaseStatus[];
@@ -220,6 +222,7 @@ export class SimHost {
       totalQuarters: s.totalQuarters,
       money: s.money,
       removed: [...s.removed],
+      soFar: s.quarterSoFar(),
       alerts: this.alertList,
       cases: s.cases(),
       days,

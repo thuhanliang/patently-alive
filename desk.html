@@ -424,6 +424,14 @@
           display: none;
         }
       }
+          /* 嵌在游戏里时上方的委托便签（?embed=1）。 */
+      #embed { position: fixed; top: 10px; left: 300px; right: 16px; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+      body.embed #note { display: none; }
+      @media (max-width: 720px), (max-height: 520px) { #embed { left: 8px; right: 8px; } }
+      #embed[hidden] { display: none; }
+      #embed .brief { font-size: 14px; line-height: 1.5; flex: 1; }
+      #embed button { white-space: nowrap; padding: 8px 14px; border-radius: 8px; border: 1px solid #5a4632; background: #f4ead6; color: #5a4632; font: inherit; cursor: pointer; }
+      #embed #embedGo { background: #2f5d8c; border-color: #24486c; color: #fff; font-weight: 600; }
     </style>
   </head>
   <body>
@@ -434,6 +442,11 @@
     <div id="signs"></div>
     <div id="signCard" class="card" hidden></div>
     <div id="receipt" class="card" hidden title="点一下收起来"></div>
+    <div id="embed" class="card" hidden>
+      <button id="embedBack" type="button">← 回岛上</button>
+      <span class="brief"></span>
+      <button id="embedGo" type="button">带去岛上 →</button>
+    </div>
     <script type="module" src="/src/proto/desk/main.ts"></script>
   </body>
 </html>

@@ -10,6 +10,13 @@ export function bindViewCard(card: HTMLElement, camera: Camera, angles: ViewAngl
   const presets = document.createElement('div');
   presets.className = 'bar';
   card.append(presets);
+  // 三根滑块平时收着（试玩反馈：一直摆在屏幕上像调试工具），点"视角"才展开。
+  const more = document.createElement('button');
+  more.textContent = '视角';
+  more.title = '缩放、俯仰、旋转的滑块';
+  more.className = 'view-more';
+  more.addEventListener('click', () => more.classList.toggle('active', card.classList.toggle('open')));
+  queueMicrotask(() => presets.append(more));
   const deg = 180 / Math.PI;
 
   const slider = (label: string, min: number, max: number, step: number): { row: HTMLElement; input: HTMLInputElement; value: HTMLSpanElement } => {

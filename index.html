@@ -223,12 +223,49 @@
         #view-card { display: none; }
         #dock .tool { width: 48px; font-size: 11px; } #dock .tool img, #dock .tool svg { height: 28px; width: 34px; }
       }
+      /* ---- 2026-11-10：事务所、引导便签、验收单、嵌入的设计台 ---- */
+      #guide { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 12px; padding: 8px 14px; max-width: min(560px, calc(100vw - 560px)); font-size: 15px; line-height: 1.5; }
+      #guide[hidden] { display: none; }
+      #guide button { white-space: nowrap; padding: 6px 14px; border-radius: 8px; border: 1px solid #24486c; background: var(--blueprint); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+      #guide button[hidden] { display: none; }
+      @media (max-width: 1180px) { #guide { top: 118px; left: 10px; transform: none; max-width: min(420px, calc(100vw - 20px)); } }
+      body.office #right, body.office #dock, body.office #ribbon, body.office #notebook, body.office #status { display: none; }
+      body.office #modal { background: #1d3a5c; }
+      #view-card:not(.open) .row { display: none; }
+      #view-card { min-width: 0; }
+      body.establish #layer-bar { display: none; }
+      .verdict { margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(74, 58, 40, 0.25); border-radius: 6px; background: rgba(255, 255, 255, 0.35); }
+      .verdict.mine { border-color: var(--blueprint); border-width: 2px; }
+      .verdict-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 16px; }
+      .verdict-head span { font-variant-numeric: tabular-nums; }
+      .verdict-rows { display: grid; grid-template-columns: 1fr auto; gap: 1px 16px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+      .verdict-rows .plus { color: #3d6b3a; text-align: right; }
+      .verdict-rows .minus { color: #8a4a34; text-align: right; }
+      .verdict-line { font-weight: 600; }
+      .wishes { display: grid; grid-template-columns: auto 1fr auto; gap: 3px 10px; align-items: baseline; margin: 6px 0; }
+      .wishes .ok { color: #3d6b3a; font-weight: 700; }
+      .wishes .bad { color: var(--alert, #d2452f); font-weight: 700; }
+      .office { width: min(560px, calc(100vw - 32px)); }
+      .office-letter { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; margin: 10px 0; padding: 12px 14px; border: 1px solid rgba(74, 58, 40, 0.3); border-radius: 4px; background: #fbf5e6; color: inherit; font: inherit; cursor: pointer; box-shadow: 2px 3px 0 rgba(74, 58, 40, 0.18); transform: rotate(-0.4deg); }
+      .office-letter:nth-of-type(even) { transform: rotate(0.5deg); }
+      .office-letter:hover { background: #fffaf0; }
+      .office-letter b { font-size: 16px; }
+      #design { display: none; background: #e9dcc0; z-index: 9; }
+      .desk-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+      .desk-release { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); padding: 16px 20px; background: var(--paper, #f4ead6); border-top: 8px solid var(--kraft, #d7b27a); border-radius: 4px; box-shadow: 0 0 0 100vmax rgba(20, 14, 8, 0.35), 0 6px 18px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; gap: 8px; }
+      .desk-release[hidden] { display: none; }
+      .desk-portrait { align-self: center; max-width: 220px; max-height: 130px; object-fit: contain; }
+      .desk-release input[type='text'] { font: inherit; padding: 4px 6px; width: 12em; }
+      .desk-release .desk-hints p { margin: 2px 0; font-size: 13px; color: var(--ink-soft, #6b5a45); }
+      .desk-release button { font: inherit; padding: 6px 12px; cursor: pointer; }
+      .desk-release .desk-back { align-self: flex-start; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="ribbon"></div>
     <div id="alert"></div>
+    <div id="guide" class="card" hidden></div>
     <div id="right">
       <div class="bar card" id="time-bar"></div>
       <div class="card" id="view-card"></div>

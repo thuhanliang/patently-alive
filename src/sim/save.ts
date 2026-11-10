@@ -48,6 +48,19 @@ const QuarterSchema: z.ZodType<Quarter> = z.object({
   budget: z.number(),
   satisfaction: z.number(),
   final: z.boolean(),
+  species: z
+    .array(
+      z.object({
+        id: z.string(),
+        start: z.number(),
+        end: z.number(),
+        births: z.number(),
+        released: z.number(),
+        removed: z.number(),
+        deaths: z.array(z.tuple([z.number().int(), z.number()])),
+      }),
+    )
+    .optional(),
 });
 
 /** Session 自己的状态（推演状态之外的部分）。 */
@@ -62,6 +75,10 @@ export const SessionStateSchema = z.object({
   received: z.number().min(0),
   quarters: z.array(QuarterSchema),
   removed: z.array(z.number().int().min(0)),
+  /** 这一季各物种到目前为止的账（2026-11-10）；旧存档没有。deaths 按死因编号排，没有的是 0。 */
+  tally: z
+    .array(z.object({ start: z.number(), births: z.number(), released: z.number(), removed: z.number(), deaths: z.array(z.number()) }))
+    .optional(),
 });
 export type SessionState = z.infer<typeof SessionStateSchema>;
 

@@ -1,0 +1,90 @@
+{
+  "name": "花园岛",
+  "width": 48,
+  "height": 48,
+  "cellSizeM": 50,
+  "fertility": {
+    "min": 0.35,
+    "max": 1,
+    "patchSize": 10
+  },
+  "terrain": {
+    "kind": "island",
+    "mainRadius": 0.72,
+    "coastRoughness": 0.28,
+    "coastPatchSize": 8,
+    "islets": {
+      "count": 1,
+      "minRadius": 3,
+      "maxRadius": 4,
+      "minGapCells": 5
+    },
+    "shrubFraction": 0.35,
+    "shrubPatchSize": 8,
+    "fertilityBy": {
+      "coast": 0.35,
+      "grass": 1,
+      "shrub": 0.8
+    }
+  },
+  "season": {
+    "growthByMonth": [
+      0.6,
+      1.0,
+      1.0,
+      0.75,
+      0.45,
+      0.4,
+      0.5,
+      0.45,
+      0.25,
+      0.0,
+      0.0,
+      0.15
+    ],
+    "decayByMonth": [
+      0.002,
+      0.002,
+      0.003,
+      0.005,
+      0.007,
+      0.007,
+      0.008,
+      0.012,
+      0.015,
+      0.01,
+      0.008,
+      0.004
+    ]
+  },
+  "grazingDamage": true,
+  "plants": [
+    {
+      "type": "herb",
+      "maxBiomass": 450,
+      "floorBiomass": 8,
+      "initialFraction": 0.35,
+      "growthRate": 0.08
+    },
+    {
+      "type": "shrub",
+      "maxBiomass": 300,
+      "initialFraction": 0.8,
+      "growthRate": 0.002,
+      "floorFraction": 0.05
+    }
+  ],
+  "weather": {
+    "persistence": 0.85,
+    "min": 0.4,
+    "max": 1.6
+  },
+  "shore": {
+    "aquaticPerM2": 0.022
+  },
+  "species": [
+    "dotterel"
+  ],
+  "mainIslandOnly": [],
+  "source": "第一份委托用的小岛（2026-11-10）：和小鸟岛同样的规则和植被参数，48×48 格（2.4 公里见方），开局只有双斑鸻，没有任何哺乳动物。"
+}

@@ -176,6 +176,7 @@ describe('鸟岛打开吃坏以后（阶段 3.5 第 8 步）', () => {
     s.advance(360 * TICKS_PER_DAY);
     const dmg = s.sim.state.grid.damage!;
     expect(Math.min(...dmg.root)).toBeLessThan(0.5);
-    expect(Math.min(...dmg.soil)).toBeLessThan(0.6);
+    // 2026-11-10：不守领地的设计不再按家域封顶（见 design.ts），这群"牛"散得更开，一年里土壤掉到 0.77 左右（原来不到 0.6）。
+    expect(Math.min(...dmg.soil)).toBeLessThan(0.85);
   }, 180_000);
 });
