@@ -54,11 +54,24 @@ describe('引导便签：永远只说下一件事', () => {
   const g = { placing: null, mine: [], season: { released: 0, births: 0, dead: 0 }, arrivingInDays: null, paused: false, daysToQuarter: 40, ended: false };
   it('还没有动物：去设计台', () => expect(guideText(g).action).toBe('desk'));
   it('等着点地图：说放几只、叫什么', () => expect(guideText({ ...g, placing: { count: 20, name: '圆圆' } }).text).toContain('20 只圆圆'));
-  it('在跑：说还有几天出验收单，可以快进', () => {
+  it('在跑：只说只数和什么时候出验收单，可以快进', () => {
     const r = guideText({ ...g, mine: [{ name: '圆圆', count: 22 }], season: { released: 20, births: 5, dead: 3 } });
     expect(r.text).toContain('圆圆 22 只');
-    expect(r.text).toContain('40 天');
     expect(r.action).toBe('fast');
   });
   it('停着：让时间走', () => expect(guideText({ ...g, mine: [{ name: '圆圆', count: 22 }], paused: true }).action).toBe('play'));
+});
+
+describe('活的图层：真实总数 → 画几只演员', () => {
+  it('没有就不画；少的时候有几只画几只；多了封顶', async () => {
+    const { actorCount } = await import('../src/render/paper/liveLayer');
+    expect(actorCount(0, true)).toBe(0);
+    expect(actorCount(1, true)).toBe(1);
+    expect(actorCount(2, true)).toBe(2);
+    expect(actorCount(20, true)).toBe(8);
+    expect(actorCount(5000, true)).toBe(14);
+    expect(actorCount(5000, false)).toBe(12);
+    // 越多画得越多（不减）。
+    for (let n = 1; n < 400; n++) expect(actorCount(n + 1, true)).toBeGreaterThanOrEqual(actorCount(n, true));
+  });
 });

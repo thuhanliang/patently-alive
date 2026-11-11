@@ -49,13 +49,19 @@ export const heapRadiusM = (g: number): number => Math.cbrt((3 * g) / (2 * Math.
 export class FoodPile {
   readonly view = new Container();
   private readonly g = new Graphics();
-  private readonly label = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44, align: 'center' } });
+  private readonly label = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44, align: 'center' }, resolution: 2 });
   /** 标签底下的一小块纸（压在纸偶上面时也读得清）。 */
   private readonly plate = new Graphics();
   /** 这一帧的小堆和标签占的地方（屏幕坐标）：点它打开能量小票。 */
   box = { x: 0, y: 0, w: 0, h: 0 };
   /** 标签的位置（小票从它上面打出来）。 */
   labelBox = { x: 0, y: 0, w: 0, h: 0 };
+
+  /**
+   * 要去的那座岛上，哪几类食物有问题（嵌在游戏里时由委托给，2026-11-11）：写了说明的那一类标 △ 和说明，没写的标 ✓。
+   * null 是不在哪座岛的语境里（单独摆弄设计台），不标。
+   */
+  island: Partial<Record<FoodKind, string>> | null = null;
 
   constructor() {
     this.view.addChild(this.g, this.plate, this.label);
@@ -88,10 +94,11 @@ export class FoodPile {
       }
       cx += r + 4;
       top = Math.min(top, gy - r);
-      parts.push(`${FOOD_NAMES[k]} ${gramText(grams)}`);
+      const note = this.island?.[k];
+      parts.push(`${this.island ? (note ? '△ ' : '✓ ') : ''}${FOOD_NAMES[k]} ${gramText(grams)}${note ? `：${note}` : ''}`);
     }
     const narrow = W < 520;
-    this.label.text = `一天要吃\n${parts.join(narrow ? '\n' : ' · ')}${f.cold > 0.005 ? `\n（冷，多吃 ${Math.round(f.cold * 100)}%）` : ''}`;
+    this.label.text = `${this.island ? '一天要吃 · 这座岛上' : '一天要吃'}\n${parts.join(narrow || this.island ? '\n' : ' · ')}${f.cold > 0.005 ? `\n（冷，多吃 ${Math.round(f.cold * 100)}%）` : ''}`;
     const lw = this.label.width;
     const lh = this.label.height;
     const lx = Math.round(Math.min(W - lw - 8, Math.max(8, beside ? cx + 4 : (x + cx - 4) / 2 - lw / 2)));

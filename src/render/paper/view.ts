@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, Texture, type Text } from 'pixi.js';
-import { TICKS_PER_DAY, herbIndex, woodyIndex, type DerivedSpecies, type SimState } from '../../sim';
+import { TICKS_PER_DAY, herbIndex, woodyIndex, type DerivedSpecies, type SimState, type SpeciesQuarter } from '../../sim';
 import { AnnotationLayer } from '../annotationLayer';
 import { CLOSE_UP_CELL_PX, Camera } from '../camera';
 import { GridLayer, type DataLayer } from '../gridLayer';
@@ -15,6 +15,9 @@ import { tokenLengthCells } from './tokens';
 import { placeVegetation } from './vegetation';
 import { AnimalLayer } from './animalLayer';
 import type { ViewAngles } from '../view';
+import type { GaitRules } from '../../data/schema/gait';
+import type { RigKit } from '../puppet/actor';
+import { LiveLayer, type RigSpec } from './liveLayer';
 
 /** 剪纸像素 / 游戏世界坐标：游戏一格 CELL_PX，剪纸一格 PX。 */
 const K = PX / CELL_PX;
@@ -85,6 +88,7 @@ export class PaperView {
     this.overlay.addChild(this.grid.container, this.focusOutline, this.annotations.container);
     this.labelBox.addChild(this.annotations.labels);
     this.animals = new AnimalLayer(assets.P6, assets.P7, app.renderer, state.config.seed, species);
+    this.liveSeed = state.config.seed;
     this.setSpecies(species);
 
     this.vignette = new Sprite(Texture.from(vignetteCanvas()));
@@ -202,6 +206,35 @@ export class PaperView {
     this.scene = scene;
     this.app.stage.addChildAt(scene.root, 0);
     old?.dispose();
+  }
+
+  private live: LiveLayer | null = null;
+  private liveSeed = 1;
+
+  /**
+   * 改用活的图层画动物（小岛上的"立足"型委托，见 liveLayer.ts）：动物是一小群自己走动的演员，不再逐只画个体。
+   * kit 是纸偶的切图零件，载入以前设计物种先用通用木偶顶着。
+   */
+  useLive(rules: GaitRules, kit: Promise<RigKit>): void {
+    const live = new LiveLayer(this.assets.P7, rules, (sp) => AnimalLayer.lengthOf(sp), this.liveSeed);
+    this.live = live;
+    this.animals.useLive(live);
+    void kit.then((k) => live.setKit(k));
+  }
+
+  /** 是不是在用活的图层（用它时不需要把格子展开成个体）。 */
+  get isLive(): boolean {
+    return this.live !== null;
+  }
+
+  /** 一种设计物种的纸偶怎么搭（身体、颜色）。 */
+  setRig(id: string, spec: RigSpec): void {
+    this.live?.setRig(id, spec);
+  }
+
+  /** 这一季到目前为止各物种的账目：活的图层把出生和死亡演出来。 */
+  setTally(rows: readonly SpeciesQuarter[]): void {
+    this.live?.setTally(rows);
   }
 
   /** 设计物种在现场画成设计台上那只纸偶的样子（url 是设计台截下来的图）。 */

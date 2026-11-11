@@ -1295,8 +1295,12 @@ async function main(): Promise<void> {
     const origin = location.origin;
     window.addEventListener('message', (e) => {
       if (e.origin !== origin) return;
-      const m = e.data as { type?: string; text?: string };
-      if (m?.type === 'pa-desk-brief') brief.textContent = m.text ?? '';
+      const m = e.data as { type?: string; text?: string; foods?: Partial<Record<'plant' | 'vertebrate' | 'invertebrate', string>> };
+      if (m?.type === 'pa-desk-brief') {
+        brief.textContent = m.text ?? '';
+        // 脚边的饭堆标出这座岛上有没有：一眼看出它要吃的东西岛上给不给得了。
+        foodPile.island = m.foods ?? null;
+      }
     });
     document.getElementById('embedBack')!.addEventListener('click', () => parent.postMessage({ type: 'pa-desk-close' }, origin));
     document.getElementById('embedGo')!.addEventListener('click', () => {

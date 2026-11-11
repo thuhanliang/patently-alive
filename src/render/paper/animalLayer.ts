@@ -9,6 +9,7 @@ import type { PaperScene } from './scene';
 import { PX } from './terrain';
 import { drawPuppet, tokenLengthCells, type PuppetKind } from './tokens';
 import { colorOf } from '../palette';
+import type { LiveLayer } from './liveLayer';
 
 /** 幼体的剪纸缩小到这个比例。 */
 const JUVENILE_SCALE = 0.65;
@@ -78,6 +79,9 @@ export class AnimalLayer {
   private lastTick = -1;
   private looks: Look[] = [];
   private closeUp = false;
+  /** 活的图层（liveLayer.ts）：有了它，动物都由它画，代表单位和逐只的个体不画。 */
+  private live: LiveLayer | null = null;
+  private liveAt = 0;
 
   constructor(
     private readonly P6: Sheet | null,
@@ -89,6 +93,18 @@ export class AnimalLayer {
   ) {
     this.shadows.alpha = 0.3;
     this.setSpecies(species);
+  }
+
+  /** 改用活的图层画动物（小岛上的"立足"型委托）。 */
+  useLive(live: LiveLayer): void {
+    this.live = live;
+    live.setSpecies(this.species);
+    if (this.scene) live.attach(this.scene.bill);
+  }
+
+  /** 近景个体的身长（剪纸像素），活的图层也按它画。 */
+  static lengthOf(sp: DerivedSpecies): number {
+    return sizeInCells(sp.params.bodyMassKg) * INDIVIDUAL_SCALE * PX;
   }
 
   /** 设计物种的画像（设计台上那只纸偶的样子，2026-11-10）：有画像的物种在现场就画成它，不用通用木偶。 */
@@ -107,6 +123,7 @@ export class AnimalLayer {
   setSpecies(species: readonly DerivedSpecies[]): void {
     this.species = species;
     this.looks = species.map((sp) => this.lookOf(sp));
+    this.live?.setSpecies(species);
     this.redraw();
   }
 
@@ -121,6 +138,7 @@ export class AnimalLayer {
   attach(scene: PaperScene): void {
     this.scene = scene;
     scene.spin.addChild(this.shadows);
+    this.live?.attach(scene.bill);
     for (const m of [...this.tokens, ...this.people, ...this.cases]) scene.bill.addChild(m.obj);
   }
 
@@ -166,6 +184,16 @@ export class AnimalLayer {
     this.closeUp = closeUp;
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     const now = performance.now();
+    if (this.live) {
+      // 演员按真实的时间走（和倍速无关）；切到别的页面回来不会一下子跳很远。
+      const dt = Math.min(0.1, this.liveAt ? (now - this.liveAt) / 1000 : 0);
+      this.liveAt = now;
+      this.live.update(state, dt);
+      for (const m of this.tokens) m.obj.visible = false;
+      for (let i = 0; i < this.used; i++) this.pool[i]!.box.visible = false;
+      this.shadows.visible = false;
+      return;
+    }
     if (!closeUp && day !== this.tokenDay && now - this.tokenAt > TOKEN_INTERVAL_MS) {
       this.tokenDay = day;
       this.tokenAt = now;
@@ -314,7 +342,8 @@ export class AnimalLayer {
       }
     }
     const ct = Math.cos(cam.t);
-    const list = [...(this.closeUp ? this.people.slice(0, this.used) : this.tokens), ...this.cases];
+    this.live?.layout(cam);
+    const list = this.live ? this.cases : [...(this.closeUp ? this.people.slice(0, this.used) : this.tokens), ...this.cases];
     for (const m of list) {
       const [x, ry] = rotate(cam, m.x, m.y);
       const y = ry * ct;
