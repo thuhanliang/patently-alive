@@ -255,6 +255,9 @@
       .desk-release { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); padding: 16px 20px; background: var(--paper, #f4ead6); border-top: 8px solid var(--kraft, #d7b27a); border-radius: 4px; box-shadow: 0 0 0 100vmax rgba(20, 14, 8, 0.35), 0 6px 18px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; gap: 8px; }
       .desk-release[hidden] { display: none; }
       .desk-portrait { align-self: center; max-width: 220px; max-height: 130px; object-fit: contain; }
+      .desk-coats { display: flex; align-items: center; gap: 6px; }
+      .desk-coats .coat { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(74, 58, 40, 0.35); padding: 0; cursor: pointer; }
+      .desk-coats .coat.on { border-color: var(--blueprint); box-shadow: 0 0 0 2px var(--blueprint); }
       .desk-release input[type='text'] { font: inherit; padding: 4px 6px; width: 12em; }
       .desk-release .desk-hints p { margin: 2px 0; font-size: 13px; color: var(--ink-soft, #6b5a45); }
       .desk-release button { font: inherit; padding: 6px 12px; cursor: pointer; }

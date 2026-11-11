@@ -23,10 +23,10 @@ export function guideText(g: GuideState): { text: string; action: 'desk' | 'play
   if (g.mine.length === 0 && g.arrivingInDays === null) return { text: '岛上还没有你的动物。先去设计台设计一种。', action: 'desk' };
   if (g.arrivingInDays !== null && g.mine.every((m) => m.count === 0))
     return g.paused ? { text: `它们在路上（检疫、运输还要 ${g.arrivingInDays} 天）。让时间走起来。`, action: 'play' } : { text: `它们在路上，还要 ${g.arrivingInDays} 天到。`, action: null };
+  // 便签上只留只数：生了多少、死了多少在岛上看（纸偶头上的小纸签），季末看验收单。数太多会眼花。
   const who = g.mine.map((m) => `${m.name} ${m.count} 只`).join('，');
-  const tally = g.season.births + g.season.dead > 0 ? `这一季生了 ${g.season.births}，死了 ${g.season.dead}。` : '';
-  if (g.paused) return { text: `${who}。${tally}让时间走起来，季末出验收单。`, action: 'play' };
-  return { text: `${who}。${tally}还有 ${g.daysToQuarter} 天出验收单。`, action: 'fast' };
+  if (g.paused) return { text: `${who}。让时间走起来，季末出验收单。`, action: 'play' };
+  return { text: `${who}。看看它们在岛上过得怎么样；${g.daysToQuarter > 10 ? '季末' : `还有 ${g.daysToQuarter} 天`}出验收单。`, action: 'fast' };
 }
 
 /** 便签本身：一句话 + 至多一个按钮。 */

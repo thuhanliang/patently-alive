@@ -1,5 +1,5 @@
-import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
+import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, partsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -7,7 +7,9 @@ import type { PaperView } from './render/paper/view';
 import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
-import { DeskFrame } from './ui/deskFrame';
+import { DeskFrame, type Coat } from './ui/deskFrame';
+import { bodyPlan } from './render/puppet/plan';
+import { loadRigKit } from './render/puppet/actor';
 import { Guide } from './ui/guide';
 import { showOffice, writeRecord } from './ui/office';
 import { deadOf } from './ui/verdict';
@@ -66,6 +68,9 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
   // 沙盒没有委托（rules.goal 为 null），不显示历史卡和结算。
   return { world: worldFor(scenario), seed: scenario.seed, rules, problem, scenario: rules.goal ? scenario : null };
 }
+
+/** 看着岛上过日子的倍速：一季（90 天）二十秒上下。 */
+const WATCH_SPEED = 5;
 
 /** 事务所桌上摆的委托，按这个顺序。 */
 const OFFICE_SCENARIOS = ['garden-island', 'bird-island'];
@@ -170,7 +175,7 @@ async function main(): Promise<void> {
   caseCards.reset(session.rules.cases ?? [], session.cases);
   // 自然档案馆：翻看现有技术；情景允许引种时，条目上有"引进到这里"。开着时推演暂停。
   /** 选好了要引进的物种（档案馆的真实物种，或设计台的设计）和数量、等着在地图上点地点；null 表示没在引进。 */
-  let introducing: { species: SpeciesParams; design?: Design; count: number; portrait?: string } | null = null;
+  let introducing: { species: SpeciesParams; design?: Design; count: number; portrait?: string; coat?: Coat } | null = null;
   const startIntroducing = (choice: NonNullable<typeof introducing>): void => {
     tools.stopReleasing();
     field.stop();
@@ -226,6 +231,8 @@ async function main(): Promise<void> {
       : scenario
         ? `委托 · ${scenario.client.name}：${scenario.client.letter[1] ?? ''}`
         : '沙盒：随便设计，放上去看看。',
+    // 花园岛上没有可以抓的小兽，只有海边的鸟：吃肉的那一份标出来。给不给得了，还是世界说了算。
+    establish ? { vertebrate: `岛上只有${species.map((x) => x.name).join('、')}` } : null,
     rules.introduction.designs && intro
       ? {
           maxAnimals: intro.maxAnimals,
@@ -235,7 +242,7 @@ async function main(): Promise<void> {
             const ok = c.budget <= have;
             return { text: `${c.budget.toLocaleString('zh-CN')} 元（繁育、运输；越重越贵），预算还有 ${have.toLocaleString('zh-CN')} 元${ok ? '；放出去就收不回来' : '：不够，少放几只，或者做小一点'}`, ok };
           },
-          start: (design, species, count, portrait) => startIntroducing({ species, design, count, portrait }),
+          start: (design, species, count, portrait, coat) => startIntroducing({ species, design, count, portrait, coat }),
         }
       : undefined,
   );
@@ -375,11 +382,19 @@ async function main(): Promise<void> {
   const guide = establish
     ? new Guide(el('guide'), {
         desk: () => desk.show(),
-        play: () => void submit({ type: 'setSpeed', speed: 10 }),
-        fast: () => void submit({ type: 'setSpeed', speed: 100 }),
+        play: () => void submit({ type: 'setSpeed', speed: WATCH_SPEED }),
+        fast: () => void submit({ type: 'setSpeed', speed: 60 }),
       })
     : null;
   document.body.classList.toggle('establish', establish);
+  // "立足"型的小岛：动物由活的图层画（一小群自己走动的演员），设计的动物是会动的纸偶。
+  if (establish) {
+    const templatePlan = (template: string) => {
+      const d = designTemplates.find((t) => t.species === template)!.design;
+      return bodyPlan(d, partsOf(d, kit), compileDesign(d, kit).bird, viabilityRules, gaitRules);
+    };
+    view.useLive(gaitRules, loadRigKit('P11-cat', templatePlan));
+  }
   // 左边的笔记本：记录、死因、曲线、文件（种子、存档、校验和）。
   bindNotebook(el('nb-tabs'), el('nb-page'), [
     ['记录', el('nb-log')],
@@ -403,16 +418,20 @@ async function main(): Promise<void> {
       // 先退出引进模式再提交：引进不可撤销，提交还没回音时再点一下不能再引一批。被拒绝了再回到模式里重选地点。
       const chosen = introducing;
       introducing = null;
-      const { species, design, count, portrait } = chosen;
+      const { species, design, count, portrait, coat } = chosen;
       void submit({ type: 'introduce', species, x: cell.x, y: cell.y, count, ...(design ? { design } : {}) }).then((ok) => {
         if (!ok) {
           introducing = chosen;
           return;
         }
         // 现场就画成设计台上那只纸偶的样子。
-        if (portrait) void view.setPortrait(species.id, portrait);
-        // "立足"型的委托：放出去以后时间自己走起来（10 倍，一季十来秒），不用玩家再找按钮。
-        if (establish && session.speed < 10) void submit({ type: 'setSpeed', speed: 10 });
+        if (view.isLive && design && coat) {
+          // 岛上的它就是设计台上那只纸偶：同一个身体，自己走、吃、趴。
+          const compiled = compileDesign(design, kit);
+          view.setRig(species.id, { plan: bodyPlan(design, partsOf(design, kit), compiled.bird, viabilityRules, gaitRules), dye: coat, speedFactor: compiled.params.body?.speed ?? 1 });
+        } else if (portrait) void view.setPortrait(species.id, portrait);
+        // "立足"型的委托：放出去以后时间自己走起来（一季二十秒上下，够看清岛上在发生什么），不用玩家再找按钮。
+        if (establish && session.speed < WATCH_SPEED) void submit({ type: 'setSpeed', speed: WATCH_SPEED });
         status.textContent = `在 (${cell.x}, ${cell.y}) 放出了${design ? '设计的' : '引进的'} ${count} 只${species.name}`;
       });
       return;
@@ -454,7 +473,8 @@ async function main(): Promise<void> {
     if (focusInFlight) return;
     let want: FocusRect | null = null;
     const { grid } = session.sim.state;
-    if (view.closeUp) {
+    // 活的图层不逐只画个体，不用把格子展开。
+    if (view.closeUp && !view.isLive) {
       const v = view.visibleCells();
       want = focusAround(v.cx, v.cy, v.w, v.h, grid.width, grid.height);
     }
@@ -490,6 +510,7 @@ async function main(): Promise<void> {
     view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
+    view.setTally(session.soFar);
     if (guide) {
       const mine = session.species.map((sp, s) => ({ id: sp.params.id, name: sp.params.name, count: state.lastDay[s]?.total ?? 0 })).filter((m) => m.id.startsWith('d_'));
       const rows = session.soFar.filter((q) => q.id.startsWith('d_'));
