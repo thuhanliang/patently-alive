@@ -1,6 +1,8 @@
 import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
 import { COMMON_GLYPHS, HAND, warm } from '../../render/font';
 import './desk.css';
+import { lifeLines, lifeTally } from './life';
+import { bindButtonTaps, sound } from '../../ui/sound';
 import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, withRelativeLitter, type CompiledDesign, type EnvironmentProfile } from '../../sim';
@@ -178,6 +180,7 @@ const CUT_PAPER = import.meta.glob<string>('../../../art/incoming/lovart/paper/c
 async function main(): Promise<void> {
   // 画布上的字先载好（不然第一眼是系统字体）。
   await warm(COMMON_GLYPHS + gaitRules.references.animals.map((r) => r.name).join(''));
+  bindButtonTaps();
   const app = new Application();
   await app.init({ resizeTo: window, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
   document.body.prepend(app.canvas);
@@ -1124,6 +1127,7 @@ async function main(): Promise<void> {
         pt = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
       }
       applyCard(tab, item);
+      sound.play('brad');
       snapT = 0;
       snapPt = pt;
     },
@@ -1238,6 +1242,7 @@ async function main(): Promise<void> {
       design.parts.coat === 'feathers' ? '长了羽毛：推演里按鸟的公式算。画面先用兽的骨架，鸟的骨架下一步做。' : note.textContent && note.textContent.startsWith('长了羽毛') ? '' : note.textContent;
   }
 
+  let readoutHtml = '';
   function updateReadout(gs: ReturnType<typeof gaitOf>): void {
     const M = design.bodyMassKg;
     const doing = behavior === 'eat' && gs.gait === 'stand' ? '在吃' : behavior === 'lie' && gs.gait === 'stand' ? '趴着' : gs.gait === 'stand' ? '站着' : `${GAIT_NAMES[gs.gait]}，每小时 ${(speed * 3.6).toFixed(speed * 3.6 < 10 ? 1 : 0)} 千米`;
@@ -1249,9 +1254,17 @@ async function main(): Promise<void> {
       `最快每小时 ${(top() * 3.6).toFixed(0)} 千米`,
       `呼吸每分钟 ${Math.round(breathsPerMin(gaitRules, M))} 次 · 心跳 ${Math.round(heartPerMin(gaitRules, M))} 次`,
     ];
+    // 生养的账（life.ts）：体型、腿、育幼一变，这两行当场跟着变。
+    const life = lifeTally(compiled);
+    const [l1, l2] = lifeLines(life);
+    rows.push(`<span class="life">${l1}</span>`, `<span class="life ${life.yearly >= 1.03 ? 'up' : life.yearly <= 0.97 ? 'down' : ''}"><b>${l2}</b></span>`);
     readout.title = `弗劳德数 ${gs.froude.toFixed(2)}${gs.gait === 'stand' ? '' : ` · 步频 ${gs.strideHz.toFixed(2)} 赫兹 · 步长 ${gs.strideM.toFixed(2)} 米`}`;
     // 手机上只显示前两行（.more 收着，点读数展开）。
-    readout.innerHTML = `${rows.slice(0, 2).join('<br>')}<span class="more"><br>${rows.slice(2).join('<br>')}</span>`;
+    const html = `${rows.slice(0, 2).join('<br>')}<span class="more"><br>${rows.slice(2).join('<br>')}</span>`;
+    if (html !== readoutHtml) {
+      readoutHtml = html;
+      readout.innerHTML = html;
+    }
   }
 
   function loadTemplate(id: string): void {

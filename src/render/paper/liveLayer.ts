@@ -58,6 +58,10 @@ interface Actor {
   dying: number | null;
   /** 身长（剪纸像素，没放大以前）。 */
   len: number;
+  /** 正在扑谁（它吃掉的那一只）；扑到了那一只才倒下。 */
+  hunt: { prey: Actor; label: string; left: number } | null;
+  /** 正被谁追着。 */
+  hunted: boolean;
   /** 这一帧画面上放大了几倍（layout 里定）：走路的快慢按画出来的身长算，脚才不打滑。 */
   shown: number;
   seed: number;
@@ -140,6 +144,8 @@ export class LiveLayer {
     /** 一格在剪纸里占多少像素（小地图细分以后是 PX 的几倍）。 */
     private readonly cellPx: number,
     seed: number,
+    /** 演出了一次出生或死亡（主角的）：外面拿去配一声。 */
+    private readonly onEvent?: (kind: 'birth' | 'death') => void,
   ) {
     this.rnd = (seed * 2654435761) >>> 0 || 1;
   }
@@ -172,13 +178,28 @@ export class LiveLayer {
 
   /** 换了物种、纸偶的搭法：演员全部重来。 */
   private rebuild(): void {
-    for (const a of this.actors) this.dispose(a);
+    for (const a of this.actors) this.dispose(a, false);
+    for (const list of this.spare.values()) for (const r of list) r.destroy();
+    this.spare.clear();
     this.actors = [];
     this.sinceCensus = 1;
   }
 
-  private dispose(a: Actor): void {
-    if (a.rig) a.rig.destroy();
+  /** 用过的纸偶收在这里（按物种），下次要用先从这里拿：搭一只纸偶要把每片零件贴一遍骨头，很费。 */
+  private readonly spare = new Map<string, PuppetActor[]>();
+  /** 这一帧还能新搭几只纸偶（一帧最多一只，不然一下子生十只会顿一下）。 */
+  private buildsLeft = 1;
+
+  private dispose(a: Actor, keepRig = true): void {
+    if (a.rig) {
+      if (keepRig) {
+        a.rig.view.removeFromParent();
+        const id = this.species[a.s]?.params.id ?? '';
+        const list = this.spare.get(id) ?? [];
+        list.push(a.rig);
+        this.spare.set(id, list);
+      } else a.rig.destroy();
+    }
     a.box.destroy({ children: true });
   }
 
@@ -202,6 +223,7 @@ export class LiveLayer {
 
   update(state: Readonly<SimState>, dt: number): void {
     if (!this.bill) return;
+    this.buildsLeft = 1;
     this.sinceCensus += dt;
     if (this.sinceCensus >= 0.5) {
       this.sinceCensus = 0;
@@ -236,7 +258,11 @@ export class LiveLayer {
       const mine = this.actors.filter((a) => a.s === s && a.dying === null);
       for (let k = mine.length; k < want; k++) {
         const at = this.pickCell(state, s);
-        if (at) this.spawn(state, s, at.x, at.y, false);
+        if (at && !this.spawn(state, s, at.x, at.y, false)) {
+          // 这一帧搭不了了，下一帧接着补。
+          this.sinceCensus = 0.5;
+          break;
+        }
       }
       // 多出来的悄悄退场（不带纸签：纸签只给账上记了的死亡）。
       for (let k = want; k < mine.length; k++) mine[k]!.dying = 0.6;
@@ -279,7 +305,19 @@ export class LiveLayer {
     const shadow = new Graphics().ellipse(len * 0.05, 0, len * 0.45, len * 0.1).fill({ color: 0x241a10, alpha: 0.28 });
     let rig: PuppetActor | null = null;
     if (spec && this.kit) {
-      rig = new PuppetActor(this.kit, spec.plan, spec.dye, this.rules, spec.speedFactor, seed, FIELD_DETAIL);
+      rig = this.spare.get(id)?.pop() ?? null;
+      if (!rig) {
+        // 这一帧已经搭过一只了：这一只下一帧再来（返回 null，调用的一方下次再试）。
+        if (this.buildsLeft <= 0) {
+          shadow.destroy();
+          inner.destroy();
+          box.destroy();
+          return null;
+        }
+        this.buildsLeft -= 1;
+        rig = new PuppetActor(this.kit, spec.plan, spec.dye, this.rules, spec.speedFactor, seed, FIELD_DETAIL);
+      }
+      rig.view.alpha = 1;
       rig.setLength(len);
       inner.addChild(rig.view);
     } else {
@@ -288,7 +326,7 @@ export class LiveLayer {
     box.addChild(shadow, inner);
     const face = this.random() < 0.5 ? -1 : 1;
     inner.scale.x = face;
-    const a: Actor = { s, box, inner, rig, x, y, tx: x, ty: y, hx: x, hy: y, doing: 'stand', timer: this.random() * 2, v: 0, face, want: face, age: 0, grow: young ? 0 : 1, dying: null, len, shown: 1, seed };
+    const a: Actor = { s, box, inner, rig, x, y, tx: x, ty: y, hx: x, hy: y, doing: 'stand', timer: this.random() * 2, v: 0, face, want: face, age: 0, grow: young ? 0 : 1, dying: null, len, shown: 1, seed, hunt: null, hunted: false };
     this.actors.push(a);
     this.bill?.addChild(box);
     void state;
@@ -310,7 +348,10 @@ export class LiveLayer {
       if (pend.births > 0 && alive.length > 0) {
         const parent = alive[Math.floor(this.random() * alive.length)]!;
         // 只给主角的出生贴纸签；别的动物只冒出一只小的。
-        if (mine) this.tag(parent, `生了 ${pend.births} 只`, 0x3d6b3a);
+        if (mine) {
+          this.tag(parent, `生了 ${pend.births} 只`, 0x3d6b3a);
+          this.onEvent?.('birth');
+        }
         if (alive.length < (mine ? MINE_CAP : OTHER_CAP) + 2) this.spawn(state, s, parent.x + (this.random() - 0.5) * parent.len, parent.y + (this.random() - 0.5) * parent.len * 0.5, true);
         pend.births = 0;
         played = true;
@@ -323,9 +364,22 @@ export class LiveLayer {
         if (top) {
           pend.deaths.delete(top[0]);
           const victim = alive[Math.floor(this.random() * alive.length)];
-          if (victim) {
-            this.tag(victim, `${causeLabel(top[0], names)} ${top[1]} 只`, 0x8a4a34);
+          const label = `${causeLabel(top[0], names)} ${top[1]} 只`;
+          const dc = decodeCause(top[0], names.length);
+          // 被事务所设计的动物吃掉的：让最近的那只主角真的跑过去扑它，扑到了再倒下、出纸签。
+          const hunter =
+            victim && dc.kind === 'predation' && isMine(this.species[dc.predator]?.params.id ?? '')
+              ? this.actors
+                  .filter((a) => a.s === dc.predator && a.dying === null && !a.hunt && a.grow === 1)
+                  .sort((a, b) => Math.hypot(a.x - victim.x, a.y - victim.y) - Math.hypot(b.x - victim.x, b.y - victim.y))[0]
+              : undefined;
+          if (victim && hunter && Math.hypot(hunter.x - victim.x, hunter.y - victim.y) < 14 * this.cellPx) {
+            hunter.hunt = { prey: victim, label, left: 4 };
+            victim.hunted = true;
+          } else if (victim) {
+            this.tag(victim, label, 0x8a4a34);
             victim.dying = 0;
+            if (mine) this.onEvent?.('death');
             victim.doing = 'lie';
             victim.rig?.setMode('lie');
           }
@@ -361,6 +415,37 @@ export class LiveLayer {
       a.rig?.step(dt);
       return;
     }
+    // 被追着的：往远离的方向逃（逃不掉——账上它已经被吃了）。
+    if (a.hunted && a.doing !== 'go') {
+      a.doing = 'go';
+      a.tx = a.x + a.want * a.len * a.shown * 6;
+      a.ty = a.y;
+      a.timer = 5;
+    }
+    // 扑食：盯着猎物跑（比走快），扑到了或者追了太久就结束——猎物倒下、出纸签，自己停下来吃。
+    if (a.hunt) {
+      const h = a.hunt;
+      h.left -= dt;
+      a.tx = h.prey.x;
+      a.ty = h.prey.y;
+      a.doing = 'go';
+      a.timer = 5;
+      if (Math.hypot(h.prey.x - a.x, h.prey.y - a.y) < a.len * a.shown * 0.55 || h.left <= 0 || h.prey.dying !== null) {
+        if (h.prey.dying === null) {
+          this.tag(h.prey, h.label, 0x8a4a34);
+          h.prey.dying = 0;
+          h.prey.hunted = false;
+          h.prey.rig?.setMode('lie');
+        }
+        a.hunt = null;
+        a.tx = a.x;
+        a.ty = a.y;
+        a.doing = 'eat';
+        a.timer = 3;
+        a.hx = a.x;
+        a.hy = a.y;
+      }
+    }
     a.timer -= dt;
     const dx = a.tx - a.x;
     const dy = a.ty - a.y;
@@ -368,7 +453,9 @@ export class LiveLayer {
     // 画面上一个身长是多少剪纸像素（已经算上放大），一秒走几个身长由身体定。
     const body = a.len * a.shown * (0.45 + 0.55 * a.grow);
     const lengthsPerS = a.rig ? a.rig.walkMs / a.rig.plan.bodyLen : 1.3;
-    const top = lengthsPerS * body;
+    // 扑食、逃命的时候跑起来（按身体的奔跑速度，最多三倍于走）。
+    const hurry = a.hunt || a.hunted ? Math.min(3, a.rig ? a.rig.runMs / a.rig.walkMs : 2.2) : 1;
+    const top = lengthsPerS * body * hurry;
     // 离目标近了就提前收步：按现在的速度和停步要的时间算刹车距离。
     const going = a.doing === 'go' && dist > 0.5 && dist > 0.5 * a.v * top * ACCEL_S;
     if (a.doing === 'go' && Math.abs(dx) > 1) a.want = dx < 0 ? -1 : 1;
@@ -386,7 +473,7 @@ export class LiveLayer {
     if (a.doing === 'go' ? (dist <= 0.5 && a.v < 0.05) || a.timer <= 0 : a.timer <= 0) this.next(a, state);
     if (a.rig) {
       a.rig.setMode(a.doing === 'go' ? 'stand' : a.doing);
-      a.rig.setSpeed(a.v * a.rig.walkMs);
+      a.rig.setSpeed(a.v * a.rig.walkMs * hurry);
       a.rig.step(dt);
     } else {
       // 整只剪纸的（鸟）：走的时候一颠一颠。

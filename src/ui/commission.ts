@@ -4,6 +4,7 @@ import type { SessionReadout } from '../runtime/remote';
 import { SCORE_LABELS, scoreRows } from './scoreText';
 import { replyKeyOf, speciesBlock, wishList, wishesOf } from './verdict';
 import { postageStamp, seal, sparkline, svgEl } from './paperArt';
+import { sound } from './sound';
 
 /**
  * 委托的流程卡片：开局的历史卡与委托信、每季的结算单、委托结束的总结。
@@ -18,7 +19,7 @@ export class CommissionCards {
     /** 物种 id，顺序和各方法收到的 names 一致；引进新物种后换掉。 */
     public speciesIds: readonly string[],
     /** "立足"型委托用：岛上有什么（开局卡上写给设计的人看）、去设计台、回事务所。 */
-    private readonly extra: { facts?: readonly string[]; desk?: () => void; office?: () => void; ended?: (reply: string, count: number) => void; portrait?: (id: string) => string | undefined } = {},
+    private readonly extra: { facts?: readonly string[]; desk?: () => void; office?: () => void; ended?: (reply: string, count: number) => void; portrait?: (id: string) => string | undefined; patent?: () => void } = {},
   ) {}
 
   get isOpen(): boolean {
@@ -144,13 +145,15 @@ export class CommissionCards {
         ...this.verdicts(last, names),
       ];
       this.extra.ended?.(key, last.targetCount);
+      if (key === 'success') window.setTimeout(() => sound.play('chime'), 900);
       this.show(
         '委托结束 · 回信',
         body,
         [
           ['留下来再看看', () => this.close()],
+          ['再接一次', () => location.reload()],
+          ...(this.extra.patent ? [['看专利证书', () => this.extra.patent!()] as [string, () => void]] : []),
           ['回事务所', () => this.extra.office?.()],
-          ['再接一次这份委托', () => location.reload()],
         ],
         svgEl(key === 'success' ? seal('办成了', 'blue') : seal('没办成', 'brown')),
       );
@@ -215,6 +218,9 @@ export class CommissionCards {
       bar.appendChild(b);
     });
     card.append(...(title ? [h] : []), ...body, ...(stamp ? [stamp] : []), bar);
+    // 一张纸落到桌上；有图章的，等纸落稳了再盖。
+    sound.play('flip');
+    if (stamp) window.setTimeout(() => this.open && sound.play('stamp'), 420);
     this.el.replaceChildren(card);
     this.el.style.display = '';
   }

@@ -187,3 +187,37 @@ body.office #modal { background: none; backdrop-filter: none; align-items: stret
 .office-foot .cat-line { opacity: 0.85; margin-bottom: 6px; }
 .office-foot a { color: #f6e8c8; opacity: 0.8; text-underline-offset: 4px; }
 .office-foot a:hover { opacity: 1; }
+
+/* ---- 物种专利证书 ---- */
+.patent { position: relative; font-size: 15px; }
+.patent:not(.small) { padding: 6px 10px 4px; border: 3px double rgba(74, 58, 40, 0.5); outline: 1px solid rgba(74, 58, 40, 0.25); outline-offset: 5px; margin: 8px; }
+.patent-no { text-align: center; font-size: 13px; letter-spacing: 3px; color: var(--ink-soft); }
+.patent-title { text-align: center; font-size: 28px; font-weight: 700; letter-spacing: 10px; padding-left: 10px; margin: 2px 0 6px; }
+.patent-name { text-align: center; font-size: 19px; letter-spacing: 2px; }
+.patent-fig { display: flex; flex-direction: column; align-items: center; margin: 8px 0 2px; }
+.patent-fig img { max-width: 300px; max-height: 170px; object-fit: contain; filter: drop-shadow(2px 4px 0 rgba(20, 12, 4, 0.2)); }
+.patent-fig span { font-size: 12px; letter-spacing: 2px; color: var(--ink-soft); }
+.patent-claims { margin: 6px 0; padding-left: 26px; }
+.patent-claims li { margin: 3px 0; line-height: 1.7; }
+.patent-opinion { font-size: 16px; padding-left: 10px; border-left: 3px solid var(--blueprint); }
+.patent .sign { text-align: right; color: var(--ink-soft); margin-top: 10px; }
+.patent:not(.small) .seal { right: 6px; top: 58px; bottom: auto; }
+.patent.small {
+  width: 150px; padding: 10px 10px 12px; text-align: center; cursor: pointer; background: var(--grain), linear-gradient(#fbf5e4, #f1e4c4);
+  border: 2.5px double rgba(74, 58, 40, 0.45); box-shadow: var(--lift); transform: rotate(var(--tilt, 0deg)); transition: transform 0.15s;
+}
+.patent.small:hover { transform: rotate(0deg) translateY(-5px) scale(1.04); }
+.patent.small .patent-no { font-size: 10px; letter-spacing: 1px; }
+.patent.small .patent-portrait { width: 120px; height: 74px; object-fit: contain; margin: 4px 0 0; }
+.patent.small .patent-title { font-size: 16px; letter-spacing: 2px; padding: 0; margin: 0; }
+.patent.small .seal { width: 46px; height: 46px; right: 4px; bottom: 4px; animation: none; }
+.office-wall { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-end; padding: 4px 24px 0; max-width: 1100px; }
+.office-wall-title { color: #e9d7b0; font-size: 14px; letter-spacing: 4px; opacity: 0.8; margin-top: clamp(8px, 2vh, 22px); }
+.office-scene { grid-template-rows: auto auto auto 1fr auto; }
+.office-scene .office-desk { align-self: start; margin-top: clamp(10px, 3vh, 34px); }
+#patent-view { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(20, 14, 8, 0.4), rgba(12, 8, 4, 0.7)); animation: veil 0.25s ease both; }
+#patent-view .modal-card { max-width: 560px; }
+
+/* ---- 声音开关：左下角一颗小纸钮 ---- */
+.mute { position: fixed; left: 12px; bottom: 12px; z-index: 12; font-size: 13px; padding: 4px 10px; border: 1px solid rgba(74, 58, 40, 0.38); background: var(--grain), var(--paper); border-radius: 2px 6px 3px 5px / 5px 2px 6px 3px; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.3); cursor: pointer; color: var(--ink); }
+.mute.off { opacity: 0.6; text-decoration: line-through; }
