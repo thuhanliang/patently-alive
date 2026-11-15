@@ -1,14 +1,16 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { HAND, warm } from '../font';
 import type { GaitRules } from '../../data/schema/gait';
 import { countAt, decodeCause, type DerivedSpecies, type SimState, type SpeciesQuarter } from '../../sim';
 import { TERRAIN } from '../../sim/terrain';
 import type { Dye } from '../puppet/cutout';
-import { PuppetActor, type ActorMode, type RigKit } from '../puppet/actor';
+import { PuppetActor, type RigKit } from '../puppet/actor';
 import type { BodyPlan } from '../puppet/plan';
 import { makeAnimal, puppetKindOf } from './animals';
 import type { Sheet } from './assets';
 import { rotate, type Cam } from './camera';
 import { PX } from './terrain';
+import { tokenLengthCells } from './tokens';
 
 /**
  * 活的图层（2026-11-11）：小岛上不再画"每个时刻每只在哪"（倍速一开就是一帧一个随机位置），
@@ -27,6 +29,8 @@ export interface RigSpec {
   speedFactor: number;
 }
 
+type Doing = 'stand' | 'eat' | 'lie' | 'go';
+
 interface Actor {
   s: number;
   box: Container;
@@ -37,14 +41,25 @@ interface Actor {
   y: number;
   tx: number;
   ty: number;
-  mode: ActorMode;
+  /** 家：它出现的地方。只在家附近转，不会走到没有这种动物的地方去。 */
+  hx: number;
+  hy: number;
+  doing: Doing;
   timer: number;
+  /** 现在的速度，占走路速度的几成（0–1）：起步、停步都有个过程，不是一下子动起来。 */
+  v: number;
+  /** 脸朝哪边（−1 左，1 右）：转身时从一边压扁了翻到另一边，像把纸片翻个面。 */
+  face: number;
+  want: number;
   age: number;
   /** 幼崽：从小长到大（0–1）。 */
   grow: number;
   /** 正在淡掉（秒）；null 是活着。 */
   dying: number | null;
+  /** 身长（剪纸像素，没放大以前）。 */
   len: number;
+  /** 这一帧画面上放大了几倍（layout 里定）：走路的快慢按画出来的身长算，脚才不打滑。 */
+  shown: number;
   seed: number;
 }
 
@@ -57,13 +72,21 @@ interface Tag {
 }
 
 const TAG_LIFE = 2.2;
+/** 岛上的纸偶只有几十像素：白边、投影、纸纹放大这么多倍才看得出是剪纸。 */
+const FIELD_DETAIL = 3.2;
 const MINE_CAP = 14;
 const OTHER_CAP = 12;
-/** 事务所设计的动物画得比别的大一些：它是主角。 */
-const MINE_BOOST = 1.5;
-/** 演员在屏幕上的身长不小于这么多像素。 */
-const MIN_PX = 34;
-const MINE_MIN_PX = 62;
+/** 演员在屏幕上的身长不小于这么多像素（主角大一些）。 */
+const MIN_PX = 30;
+const MINE_MIN_PX = 54;
+/** 演员的身长（剪纸像素）：和代表单位一样按体重压缩着变，主角画得大一些。 */
+const lengthOf = (massKg: number, mine: boolean): number => tokenLengthCells(massKg) * PX * (mine ? 1.5 : 0.62);
+/** 演员离家最远几格（左右）。 */
+const LEASH_CELLS = 2.2;
+/** 起步、停步用多久（秒）。 */
+const ACCEL_S = 0.45;
+/** 转身用多久（秒）。 */
+const TURN_S = 0.28;
 
 const isMine = (id: string): boolean => id.startsWith('d_');
 
@@ -114,8 +137,8 @@ export class LiveLayer {
   constructor(
     private readonly P7: Sheet | null,
     private readonly rules: GaitRules,
-    /** 一种动物在画面上的身长（剪纸像素）。 */
-    private readonly lenOf: (sp: DerivedSpecies) => number,
+    /** 一格在剪纸里占多少像素（小地图细分以后是 PX 的几倍）。 */
+    private readonly cellPx: number,
     seed: number,
   ) {
     this.rnd = (seed * 2654435761) >>> 0 || 1;
@@ -219,19 +242,12 @@ export class LiveLayer {
       for (let k = want; k < mine.length; k++) mine[k]!.dying = 0.6;
       const { width } = state.grid;
       for (const a of mine.slice(0, want)) {
-        const cx = Math.floor(a.x / PX);
-        const cy = Math.floor(a.y / PX);
+        const cx = Math.floor(a.hx / this.cellPx);
+        const cy = Math.floor(a.hy / this.cellPx);
         let near = 0;
-        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) near += countAt(pop, Math.max(0, Math.min(state.grid.height - 1, cy + dy)) * width + Math.max(0, Math.min(width - 1, cx + dx)));
-        if (near === 0) {
-          const at = this.pickCell(state, s);
-          if (at) {
-            a.tx = at.x;
-            a.ty = at.y;
-            a.mode = 'run';
-            a.timer = 8;
-          }
-        }
+        for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) near += countAt(pop, Math.max(0, Math.min(state.grid.height - 1, cy + dy)) * width + Math.max(0, Math.min(width - 1, cx + dx)));
+        // 站的地方已经没有这种动物了：这一只悄悄退场，下一轮在有的地方补一只（不让它横穿整座岛跑过去）。
+        if (near === 0) a.dying = 0.6;
       }
     });
   }
@@ -246,7 +262,7 @@ export class LiveLayer {
     let r = this.random() * total;
     for (let c = 0; c < n; c++) {
       r -= countAt(pop, c);
-      if (r < 0) return { x: ((c % state.grid.width) + this.random()) * PX, y: (Math.floor(c / state.grid.width) + this.random()) * PX };
+      if (r < 0) return { x: ((c % state.grid.width) + this.random()) * this.cellPx, y: (Math.floor(c / state.grid.width) + this.random()) * this.cellPx };
     }
     return null;
   }
@@ -255,7 +271,7 @@ export class LiveLayer {
     const sp = this.species[s]!;
     const id = sp.params.id;
     const mine = isMine(id);
-    const len = this.lenOf(sp) * (mine ? MINE_BOOST : 1);
+    const len = lengthOf(sp.params.bodyMassKg, mine);
     const spec = this.rigs.get(id);
     const box = new Container();
     const inner = new Container();
@@ -263,14 +279,16 @@ export class LiveLayer {
     const shadow = new Graphics().ellipse(len * 0.05, 0, len * 0.45, len * 0.1).fill({ color: 0x241a10, alpha: 0.28 });
     let rig: PuppetActor | null = null;
     if (spec && this.kit) {
-      rig = new PuppetActor(this.kit, spec.plan, spec.dye, this.rules, spec.speedFactor, seed);
+      rig = new PuppetActor(this.kit, spec.plan, spec.dye, this.rules, spec.speedFactor, seed, FIELD_DETAIL);
       rig.setLength(len);
       inner.addChild(rig.view);
     } else {
       inner.addChild(makeAnimal(this.P7, puppetKindOf(id), len, 0, false));
     }
     box.addChild(shadow, inner);
-    const a: Actor = { s, box, inner, rig, x, y, tx: x, ty: y, mode: 'stand', timer: this.random() * 2, age: 0, grow: young ? 0 : 1, dying: null, len, seed };
+    const face = this.random() < 0.5 ? -1 : 1;
+    inner.scale.x = face;
+    const a: Actor = { s, box, inner, rig, x, y, tx: x, ty: y, hx: x, hy: y, doing: 'stand', timer: this.random() * 2, v: 0, face, want: face, age: 0, grow: young ? 0 : 1, dying: null, len, shown: 1, seed };
     this.actors.push(a);
     this.bill?.addChild(box);
     void state;
@@ -308,6 +326,7 @@ export class LiveLayer {
           if (victim) {
             this.tag(victim, `${causeLabel(top[0], names)} ${top[1]} 只`, 0x8a4a34);
             victim.dying = 0;
+            victim.doing = 'lie';
             victim.rig?.setMode('lie');
           }
           played = true;
@@ -318,9 +337,10 @@ export class LiveLayer {
   }
 
   private tag(at: Actor, text: string, color: number): void {
+    void warm(text);
     const label = new Text({
       text,
-      style: { fontFamily: 'Georgia, "Songti SC", "Noto Serif SC", serif', fontSize: 26, fill: color, fontWeight: '700', stroke: { color: 0xfbf5e6, width: 6, join: 'round' } },
+      style: { fontFamily: HAND, fontSize: 26, fill: color, fontWeight: '700', stroke: { color: 0xfbf5e6, width: 6, join: 'round' } },
       resolution: 2,
     });
     label.anchor.set(0.5, 1);
@@ -336,53 +356,80 @@ export class LiveLayer {
     if (a.dying !== null) {
       a.dying += dt;
       a.box.alpha = Math.max(0, 1 - Math.max(0, a.dying - 0.5) / 0.9);
+      a.v = Math.max(0, a.v - dt / ACCEL_S);
+      a.rig?.setSpeed(0);
       a.rig?.step(dt);
       return;
     }
     a.timer -= dt;
-    const moving = a.mode === 'walk' || a.mode === 'run';
     const dx = a.tx - a.x;
     const dy = a.ty - a.y;
     const dist = Math.hypot(dx, dy);
-    if (moving && dist > 1) {
-      // 画面上走多快：按身体的真实速度折成"每秒几个身长"。
-      const v = a.rig ? (a.rig.speedOf(a.mode) / a.rig.plan.bodyLen) * a.len : a.len * (a.mode === 'run' ? 3 : 1.3);
-      const step = Math.min(dist, v * dt);
+    // 画面上一个身长是多少剪纸像素（已经算上放大），一秒走几个身长由身体定。
+    const body = a.len * a.shown * (0.45 + 0.55 * a.grow);
+    const lengthsPerS = a.rig ? a.rig.walkMs / a.rig.plan.bodyLen : 1.3;
+    const top = lengthsPerS * body;
+    // 离目标近了就提前收步：按现在的速度和停步要的时间算刹车距离。
+    const going = a.doing === 'go' && dist > 0.5 && dist > 0.5 * a.v * top * ACCEL_S;
+    if (a.doing === 'go' && Math.abs(dx) > 1) a.want = dx < 0 ? -1 : 1;
+    // 转身：先停一停，纸片翻过来，再走。
+    const turning = Math.sign(a.face) !== a.want || Math.abs(a.face) < 1;
+    a.face += Math.sign(a.want - a.face) * Math.min(Math.abs(a.want - a.face), (2 * dt) / TURN_S);
+    a.inner.scale.x = (a.face < 0 ? -1 : 1) * Math.max(0.08, Math.abs(a.face));
+    const vTarget = going && !turning ? 1 : 0;
+    a.v += Math.sign(vTarget - a.v) * Math.min(Math.abs(vTarget - a.v), dt / ACCEL_S);
+    if (a.v > 0 && dist > 1e-6) {
+      const step = Math.min(dist, a.v * top * dt);
       a.x += (dx / dist) * step;
       a.y += (dy / dist) * step;
-      if (Math.abs(dx) > 0.5) a.inner.scale.x = dx < 0 ? -1 : 1;
     }
-    if (a.timer <= 0 || (moving && dist <= 1)) this.nextMode(a, state, moving);
+    if (a.doing === 'go' ? (dist <= 0.5 && a.v < 0.05) || a.timer <= 0 : a.timer <= 0) this.next(a, state);
     if (a.rig) {
-      a.rig.setMode(a.mode);
+      a.rig.setMode(a.doing === 'go' ? 'stand' : a.doing);
+      a.rig.setSpeed(a.v * a.rig.walkMs);
       a.rig.step(dt);
     } else {
       // 整只剪纸的（鸟）：走的时候一颠一颠。
-      a.inner.y = moving ? -Math.abs(Math.sin((a.age + a.seed * 9) * 9)) * a.len * 0.08 : 0;
+      a.inner.y = -Math.abs(Math.sin((a.age + a.seed * 9) * 9)) * a.len * 0.08 * a.v;
     }
   }
 
-  private nextMode(a: Actor, state: Readonly<SimState>, wasMoving: boolean): void {
+  /** 这一段做完了，接着做什么：走一段 → 吃 / 站 / 趴 → 再走。 */
+  private next(a: Actor, state: Readonly<SimState>): void {
     const r = this.random();
-    if (wasMoving) {
-      a.mode = r < 0.5 ? 'eat' : r < 0.75 ? 'stand' : r < 0.9 ? 'lie' : 'walk';
-    } else {
-      a.mode = r < 0.85 ? 'walk' : 'stand';
+    if (a.doing === 'go') a.doing = r < 0.5 ? 'eat' : r < 0.78 ? 'stand' : r < 0.92 ? 'lie' : 'go';
+    else a.doing = r < 0.85 ? 'go' : 'stand';
+    if (a.doing !== 'go') {
+      a.timer = a.doing === 'eat' ? 2.5 + this.random() * 3 : a.doing === 'lie' ? 3 + this.random() * 4 : 1 + this.random() * 2;
+      return;
     }
-    if (a.mode === 'walk') {
-      const { width, height, terrain } = state.grid;
-      for (let k = 0; k < 8; k++) {
-        const tx = a.x + (this.random() - 0.5) * 6 * PX;
-        const ty = a.y + (this.random() - 0.5) * 6 * PX;
-        const cx = Math.floor(tx / PX);
-        const cy = Math.floor(ty / PX);
-        if (cx < 0 || cy < 0 || cx >= width || cy >= height || terrain[cy * width + cx] === TERRAIN.water) continue;
-        a.tx = tx;
-        a.ty = ty;
-        break;
-      }
-      a.timer = 7;
-    } else a.timer = a.mode === 'eat' ? 2.5 + this.random() * 3 : a.mode === 'lie' ? 3 + this.random() * 4 : 1 + this.random() * 2;
+    // 纸偶是侧面的：走的路线基本是横着的，只带一点上下，不会"一边迈步一边横着飘"。
+    // 尽量落在草地、海岸上（灌丛里会被叶子挡住）；实在找不到就原地站着。
+    const { width, height, terrain } = state.grid;
+    const body = a.len * a.shown;
+    let found = false;
+    for (let k = 0; k < 14 && !found; k++) {
+      // 离家远了就往回走；不远就多半顺着现在的方向。
+      const away = (a.x - a.hx) / (LEASH_CELLS * this.cellPx);
+      const side = Math.abs(away) > 1 ? -Math.sign(away) : this.random() < 0.65 ? a.want : -a.want;
+      const run = side * (2 + this.random() * 5) * body;
+      const tx = a.x + run;
+      const ty = a.y + run * (this.random() - 0.5) * 0.5 - (a.y - a.hy) * 0.3;
+      const cx = Math.floor(tx / this.cellPx);
+      const cy = Math.floor(ty / this.cellPx);
+      if (cx < 0 || cy < 0 || cx >= width || cy >= height) continue;
+      const t = terrain[cy * width + cx];
+      if (t === TERRAIN.water || (t === TERRAIN.shrub && k < 9)) continue;
+      a.tx = tx;
+      a.ty = ty;
+      found = true;
+    }
+    if (!found) {
+      a.doing = 'stand';
+      a.timer = 1 + this.random();
+      return;
+    }
+    a.timer = 14;
   }
 
   /** 按镜头摆好：演员不小于 MIN_PX，纸签不随缩放变小。 */
@@ -397,7 +444,8 @@ export class LiveLayer {
       a.box.position.set(x, y);
       // 主角（会动的纸偶）画得更大：纸偶的头体长比整只剪纸的鸟显小。
       const minPx = a.rig ? MINE_MIN_PX : crowded ? MIN_PX * 0.8 : MIN_PX;
-      a.box.scale.set(Math.max(1, minPx / (a.len * cam.s)) * young * (0.6 + 0.4 * pop));
+      a.shown = Math.max(1, minPx / (a.len * cam.s));
+      a.box.scale.set(a.shown * young * (0.6 + 0.4 * pop));
       a.box.zIndex = y + 0.5;
     }
     for (const t of this.tags) {

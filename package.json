@@ -20,6 +20,7 @@
     "routes": "vitest run --config vitest.sweep.config.ts --silent=false scripts/routes.bench.ts"
   },
   "dependencies": {
+    "lxgw-wenkai-screen-webfont": "^1.7.0",
     "pixi.js": "^8.22.0",
     "zod": "^4.6.7"
   },

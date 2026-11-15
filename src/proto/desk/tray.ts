@@ -251,3 +251,38 @@ export function drawEarIcon(c: HTMLCanvasElement, a: Morph['appearance'], tipCat
     ctx.stroke();
   }
 }
+
+/** 毛色卡上的小图：一块圆纸片，主色打底，两道条纹，下面一弯浅色。 */
+export function drawCoatIcon(c: HTMLCanvasElement, coat: { main: number; stripe: number; pale: number }): void {
+  const ctx = c.getContext('2d')!;
+  const w = c.width;
+  const h = c.height;
+  const hex = (v: number): string => `#${v.toString(16).padStart(6, '0')}`;
+  const r = Math.min(w, h) * 0.4;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = hex(coat.main);
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = hex(coat.stripe);
+  ctx.lineWidth = r * 0.22;
+  ctx.lineCap = 'round';
+  for (const k of [-0.35, 0.15]) {
+    ctx.beginPath();
+    ctx.moveTo(w / 2 + k * r * 2 - r * 0.2, h / 2 - r);
+    ctx.quadraticCurveTo(w / 2 + k * r * 2 + r * 0.3, h / 2 - r * 0.3, w / 2 + k * r * 2 - r * 0.1, h / 2 + r * 0.2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = hex(coat.pale);
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2 + r * 1.05, r * 1.1, r * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(74,58,40,.55)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
+  ctx.stroke();
+}

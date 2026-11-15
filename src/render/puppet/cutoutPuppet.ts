@@ -95,6 +95,12 @@ export class CutoutPuppet {
   /** 原样的站姿：成品图画的是它，身体的倾斜相对它算（前腿短的身体站着就前低后高）。 */
   private restRef!: Pose;
 
+  /**
+   * 白边、影子、纸纹再放大几倍（build 以前设）：纸偶在画面上画得很小时（岛上只有几十像素），
+   * 按原图比例的白边不到一个像素，看不出是剪纸；放大以后小尺寸也有一圈白边和一点投影。
+   */
+  detailBoost = 1;
+
   /** ref 是成品图那条现有技术（data.rig.template）的 BodyPlan；flat 画成影子纸（见 Cutout）。 */
   constructor(
     readonly data: CutData,
@@ -396,7 +402,7 @@ export class CutoutPuppet {
       }
     }
     // 白边、影子、纸纹、铆钉的描边跟着零件一起缩放（10 克的小兽不被白边淹没）。
-    this.cut.setDetail(kb);
+    this.cut.setDetail(kb * this.detailBoost);
     for (const [id, sh] of shapes) this.cut.setShape(id, sh, rivets.get(id) ?? []);
     this.setScale(this.pxPerM);
   }
@@ -445,6 +451,12 @@ export class CutoutPuppet {
 
   handles(): HandleSpot[] {
     return this.spots;
+  }
+
+  /** 换毛色：零件按新的三档颜色重画。 */
+  setDye(dye: Dye): void {
+    this.cut.setDye(dye);
+    if (this.plan) this.build(this.plan);
   }
 
   setScale(pxPerM: number): void {

@@ -9,8 +9,11 @@ export function bindTimeControls(
   getSpeed: () => number,
   setSpeed: (speed: number) => void,
   stepOneDay: () => void,
+  /** 不给就是 1 / 10 / 100 倍和单步一天；给了就只有这几档，各带一个名字（不要单步）。 */
+  named?: ReadonlyArray<readonly [number, string]>,
 ): () => void {
-  let resumeSpeed = getSpeed() > 0 ? getSpeed() : 1;
+  const speeds: readonly number[] = named ? named.map(([s]) => s) : SPEEDS;
+  let resumeSpeed = getSpeed() > 0 ? getSpeed() : (named?.[0]?.[0] ?? 1);
 
   const button = (label: string, title: string, onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
@@ -40,19 +43,25 @@ export function bindTimeControls(
 
   // 圆纸片按钮：只放符号，说明在 title 里。
   const pauseBtn = button('❚❚', '暂停 / 继续 [空格]', togglePause);
-  button('+1天', '单步一天 [.]', step).classList.add('wide');
-  const speedBtns = SPEEDS.map((s) => [s, button(`${s}×`, `${s} 倍速 [ [ ] 切换 ]`, () => choose(s))] as const);
+  if (!named) button('+1天', '单步一天 [.]', step).classList.add('wide');
+  const speedBtns = named
+    ? named.map(([s, label]) => {
+        const b = button(label, `${label} [ [ ] 切换 ]`, () => choose(s));
+        b.classList.add('wide');
+        return [s, b] as const;
+      })
+    : SPEEDS.map((s) => [s, button(`${s}×`, `${s} 倍速 [ [ ] 切换 ]`, () => choose(s))] as const);
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (e.key === ' ') {
       e.preventDefault();
       togglePause();
-    } else if (e.key === '.') {
+    } else if (e.key === '.' && !named) {
       step();
     } else if (e.key === ']' || e.key === '[') {
-      const i = SPEEDS.indexOf(resumeSpeed as (typeof SPEEDS)[number]);
-      choose(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, (i < 0 ? 0 : i) + (e.key === ']' ? 1 : -1)))]!);
+      const i = speeds.indexOf(resumeSpeed);
+      choose(speeds[Math.max(0, Math.min(speeds.length - 1, (i < 0 ? 0 : i) + (e.key === ']' ? 1 : -1)))]!);
     }
   });
 

@@ -19,8 +19,53 @@ import type { GaitRules } from '../../data/schema/gait';
 import type { RigKit } from '../puppet/actor';
 import { LiveLayer, type RigSpec } from './liveLayer';
 
-/** 剪纸像素 / 游戏世界坐标：游戏一格 CELL_PX，剪纸一格 PX。 */
-const K = PX / CELL_PX;
+/**
+ * 小地图画得更细（2026-11-14）：一格在剪纸里占 detail × PX 像素。地形、植被都按细分以后的格子画，
+ * 所以 48 格的小岛和 144 格的岛一样细致，放大了看不糊；植物相对岛也小下来，动物站在里面不会被整丛挡住。
+ * 只是画面的细分，推演的格子不变。
+ */
+export function detailOf(w: number, h: number): number {
+  return Math.max(1, Math.min(3, Math.round(144 / Math.max(w, h))));
+}
+
+/** 把一张格子图放大 r 倍：数量（0–1）双线性插值。 */
+function refine(src: Float32Array, w: number, h: number, r: number): Float32Array {
+  if (r === 1) return src;
+  const out = new Float32Array(w * r * h * r);
+  for (let y = 0; y < h * r; y++) {
+    const fy = Math.min(h - 1, Math.max(0, (y + 0.5) / r - 0.5));
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(h - 1, y0 + 1);
+    const ty = fy - y0;
+    for (let x = 0; x < w * r; x++) {
+      const fx = Math.min(w - 1, Math.max(0, (x + 0.5) / r - 0.5));
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(w - 1, x0 + 1);
+      const tx = fx - x0;
+      out[y * w * r + x] = (src[y0 * w + x0]! * (1 - tx) + src[y0 * w + x1]! * tx) * (1 - ty) + (src[y1 * w + x0]! * (1 - tx) + src[y1 * w + x1]! * tx) * ty;
+    }
+  }
+  return out;
+}
+
+/** 把地形放大 r 倍：每一类地形各自插值，取最大的那一类（边界变成斜的、圆的，不是放大了的台阶）。 */
+function refineTerrain(terrain: ArrayLike<number>, w: number, h: number, r: number): Uint8Array {
+  if (r === 1) return Uint8Array.from(terrain as ArrayLike<number>);
+  const kinds = [...new Set(Array.from(terrain as ArrayLike<number>))];
+  const out = new Uint8Array(w * r * h * r);
+  const best = new Float32Array(out.length).fill(-1);
+  for (const k of kinds) {
+    const mask = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) mask[i] = terrain[i] === k ? 1 : 0;
+    const fine = refine(mask, w, h, r);
+    for (let i = 0; i < out.length; i++)
+      if (fine[i]! > best[i]!) {
+        best[i] = fine[i]!;
+        out[i] = k;
+      }
+  }
+  return out;
+}
 /**
  * 植被变了以后重画剪纸地图：推演里至少过了这么多天，而且离上次画完至少这么多毫秒（高倍速时不至于一直在画）。
  * 重画时草丛、灌丛跟着植被量换样子（被啃的泛黄、稀疏），地面颜色也跟着变。
@@ -45,7 +90,7 @@ interface Assets {
  * - 地形逐像素画成纸雕（Worker 里并行，见 painter.ts），植被立起来、正对镜头（vegetation.ts、scene.ts）；
  * - 镜头可以倾斜、旋转（camera.ts 的 tilt、yaw），拉远俯视、拉近斜看；点击换算走同一个 Camera，点哪儿是哪儿；
  * - 玩家的批注、关注区边框、警报圈、数据图层都画在地面上，跟着地面压扁、旋转；批注的文字立起来。
- * 世界坐标仍是游戏的（一格 CELL_PX），剪纸场景内部是剪纸像素（一格 PX），中间差一个倍数 K。
+ * 世界坐标仍是游戏的（一格 CELL_PX），剪纸场景内部是剪纸像素（一格 detail × PX），中间差一个倍数 K。
  */
 export class PaperView {
   readonly camera = new Camera();
@@ -69,7 +114,11 @@ export class PaperView {
   private readonly vignette: Sprite;
   private readonly cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
   private readonly animals: AnimalLayer;
-  readonly angles: ViewAngles = { pitchLimit: PITCH_LIMIT, yawLimit: YAW_LIMIT, autoTilt: (zoom) => tiltFor(zoom / K) };
+  /** 一格细分成几份来画（见 detailOf）。 */
+  private readonly detail: number;
+  /** 剪纸像素 / 游戏世界坐标。 */
+  private readonly K: number;
+  readonly angles: ViewAngles;
 
   private constructor(
     readonly app: Application,
@@ -78,16 +127,20 @@ export class PaperView {
     private readonly assets: Assets,
   ) {
     const { width, height } = state.grid;
+    this.detail = detailOf(width, height);
+    this.K = (PX * this.detail) / CELL_PX;
+    const K = this.K;
+    this.angles = { pitchLimit: PITCH_LIMIT, yawLimit: YAW_LIMIT, autoTilt: (zoom) => tiltFor(zoom / K) };
     this.terrain = state.grid.terrain;
     this.grid = new GridLayer(width, height, state.grid.terrain, []);
     this.grid.hideWater = true;
     this.grid.setSmooth(true);
     this.grid.container.alpha = 0.78;
     this.annotations = new AnnotationLayer(state.config.tools);
-    this.overlay.scale.set(K);
+    this.overlay.scale.set(this.K);
     this.overlay.addChild(this.grid.container, this.focusOutline, this.annotations.container);
     this.labelBox.addChild(this.annotations.labels);
-    this.animals = new AnimalLayer(assets.P6, assets.P7, app.renderer, state.config.seed, species);
+    this.animals = new AnimalLayer(assets.P6, assets.P7, app.renderer, state.config.seed, species, PX * this.detail);
     this.liveSeed = state.config.seed;
     this.setSpecies(species);
 
@@ -169,7 +222,9 @@ export class PaperView {
     }
     const seed = state.config.seed;
     const { kit, pool } = this.assets;
-    const fields = buildFields({ width: w, height: h, terrain, herb, shrub });
+    // 小地图细分以后再画（见 detailOf）。
+    const r = this.detail;
+    const fields = buildFields({ width: w * r, height: h * r, terrain: refineTerrain(terrain, w, h, r), herb: refine(herb, w, h, r), shrub: refine(shrub, w, h, r) });
     const img = await pool.paint(fields, seed, { softVegetation: !!kit, sculpt: !!kit });
     const base = document.createElement('canvas');
     base.width = img.width;
@@ -183,8 +238,8 @@ export class PaperView {
       const rabbit = state.config.species.find((sp) => sp.id === 'rabbit');
       placeVegetation(scene, {
         fields,
-        herb,
-        shrub,
+        herb: fields.herb,
+        shrub: fields.shrub,
         seed,
         rabbitLen: tokenLengthCells(rabbit?.bodyMassKg ?? 1.6) * PX,
         kit,
@@ -216,7 +271,7 @@ export class PaperView {
    * kit 是纸偶的切图零件，载入以前设计物种先用通用木偶顶着。
    */
   useLive(rules: GaitRules, kit: Promise<RigKit>): void {
-    const live = new LiveLayer(this.assets.P7, rules, (sp) => AnimalLayer.lengthOf(sp), this.liveSeed);
+    const live = new LiveLayer(this.assets.P7, rules, PX * this.detail, this.liveSeed);
     this.live = live;
     this.animals.useLive(live);
     void kit.then((k) => live.setKit(k));
@@ -356,6 +411,7 @@ export class PaperView {
     if (!scene) return;
     const cam = this.cam;
     const { x: SW, y: SH } = this.camera.screenSize;
+    const K = this.K;
     cam.s = this.camera.zoom / K;
     cam.t = this.camera.tilt;
     cam.r = this.camera.yaw;

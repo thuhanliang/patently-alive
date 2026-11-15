@@ -1,4 +1,6 @@
 import { AlphaFilter, Application, Assets, Container, Graphics, Text, type Texture } from 'pixi.js';
+import { COMMON_GLYPHS, HAND, warm } from '../../render/font';
+import './desk.css';
 import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, withRelativeLitter, type CompiledDesign, type EnvironmentProfile } from '../../sim';
@@ -8,10 +10,11 @@ import { FoodPile, dailyFood, type DailyFood } from './food';
 import { Receipt, receiptRows } from './receipt';
 import { drawXray } from './xray';
 import { CHECK_NAMES, GRADE_NAMES, cannotStand, limpOf, signsOf, thermalOf, thinOf, type Sign } from './signs';
-import { Tray, appearanceFor, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
+import { Tray, appearanceFor, drawCoatIcon, drawEarIcon, isMorph, type TrayItem, type TrayTab } from './tray';
 import { BLUEPRINT, speciesColor } from '../../render/palette';
 import { breathsPerMin, chewHz, gaitOf, heartPerMin, speedAtFroude, topSpeed, walkSpeed, type Gait } from '../../render/puppet/gait';
 import { EAR_ABSENT, EAR_TIP_CAT, bodyPlan, intermembralOf, type BodyPlan } from '../../render/puppet/plan';
+import { COATS, coatFor, type Coat } from '../../render/puppet/coats';
 import { blendPose, eatPose, gaitPose, liePose, standPose, type Pose } from '../../render/puppet/pose';
 import { Puppet, lookOf, type Look } from '../../render/puppet/puppet';
 import type { CutData } from '../../render/puppet/cutout';
@@ -51,6 +54,8 @@ let templateId = 'cat';
 // 仔数记成"比同体型的一般多多少"：把猫拖成虎，仔数跟着变（和游戏里的设计一样）。
 let design: Design = withRelativeLitter(structuredClone(MAMMALS.find((t) => t.species === templateId)!.design), kit);
 let look: Look = lookOf(speciesColor(templateId).body);
+/** 毛色：纸偶零件上的三档颜色（只是外观）。换模板时先给那种动物常见的颜色。 */
+let coat: Coat = coatFor(templateId);
 /** 冷热试验的气温（°C）；null 是不试（默认）：不给气候，冷热这一项检查跳过，和以前一模一样。 */
 let climateC: number | null = null;
 const envOf = (): EnvironmentProfile | undefined => (climateC === null ? undefined : { climate: { temperatureC: climateC } });
@@ -171,8 +176,10 @@ const CUT_PAPER = import.meta.glob<string>('../../../art/incoming/lovart/paper/c
 
 // ---- 画面 ----
 async function main(): Promise<void> {
+  // 画布上的字先载好（不然第一眼是系统字体）。
+  await warm(COMMON_GLYPHS + gaitRules.references.animals.map((r) => r.name).join(''));
   const app = new Application();
-  await app.init({ resizeTo: window, background: 0xe9dcc0, antialias: true, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
+  await app.init({ resizeTo: window, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
   document.body.prepend(app.canvas);
 
   const refLayer = new Container();
@@ -183,7 +190,7 @@ async function main(): Promise<void> {
   const handleInk = new Graphics();
   /** 卡片扣上时的"咔"（一圈蓝图蓝的墨圈）和拖着卡片时纸偶四角的裁切角。 */
   const snapInk = new Graphics();
-  const handleLabel = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: BLUEPRINT, fontWeight: '600' } });
+  const handleLabel = new Text({ text: '', style: { fontFamily: HAND, fontSize: 13, fill: BLUEPRINT, fontWeight: '600' } });
   handleLabel.visible = false;
   /** 体重分配纸饼（第 2 步 b）：画在屏幕上，不随镜头缩放。 */
   const pie = new AllocPie(SYSTEM_NAMES);
@@ -212,7 +219,7 @@ async function main(): Promise<void> {
     // 成品图画的是哪条现有技术：按它的身体算“原样”，其他身体按比例贴。
     const refDesign = MAMMALS.find((t) => t.species === data.rig.template)!.design;
     cutKit = { data, paper, ref: planOf(refDesign, compileDesign(refDesign, kit)) };
-    puppet = new CutoutPuppet(data, paper, { main: 0xe6d8bd, stripe: 0xe6d8bd, pale: 0xe6d8bd }, cutKit.ref, plan);
+    puppet = new CutoutPuppet(data, paper, coat, cutKit.ref, plan);
   } else {
     puppet = new Puppet(plan, look);
   }
@@ -315,7 +322,7 @@ async function main(): Promise<void> {
       if (isMajor) {
         let t = labelPool[li];
         if (!t) {
-          t = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x8a7458 } });
+          t = new Text({ text: '', style: { fontFamily: HAND, fontSize: 11, fill: 0x8a7458 } });
           labelPool.push(t);
           tapeLabels.addChild(t);
         }
@@ -1045,6 +1052,13 @@ async function main(): Promise<void> {
 
   // ---- 部件托盘（第 2 步 c）：每个部位一排卡片，点一下或拖到纸偶身上扣上。 ----
   const tabs: TrayTab[] = [];
+  // 毛色（切图零件才有染色区）：六张色卡。
+  if (cutKit)
+    tabs.push({
+      id: 'dye',
+      name: '毛色',
+      items: COATS.map((c) => ({ key: c.id, name: c.name, blurb: '毛色只是它的样子，不影响它活不活得下去。', icon: (cv: HTMLCanvasElement) => drawCoatIcon(cv, c), isOn: () => coat.id === c.id })),
+    });
   // 代码画的纸偶不认新的耳朵参数：没有切图零件时不放耳卡。
   if (cutKit)
     tabs.push({
@@ -1066,9 +1080,15 @@ async function main(): Promise<void> {
       name: SLOT_NAMES[slot],
       items: [...partLibrary.values()].filter((p) => p.slot === slot && p.id !== 'wings').map((p) => ({ key: p.id, name: p.name, blurb: p.blurb, isOn: () => design.parts[slot] === p.id })),
     });
+  function setCoat(c: Coat): void {
+    coat = c;
+    (puppet as { setDye?: (d: Coat) => void }).setDye?.(c);
+  }
   /** 扣上一张卡：形状卡把五个数整组写进设计（和默认一样的不写，设计的写法和以前一样）；部件卡换这个槽的部件。 */
   function applyCard(tab: TrayTab, item: TrayItem): void {
-    if (tab.id === 'ear') {
+    if (tab.id === 'dye') {
+      setCoat(COATS.find((c) => c.id === item.key)!);
+    } else if (tab.id === 'ear') {
       const a = appearanceFor(morphLibrary.find((x) => x.id === item.key)!, EAR_TIP_CAT);
       const d = { ...design };
       if (a) d.appearance = a;
@@ -1220,14 +1240,16 @@ async function main(): Promise<void> {
 
   function updateReadout(gs: ReturnType<typeof gaitOf>): void {
     const M = design.bodyMassKg;
+    const doing = behavior === 'eat' && gs.gait === 'stand' ? '在吃' : behavior === 'lie' && gs.gait === 'stand' ? '趴着' : gs.gait === 'stand' ? '站着' : `${GAIT_NAMES[gs.gait]}，每小时 ${(speed * 3.6).toFixed(speed * 3.6 < 10 ? 1 : 0)} 千米`;
+    const cm = (m: number): string => (m >= 1 ? `${m.toFixed(2)} 米` : `${Math.round(m * 100)} 厘米`);
+    // 读数说人话：多重、多长、在干什么、最快多快、喘气和心跳。弗劳德数、步频这些留在"高级"里（title）。
     const rows = [
-      `<b>${kgText(M)}</b> · 头体长 ${plan.bodyLen.toFixed(2)} 米 · 腿 ${plan.legLen.toFixed(2)} 米`,
-      `速度 ${speed.toFixed(1)} 米/秒（${(speed * 3.6).toFixed(0)} 千米/时）`,
-      `弗劳德数 ${gs.froude.toFixed(2)} → <b>${behavior === 'eat' && gs.gait === 'stand' ? '吃' : behavior === 'lie' && gs.gait === 'stand' ? '趴着' : GAIT_NAMES[gs.gait]}</b>`,
-      gs.gait === 'stand' ? '步频 —' : `步频 ${gs.strideHz.toFixed(2)} 赫兹 · 步长 ${gs.strideM.toFixed(2)} 米`,
-      `呼吸 ${Math.round(breathsPerMin(gaitRules, M))} 次/分 · 心跳 ${Math.round(heartPerMin(gaitRules, M))} 次/分（静息）`,
-      `最快 ${(top() * 3.6).toFixed(0)} 千米/时`,
+      `<b>${kgText(M)}</b> · 身长 ${cm(plan.bodyLen)} · 腿 ${cm(plan.legLen)}`,
+      `现在：<b>${doing}</b>`,
+      `最快每小时 ${(top() * 3.6).toFixed(0)} 千米`,
+      `呼吸每分钟 ${Math.round(breathsPerMin(gaitRules, M))} 次 · 心跳 ${Math.round(heartPerMin(gaitRules, M))} 次`,
     ];
+    readout.title = `弗劳德数 ${gs.froude.toFixed(2)}${gs.gait === 'stand' ? '' : ` · 步频 ${gs.strideHz.toFixed(2)} 赫兹 · 步长 ${gs.strideM.toFixed(2)} 米`}`;
     // 手机上只显示前两行（.more 收着，点读数展开）。
     readout.innerHTML = `${rows.slice(0, 2).join('<br>')}<span class="more"><br>${rows.slice(2).join('<br>')}</span>`;
   }
@@ -1238,6 +1260,7 @@ async function main(): Promise<void> {
     templateId = id;
     design = withRelativeLitter(structuredClone(t.design), kit);
     look = lookOf(speciesColor(id).body);
+    setCoat(coatFor(id));
     chosenRunSpeed = null;
     rebuild();
   }
@@ -1306,7 +1329,7 @@ async function main(): Promise<void> {
     document.getElementById('embedGo')!.addEventListener('click', () => {
       // 画像：此刻桌上这只纸偶的样子（瘦了、跛了也照样），现场就画成它。
       const shot = app.renderer.extract.canvas({ target: puppet.view, resolution: 2 }) as HTMLCanvasElement;
-      parent.postMessage({ type: 'pa-desk-release', design: structuredClone(design), portrait: shot.toDataURL('image/png') }, origin);
+      parent.postMessage({ type: 'pa-desk-release', design: structuredClone(design), portrait: shot.toDataURL('image/png'), coat: coat.id }, origin);
     });
     parent.postMessage({ type: 'pa-desk-ready' }, origin);
   }

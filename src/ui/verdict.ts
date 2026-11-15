@@ -109,17 +109,31 @@ export function replyKeyOf(q: Pick<Quarter, 'targetCount' | 'detail'>, goal: Goa
   return 'success';
 }
 
-/** 验收单上一种动物的一块：名字、季初 → 季末、生和死的明细、一句话结论。 */
-export function speciesBlock(q: SpeciesQuarter, names: readonly string[], name: string, mine: boolean): HTMLElement {
+/** 验收单上一种动物的一块：画像（事务所设计的动物）、名字、季初 → 季末、生和死的明细、一句话结论。 */
+export function speciesBlock(q: SpeciesQuarter, names: readonly string[], name: string, mine: boolean, portrait?: string): HTMLElement {
   const box = document.createElement('div');
   box.className = `verdict${mine ? ' mine' : ''}`;
   const head = document.createElement('div');
   head.className = 'verdict-head';
+  if (portrait) {
+    const img = document.createElement('img');
+    img.className = 'verdict-portrait';
+    img.src = portrait;
+    img.alt = '';
+    head.append(img);
+  }
   const nm = document.createElement('b');
   nm.textContent = name;
-  const count = document.createElement('span');
   // 这一季才放上岛的：从放上去的只数说起。
-  count.textContent = `${q.start === 0 && q.released > 0 ? `放 ${q.released}` : q.start} → ${q.end} 只`;
+  const from = q.start === 0 && q.released > 0 ? q.released : q.start;
+  const count = document.createElement('span');
+  count.className = 'count';
+  const end = document.createElement('em');
+  end.textContent = String(q.end);
+  end.className = q.end > from ? 'up' : q.end < from ? 'down' : '';
+  const arrow = document.createElement('i');
+  arrow.textContent = '→';
+  count.append(q.start === 0 && q.released > 0 ? `放 ${from}` : String(from), arrow, end, ' 只');
   head.append(nm, count);
   const rows = document.createElement('div');
   rows.className = 'verdict-rows';
@@ -144,12 +158,13 @@ export function speciesBlock(q: SpeciesQuarter, names: readonly string[], name: 
 }
 
 /** 委托人的要求清单。 */
-export function wishList(wishes: readonly Wish[]): HTMLElement {
+export function wishList(wishes: readonly Wish[], todo = false): HTMLElement {
   const ul = document.createElement('div');
   ul.className = 'wishes';
   for (const w of wishes) {
     const mark = document.createElement('span');
-    mark.className = w.ok ? 'ok' : 'bad';
+    // todo：还没到验收的时候（开局的信上），只画一个空框。
+    mark.className = todo ? 'todo' : w.ok ? 'ok' : 'bad';
     mark.textContent = w.ok ? '✓' : '✗';
     const label = document.createElement('span');
     label.textContent = w.label;

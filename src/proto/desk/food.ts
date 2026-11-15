@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { HAND } from '../../render/font';
 import type { GaitRules } from '../../data/schema/gait';
 import type { CompiledDesign } from '../../sim';
 
@@ -49,7 +50,7 @@ export const heapRadiusM = (g: number): number => Math.cbrt((3 * g) / (2 * Math.
 export class FoodPile {
   readonly view = new Container();
   private readonly g = new Graphics();
-  private readonly label = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44, align: 'center' }, resolution: 2 });
+  private readonly label = new Text({ text: '', style: { fontFamily: HAND, fontSize: 11, fill: 0x6e5a44, align: 'center' }, resolution: 2 });
   /** 标签底下的一小块纸（压在纸偶上面时也读得清）。 */
   private readonly plate = new Graphics();
   /** 这一帧的小堆和标签占的地方（屏幕坐标）：点它打开能量小票。 */
