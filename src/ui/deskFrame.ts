@@ -1,6 +1,7 @@
 import type { Design, SpeciesParams } from '../data';
 import { checksum, compileDesign, type DesignKit } from '../sim';
 import { countPicker } from './countPicker';
+import { sound } from './sound';
 import { COATS, coatById, type Coat } from '../render/puppet/coats';
 
 export type { Coat };
@@ -147,6 +148,7 @@ export class DeskFrame {
     showQuote(this.count);
     card.replaceChildren(title, img, nameRow, hints, picker.row, picker.note, this.backButton());
     card.hidden = false;
+    sound.play('flip');
     input.focus();
   }
 

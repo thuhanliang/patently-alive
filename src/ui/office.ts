@@ -1,5 +1,7 @@
 import type { Scenario } from '../data';
 import { postageStamp, sleepingCat, svgEl } from './paperArt';
+import { patentCard, readPatents, showPatent } from './patent';
+import { sound } from './sound';
 
 /**
  * 事务所（2026-11-10，先是一个很简单的壳）：桌上摆着几封委托信，拆开一封就去那座岛。
@@ -78,6 +80,7 @@ export function showOffice(el: HTMLElement, scenarios: readonly Scenario[], open
     go.className = 'open';
     go.textContent = '拆开 →';
     letter.append(svgEl(postageStamp(s.goal.establish ? 'island' : 'bird')), to, from, excerpt, rec, go);
+    letter.addEventListener('pointerenter', () => sound.play('paper'));
     letter.addEventListener('click', () => open(s.id));
     desk.append(letter);
   });
@@ -90,7 +93,20 @@ export function showOffice(el: HTMLElement, scenarios: readonly Scenario[], open
   toy.href = `${import.meta.env.BASE_URL}desk.html?cut=P11-cat`;
   toy.textContent = '不接委托，只想在设计台上摆弄一会儿 →';
   foot.append(cat, toy);
-  scene.append(sign, desk, foot, svgEl(sleepingCat()));
+  // 墙上的证书：办过的委托留下来的，点一张看全文。
+  const patents = readPatents();
+  const wallTitle = document.createElement('div');
+  wallTitle.className = 'office-wall-title';
+  wallTitle.textContent = patents.length ? '墙 上 的 证 书' : '';
+  const wall = document.createElement('div');
+  wall.className = 'office-wall';
+  patents.slice(-6).forEach((p, i) => {
+    const c = patentCard(p, true);
+    c.style.setProperty('--tilt', `${[-2, 1.5, -1, 2.2, -1.6, 0.8][i % 6]}deg`);
+    c.addEventListener('click', () => showPatent(p));
+    wall.append(c);
+  });
+  scene.append(sign, wallTitle, wall, desk, foot, svgEl(sleepingCat()));
   el.replaceChildren(scene);
   el.style.display = '';
 }

@@ -55,3 +55,8 @@ input[type='range']::-moz-range-thumb { width: 11px; height: 11px; border-radius
 #embed button { font-size: 15px; padding: 7px 14px; }
 #embed #embedGo { background: var(--grain), var(--blueprint); border-color: #1f4f8a; color: #fbf5e4; letter-spacing: 1px; box-shadow: 1px 2px 0 #17406f, 3px 5px 0 rgba(20, 12, 4, 0.2); }
 #receipt { font-family: var(--hand); }
+#readout .life { display: inline-block; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(74, 58, 40, 0.28); }
+#readout .life + br + .life { border-top: none; margin-top: 0; padding-top: 0; }
+#readout .life.up b { color: #3f6d4a; }
+#readout .life.down b { color: #8a4a34; }
+#readout { width: 300px; }

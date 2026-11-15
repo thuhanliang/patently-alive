@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, partsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -15,6 +15,8 @@ import { loadRigKit } from './render/puppet/actor';
 import { Guide } from './ui/guide';
 import { showOffice, writeRecord } from './ui/office';
 import { deadOf } from './ui/verdict';
+import { bindButtonTaps, muteButton, sound } from './ui/sound';
+import { claimsOf, savePatent, showPatent, shrinkPortrait, type Patent } from './ui/patent';
 import { bindCameraControls } from './ui/cameraControls';
 import { CommissionCards } from './ui/commission';
 import { PopulationChart } from './ui/chart';
@@ -80,6 +82,8 @@ const FAST_SPEED = 60;
 const OFFICE_SCENARIOS = ['garden-island', 'bird-island'];
 
 async function main(): Promise<void> {
+  bindButtonTaps();
+  document.body.append(muteButton());
   // 没指定情景：先到事务所，从桌上的信里挑一份委托。
   const query = new URLSearchParams(location.search);
   if (!query.has('scenario') && !query.has('world')) {
@@ -164,12 +168,47 @@ async function main(): Promise<void> {
   ];
   /** 事务所设计的动物在设计台上的样子（验收单上贴的画像）。 */
   const portraits = new Map<string, string>();
+  /** 这一局投放过的设计（发证书时要用）。 */
+  const released = new Map<string, Design>();
+  /** 委托结束时发的那张专利证书（画像要缩小，所以是异步的）；一局只发一次。 */
+  let patent: Promise<Patent | null> | null = null;
+  const issuePatent = (reply: string): void => {
+    if (patent || !scenario?.goal.establish) return;
+    // 发给最后还剩得最多的那一种；都没了就发给最后放的那一种。
+    const ids = session.species.map((sp) => sp.params.id);
+    const mine = [...released.keys()].map((id) => ({ id, n: session.sim.state.lastDay[ids.indexOf(id)]?.total ?? 0 }));
+    const best = mine.sort((a, b) => b.n - a.n)[0];
+    const design = best && released.get(best.id);
+    const shot = best && portraits.get(best.id);
+    if (!best || !design || !shot) return;
+    const compiled = compileDesign(design, kit);
+    const prior = nearest(traitsOf(compiled.params), speciesLibrary.values(), 1)[0];
+    patent = shrinkPortrait(shot).then(
+      (portrait) =>
+        savePatent({
+          name: design.name,
+          place: scenario.name,
+          client: scenario.client.name,
+          reply,
+          counts: session.quarters.map((q) => q.targetCount),
+          floor: scenario.goal.establish!.settle,
+          claims: claimsOf(design, partsOf(design, kit)),
+          prior: prior ? { name: speciesLibrary.get(prior.id)?.name ?? prior.id, similarity: prior.similarity } : null,
+          portrait,
+        }),
+      () => null,
+    );
+  };
   const cards = scenario
     ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id), {
         facts,
         desk: () => desk.show(),
         office: backToOffice,
-        ended: (reply, count) => writeRecord(scenario.id, { reply, count }),
+        ended: (reply, count) => {
+          writeRecord(scenario.id, { reply, count });
+          issuePatent(reply);
+        },
+        patent: () => void patent?.then((p) => p && showPatent(p)),
         portrait: (id) => portraits.get(id),
       })
     : null;
@@ -401,7 +440,8 @@ async function main(): Promise<void> {
       const d = designTemplates.find((t) => t.species === template)!.design;
       return bodyPlan(d, partsOf(d, kit), compileDesign(d, kit).bird, viabilityRules, gaitRules);
     };
-    view.useLive(gaitRules, loadRigKit('P11-cat', templatePlan));
+    view.useLive(gaitRules, loadRigKit('P11-cat', templatePlan), (kind) => sound.play(kind === 'birth' ? 'pop' : 'sigh'));
+    sound.ambience(true);
   }
   // 左边的笔记本：记录、死因、曲线、文件（种子、存档、校验和）。
   bindNotebook(el('nb-tabs'), el('nb-page'), [
@@ -433,7 +473,9 @@ async function main(): Promise<void> {
           return;
         }
         // 现场就画成设计台上那只纸偶的样子。
+        sound.play('drop');
         if (portrait) portraits.set(species.id, portrait);
+        if (design) released.set(species.id, design);
         if (view.isLive && design && coat) {
           // 岛上的它就是设计台上那只纸偶：同一个身体，自己走、吃、趴。
           const compiled = compileDesign(design, kit);
@@ -508,6 +550,8 @@ async function main(): Promise<void> {
     if (cards && session.quarters.length > shownQuarters) {
       shownQuarters = session.quarters.length;
       cards.quarter(session.quarters.at(-1)!, session, names);
+      // 验收单盖着画面的时候，顺手把地图按新一季的植被重画。
+      view.repaintSoon();
     }
     // 结算单优先；它关上以后再弹个案的卡片。
     if (!cards?.isOpen) caseCards.update(session.rules.cases ?? [], session.cases);

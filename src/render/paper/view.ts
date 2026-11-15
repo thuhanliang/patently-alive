@@ -28,6 +28,13 @@ export function detailOf(w: number, h: number): number {
   return Math.max(1, Math.min(3, Math.round(144 / Math.max(w, h))));
 }
 
+/** 两张地形图内容一样吗。 */
+function sameTerrain(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** 把一张格子图放大 r 倍：数量（0–1）双线性插值。 */
 function refine(src: Float32Array, w: number, h: number, r: number): Float32Array {
   if (r === 1) return src;
@@ -72,6 +79,8 @@ function refineTerrain(terrain: ArrayLike<number>, w: number, h: number, r: numb
  */
 const REPAINT_DAYS = 10;
 const REPAINT_MS = 5000;
+/** 草本的平均多少变了这么多（占上限的比例）才值得整张重画。 */
+const REPAINT_CHANGE = 0.06;
 
 interface Assets {
   P1: Sheet | null;
@@ -110,6 +119,9 @@ export class PaperView {
   private building = false;
   /** 现在这张剪纸地图是按哪一天的植被画的、什么时候画完的。 */
   private builtDay = 0;
+  /** 上一次画的时候，陆地上草本的平均多少（0–1）。 */
+  private builtVeg = 0;
+  private repaintAsked = false;
   private builtAt = 0;
   private readonly vignette: Sprite;
   private readonly cam: Cam = { s: 1, t: 0, r: 0, ox: 0, oy: 0 };
@@ -127,7 +139,9 @@ export class PaperView {
     private readonly assets: Assets,
   ) {
     const { width, height } = state.grid;
-    this.detail = detailOf(width, height);
+    // ?detail=1…3 可以手动指定（查性能、对比画质用）。
+    const forced = Number(new URLSearchParams(location.search).get('detail'));
+    this.detail = forced >= 1 && forced <= 3 ? Math.round(forced) : detailOf(width, height);
     this.K = (PX * this.detail) / CELL_PX;
     const K = this.K;
     this.angles = { pitchLimit: PITCH_LIMIT, yawLimit: YAW_LIMIT, autoTilt: (zoom) => tiltFor(zoom / K) };
@@ -210,6 +224,7 @@ export class PaperView {
 
   private async buildScene(state: Readonly<SimState>): Promise<void> {
     this.builtDay = Math.floor(state.tick / TICKS_PER_DAY);
+    this.builtVeg = this.vegetationLevel(state);
     const { width: w, height: h, terrain } = state.grid;
     const world = state.config.world;
     const herbI = herbIndex(world);
@@ -270,8 +285,8 @@ export class PaperView {
    * 改用活的图层画动物（小岛上的"立足"型委托，见 liveLayer.ts）：动物是一小群自己走动的演员，不再逐只画个体。
    * kit 是纸偶的切图零件，载入以前设计物种先用通用木偶顶着。
    */
-  useLive(rules: GaitRules, kit: Promise<RigKit>): void {
-    const live = new LiveLayer(this.assets.P7, rules, PX * this.detail, this.liveSeed);
+  useLive(rules: GaitRules, kit: Promise<RigKit>, onEvent?: (kind: 'birth' | 'death') => void): void {
+    const live = new LiveLayer(this.assets.P7, rules, PX * this.detail, this.liveSeed, onEvent);
     this.live = live;
     this.animals.useLive(live);
     void kit.then((k) => live.setKit(k));
@@ -362,6 +377,27 @@ export class PaperView {
     this.annotations.fenceStart = p;
   }
 
+  /** 趁现在画面被盖着（季末的验收单），把地图按新的植被重画一遍。 */
+  repaintSoon(): void {
+    this.repaintAsked = true;
+  }
+
+  /** 陆地上草本的平均多少（占上限的比例）：判断值不值得整张重画。 */
+  private vegetationLevel(state: Readonly<SimState>): number {
+    const world = state.config.world;
+    const k = herbIndex(world);
+    const herb = state.grid.plants[k]!;
+    const max = world.plants[k]!.maxBiomass;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < herb.length; i += 3) {
+      if (state.grid.terrain[i] === 0) continue;
+      sum += Math.min(1, herb[i]! / max);
+      n += 1;
+    }
+    return n > 0 ? sum / n : 0;
+  }
+
   redraw(): void {
     this.lastDay = -1;
     this.animals?.redraw();
@@ -370,12 +406,17 @@ export class PaperView {
   draw(state: Readonly<SimState>): void {
     const day = Math.floor(state.tick / TICKS_PER_DAY);
     if (!this.building) {
-      if (state.grid.terrain !== this.terrain) {
+      if (state.grid.terrain !== this.terrain && !sameTerrain(state.grid.terrain, this.terrain)) {
         // 换了一局：地形变了，重画整张剪纸地图。
+        // （每一帧送来的状态都是新拷贝，数组不是同一个；要比内容，不然会一遍接一遍不停地重画。）
         this.terrain = state.grid.terrain;
         void this.build(state);
-      } else if (Math.abs(day - this.builtDay) >= REPAINT_DAYS && performance.now() - this.builtAt > REPAINT_MS) {
-        void this.build(state);
+      } else if (this.repaintAsked || (Math.abs(day - this.builtDay) >= REPAINT_DAYS * this.detail * this.detail && performance.now() - this.builtAt > REPAINT_MS)) {
+        // 整张重画要顿一下（细分以后更久）：植被没怎么变就不画，过几天再看；外面说"现在画"（季末的验收单盖着画面时）就马上画。
+        const veg = this.vegetationLevel(state);
+        if (this.repaintAsked ? Math.abs(veg - this.builtVeg) >= 0.01 : Math.abs(veg - this.builtVeg) >= REPAINT_CHANGE) void this.build(state);
+        else this.builtDay = day;
+        this.repaintAsked = false;
       }
     }
     const overlayOn = this.layer.kind !== 'vegetation';
