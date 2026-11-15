@@ -1,4 +1,4 @@
-import { QUARTER_DAYS, SEASON_NAMES, calendar } from '../sim';
+import { SEASON_NAMES, calendar } from '../sim';
 import type { SessionReadout } from '../runtime/remote';
 
 /**
@@ -41,7 +41,7 @@ export class Hud {
             ? ([
                 session.ended
                   ? ['委托', `已结束（${session.totalQuarters} 季）`]
-                  : ['委托', `第 ${session.quarters.length + 1} / ${session.totalQuarters} 季，第 ${(session.quarters.length + 1) * QUARTER_DAYS} 天结算`],
+                  : ['委托', `第 ${session.quarters.length + 1} / ${session.totalQuarters} 季`],
               ] as [string, string][])
             : []),
         ]
@@ -60,6 +60,18 @@ export class Hud {
           const b = document.createElement('b');
           b.textContent = k;
           c.append(b, ` ${v}`);
+          // 委托进度：一排小圆点，一年四颗，过了的涂实，这一季是蓝的。
+          if (k === '委托' && !session.ended && session.totalQuarters <= 24) {
+            const dots = document.createElement('span');
+            dots.className = 'season-dots';
+            for (let i = 0; i < session.totalQuarters; i++) {
+              const d = document.createElement('i');
+              if (i < session.quarters.length) d.className = 'done';
+              else if (i === session.quarters.length) d.className = 'now';
+              dots.append(d);
+            }
+            c.append(dots);
+          }
           return c;
         }),
       );

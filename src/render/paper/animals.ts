@@ -1,4 +1,5 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
+import { HAND } from '../font';
 import { P7_ROW, type Sheet } from './assets';
 import { PX } from './terrain';
 import { clusterTokens, drawPuppet, tokenLengthCells, type PuppetKind, type Token } from './tokens';
@@ -91,7 +92,7 @@ export function makeTag(P6: Sheet | null, text: string, len: number): Container 
   tagBox.addChild(tag);
   const label = new Text({
     text,
-    style: { fontFamily: 'Georgia, "Songti SC", "Noto Serif SC", serif', fontSize: 30, fill: 0x4a3a28, fontWeight: '600' },
+    style: { fontFamily: HAND, fontSize: 30, fill: 0x4a3a28, fontWeight: '600' },
     resolution: 2,
   });
   label.anchor.set(0.5);

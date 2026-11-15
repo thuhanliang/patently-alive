@@ -90,6 +90,8 @@ export class AnimalLayer {
     /** 推演的种子（代表单位挑姿势用；换一局时跟着换）。 */
     public seed: number,
     private species: readonly DerivedSpecies[],
+    /** 一格在剪纸里占多少像素（小地图细分以后是 PX 的几倍，见 view.ts 的 detailOf）。 */
+    private readonly cellPx: number = PX,
   ) {
     this.shadows.alpha = 0.3;
     this.setSpecies(species);
@@ -175,7 +177,7 @@ export class AnimalLayer {
       const obj = makeAnimal(this.P7, 'cat-piebald', len, 0, true);
       // 名字签代替数量签：它不是哪一群的代表，就是这一只。
       obj.addChild(makeTag(this.P6, c.name, len));
-      this.cases.push({ obj, x: (c.x + 0.5) * PX, y: (c.y + 0.5) * PX, bias: 0.5, near: (sizeInCells(c.massKg) * INDIVIDUAL_SCALE * PX) / len });
+      this.cases.push({ obj, x: (c.x + 0.5) * this.cellPx, y: (c.y + 0.5) * this.cellPx, bias: 0.5, near: (sizeInCells(c.massKg) * INDIVIDUAL_SCALE * PX) / len });
       this.scene?.bill.addChild(obj);
     }
   }
@@ -230,8 +232,8 @@ export class AnimalLayer {
     const si = (id: string): number => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 1000;
     for (const { id, kind, tokens, len } of info)
       tokens.forEach((tk, j) => {
-        const cx = (tk.x + 0.5) * PX;
-        const cy = (tk.y + 0.5) * PX;
+        const cx = (tk.x + 0.5) * this.cellPx;
+        const cy = (tk.y + 0.5) * this.cellPx;
         const n = groupSize(tk.count);
         for (let m = 0; m < n; m++) {
           const k: PuppetKind = id === 'cat' && (j + m) % 2 === 1 ? 'cat-piebald' : kind;
@@ -307,8 +309,8 @@ export class AnimalLayer {
       shadow.height = len * 0.2;
       shadow.position.set(len * 0.06, 0);
       const m = this.people[i]!;
-      m.x = ind.x[i]! * PX;
-      m.y = ind.y[i]! * PX;
+      m.x = ind.x[i]! * this.cellPx;
+      m.y = ind.y[i]! * this.cellPx;
     }
     for (let i = ind.count; i < this.used; i++) this.pool[i]!.box.visible = false;
     this.used = ind.count;

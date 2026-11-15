@@ -95,7 +95,7 @@ export class Cutout {
   constructor(
     readonly data: CutData,
     paper: Texture,
-    private readonly dye: Dye,
+    private dye: Dye,
     /** 影子纸（体型标尺身后的参照动物）：只有平涂的剪影，不画白边、影子、纸纹和铆钉。 */
     private readonly flat = false,
   ) {
@@ -162,6 +162,11 @@ export class Cutout {
     piece.grain.position.set(b.x - 20, b.y - 20);
     piece.rivets.clear();
     if (!this.flat) for (const [x, y, r] of rivets) drawRivet(piece.rivets, x, y, r, this.detail);
+  }
+
+  /** 换一套颜色；下一次 setShape 生效。 */
+  setDye(dye: Dye): void {
+    this.dye = dye;
   }
 
   /** 细节的比例（见 detail）：零件按原图缩放了多少倍就给多少。 */

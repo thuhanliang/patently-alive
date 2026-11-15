@@ -1,0 +1,57 @@
+/*
+ * 设计台的第二层样式（2026-11-14）：和游戏里的纸件成一套——霞鹜文楷、卡纸、纸钮、蓝图蓝只给选中和动作。
+ * 桌面是一张切割垫板（暖色的纸，上面有浅浅的方格）。
+ */
+@import 'lxgw-wenkai-screen-webfont/lxgwwenkaiscreen.css';
+
+:root {
+  --hand: 'LXGW WenKai Screen', 'Kaiti SC', 'STKaiti', 'KaiTi', Georgia, 'Songti SC', serif;
+  --ink: #4a3a28; --ink-soft: rgba(74, 58, 40, 0.66); --blueprint: #2f6bb3; --paper: #f6eedb; --kraft: #e3c896;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .22 0 0 0 0 .12 0 0 0 .14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html, body {
+  font-family: var(--hand); color: var(--ink); -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(ellipse 80% 70% at 55% 45%, rgba(255, 244, 214, 0.55), transparent 75%),
+    var(--grain),
+    linear-gradient(rgba(74, 58, 40, 0.05) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, rgba(74, 58, 40, 0.05) 1px, transparent 1px) 0 0 / 40px 40px,
+    #e6d6b4;
+}
+body::after { content: ''; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px rgba(60, 36, 12, 0.32); z-index: 1; }
+canvas { position: relative; z-index: 0; }
+.card {
+  z-index: 5; font-size: 14px; line-height: 1.55; padding: 12px 16px;
+  background: var(--grain), linear-gradient(#fbf5e4, #f2e6c9); border-radius: 3px 7px 4px 6px / 6px 3px 7px 4px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 2px 3px 0 rgba(20, 12, 4, 0.24), 6px 10px 18px rgba(20, 12, 4, 0.16);
+}
+#controls { width: 272px; gap: 8px; scrollbar-width: thin; }
+#controls h3 { font-size: 13px; letter-spacing: 2px; color: var(--ink-soft); font-weight: 400; margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+#controls h3::after { content: ''; flex: 1; border-top: 1px dashed rgba(74, 58, 40, 0.25); }
+#controls label { grid-template-columns: 48px 1fr 74px; font-size: 14px; }
+button {
+  font-family: var(--hand); font-size: 14px; padding: 3px 9px; border: 1px solid rgba(74, 58, 40, 0.36);
+  background: var(--grain), #fbf5e4; border-radius: 2px 6px 3px 5px / 5px 2px 6px 3px; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.2);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+button:hover { transform: translateY(-1px); box-shadow: 1px 3px 0 rgba(20, 12, 4, 0.24); }
+button:active { transform: translateY(1px); box-shadow: none; }
+button.on { background: var(--grain), var(--blueprint); border-color: #1f4f8a; color: #fbf5e4; box-shadow: 1px 2px 0 #17406f; }
+.pcard { font-size: 12.5px; background: var(--grain), #fbf5e4; border: 1px solid rgba(74, 58, 40, 0.3); border-radius: 3px 6px 4px 5px; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.18); transition: transform 0.1s ease, box-shadow 0.1s ease; }
+.pcard:hover { transform: translateY(-2px) rotate(-1deg); box-shadow: 2px 5px 0 rgba(20, 12, 4, 0.18); }
+.pcard.on { border: 2px solid var(--blueprint); color: var(--blueprint); }
+#tray .blurb, .blurb { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+input[type='range'] { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; cursor: pointer; }
+input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: #c9a66b; box-shadow: inset 0 1px 0 rgba(74, 58, 40, 0.35); }
+input[type='range']::-moz-range-track { height: 4px; border-radius: 2px; background: #c9a66b; }
+input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; margin-top: -5.5px; border-radius: 50%; background: var(--blueprint); border: 2px solid #fbf5e4; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.35); }
+input[type='range']::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: var(--blueprint); border: 2px solid #fbf5e4; }
+#readout { font-size: 14px; line-height: 1.75; width: 250px; transform: rotate(0.6deg); }
+#readout b { font-size: 16px; }
+#note { font-size: 13.5px; color: var(--ink-soft); }
+#signCard { font-size: 14px; }
+#embed { align-items: center; gap: 14px; padding: 10px 14px; background: var(--grain), linear-gradient(#f0d9a6, #e3c896); }
+#embed .brief { font-size: 15px; }
+#embed button { font-size: 15px; padding: 7px 14px; }
+#embed #embedGo { background: var(--grain), var(--blueprint); border-color: #1f4f8a; color: #fbf5e4; letter-spacing: 1px; box-shadow: 1px 2px 0 #17406f, 3px 5px 0 rgba(20, 12, 4, 0.2); }
+#receipt { font-family: var(--hand); }

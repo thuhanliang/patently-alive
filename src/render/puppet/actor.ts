@@ -31,16 +31,20 @@ export async function loadRigKit(cut: string, refOf: (template: string) => BodyP
   return { data, paper, ref: refOf(data.rig.template) };
 }
 
-export type ActorMode = 'stand' | 'walk' | 'run' | 'eat' | 'lie';
+/** 不走的时候在干什么。走不走由速度定（setSpeed）。 */
+export type ActorMode = 'stand' | 'eat' | 'lie';
 
 /** 换姿势用多久（秒）：大动物慢一些（按 √腿长）。 */
-const blendTime = (legM: number): number => 0.25 + 0.5 * Math.sqrt(legM);
+const blendTime = (legM: number): number => 0.22 + 0.45 * Math.sqrt(legM);
 
 export class PuppetActor {
   /** 脚底中点在原点，头朝 +x；要朝左就把 view.scale.x 取负。 */
   readonly view = new Container();
   private readonly puppet: CutoutPuppet;
   private mode: ActorMode = 'stand';
+  /** 现在的速度（米/秒）：大于"站着"的门槛就按步态走。 */
+  private speed = 0;
+  private key = 'stand';
   private from: Pose | null = null;
   private w = 1;
   private phase: number;
@@ -60,8 +64,11 @@ export class PuppetActor {
     speedFactor = 1,
     /** 每只演员错开一点，不会齐步走。 */
     seed = 0,
+    /** 白边、影子、纸纹放大几倍（画得很小时用，见 CutoutPuppet.detailBoost）。 */
+    detailBoost = 1,
   ) {
     this.puppet = new CutoutPuppet(kit.data, kit.paper, dye, kit.ref, plan);
+    this.puppet.detailBoost = detailBoost;
     this.puppet.build(plan);
     this.view.addChild(this.puppet.view);
     this.phase = seed % 1;
@@ -76,28 +83,31 @@ export class PuppetActor {
     this.puppet.setScale(px / this.plan.bodyLen);
   }
 
-  /** 这种姿态下在地上走多快（米/秒）；站、吃、趴是 0。 */
-  speedOf(mode: ActorMode): number {
-    return mode === 'walk' ? this.walkMs : mode === 'run' ? this.runMs : 0;
+  /** 不走的时候摆什么姿势。 */
+  setMode(mode: ActorMode): void {
+    this.mode = mode;
   }
 
-  setMode(mode: ActorMode): void {
-    if (mode === this.mode) return;
-    this.from = this.last;
-    this.w = 0;
-    this.mode = mode;
+  /** 现在在地上走多快（米/秒）。脚步跟着它：步长、步频、走还是跑都由这个速度按身体算。 */
+  setSpeed(ms: number): void {
+    this.speed = Math.max(0, ms);
   }
 
   step(dt: number): void {
     const { plan, rules } = this;
     this.time += dt;
-    const speed = this.speedOf(this.mode);
-    const gs = gaitOf(rules, speed, plan.legLen, intermembralOf(plan));
+    const gs = gaitOf(rules, this.speed, plan.legLen, intermembralOf(plan));
+    const key = gs.gait === 'stand' ? this.mode : 'move';
+    if (key !== this.key) {
+      this.from = this.last;
+      this.w = 0;
+      this.key = key;
+    }
     this.phase = (this.phase + gs.strideHz * dt) % 1;
     let pose: Pose;
-    if (this.mode === 'walk' || this.mode === 'run') pose = gaitPose(plan, gs, this.phase);
-    else if (this.mode === 'eat') pose = eatPose(plan, this.time, chewHz(rules, plan.massKg));
-    else if (this.mode === 'lie') pose = liePose(plan);
+    if (key === 'move') pose = gaitPose(plan, gs, this.phase);
+    else if (key === 'eat') pose = eatPose(plan, this.time, chewHz(rules, plan.massKg));
+    else if (key === 'lie') pose = liePose(plan);
     else {
       const p = standPose(plan);
       pose = { ...p, head: p.head + 0.18 * Math.sin(this.time * 0.7) * Math.sin(this.time * 0.23), neck: p.neck + 0.08 * Math.sin(this.time * 0.31) };
@@ -110,7 +120,7 @@ export class PuppetActor {
     }
     this.last = pose;
     const rest = breathsPerMin(rules, plan.massKg) / 60;
-    this.breath += (this.mode === 'run' ? Math.max(rest * 2.5, gs.strideHz) : this.mode === 'walk' ? rest * 1.5 : rest) * dt;
+    this.breath += (key === 'move' ? Math.max(rest * 1.5, gs.strideHz * 0.5) : rest) * dt;
     this.puppet.apply(pose, dt, Math.sin(this.breath * Math.PI * 2));
   }
 

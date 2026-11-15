@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { HAND } from '../font';
 import type { ReferenceAnimal } from '../../data/schema/gait';
 
 /**
@@ -56,7 +57,7 @@ export function drawReference(ref: ReferenceAnimal, color: number, alpha: number
 /** 剪影上方的名字签。字号按像素给，所以由调用的人每帧摆位置（不跟着剪影缩放）。 */
 export function referenceLabel(ref: ReferenceAnimal, color: number): Text {
   const kg = ref.massKg < 1 ? `${Math.round(ref.massKg * 1000)} 克` : `${ref.massKg} 千克`;
-  return new Text({ text: `${ref.name} · ${kg}`, style: { fontFamily: 'system-ui, sans-serif', fontSize: 13, fill: color } });
+  return new Text({ text: `${ref.name} · ${kg}`, style: { fontFamily: HAND, fontSize: 13, fill: color } });
 }
 
 /** 剪影的头在哪（米，y 朝上）和头的大小：脖子往前上方斜伸出去。 */

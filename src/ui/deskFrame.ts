@@ -1,27 +1,12 @@
 import type { Design, SpeciesParams } from '../data';
 import { checksum, compileDesign, type DesignKit } from '../sim';
-import { DESIGN_COLORS } from '../render/palette';
 import { countPicker } from './countPicker';
+import { COATS, coatById, type Coat } from '../render/puppet/coats';
 
-/** 毛色：主色、条纹、浅色（肚子、吻）三档，纸偶的染色区照它上色。只是外观，不进推演。 */
-export interface Coat {
-  name: string;
-  main: number;
-  stripe: number;
-  pale: number;
-}
-export const COATS: readonly Coat[] = [
-  { name: '赭', main: 0xb0805c, stripe: 0x8a5f42, pale: 0xead9bf },
-  { name: '橘', main: 0xd98b3f, stripe: 0xb3642a, pale: 0xf3e2c4 },
-  { name: '沙', main: 0xcbb084, stripe: 0xa88f66, pale: 0xf1e6cf },
-  { name: '灰蓝', main: 0x8493a3, stripe: 0x5f6d7c, pale: 0xdfe3e2 },
-  { name: '炭', main: 0x4f4a48, stripe: 0x2f2b2a, pale: 0xcfc6b8 },
-  { name: '雪', main: 0xefe8da, stripe: 0xcfc4ad, pale: 0xfbf7ee },
-];
+export type { Coat };
+
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
-/** 现场画像的主色：暖的赭色，在绿的岛上看得清（以后可以让玩家自己挑）。 */
-const DESIGN_COLOR = DESIGN_COLORS[3];
 
 /** "带去岛上"要的东西；情景不允许投放设计物种时不传。 */
 export interface DeskRelease {
@@ -58,10 +43,14 @@ export class DeskFrame {
     this.card.hidden = true;
     window.addEventListener('message', (e) => {
       if (e.origin !== location.origin || e.source !== this.frame?.contentWindow) return;
-      const m = e.data as { type?: string; design?: Design; portrait?: string };
+      const m = e.data as { type?: string; design?: Design; portrait?: string; coat?: string };
       if (m?.type === 'pa-desk-ready') this.frame!.contentWindow!.postMessage({ type: 'pa-desk-brief', text: this.brief, ...(this.foods ? { foods: this.foods } : {}) }, location.origin);
       else if (m?.type === 'pa-desk-close') this.close();
-      else if (m?.type === 'pa-desk-release' && m.design && m.portrait) this.offer(m.design, m.portrait);
+      else if (m?.type === 'pa-desk-release' && m.design && m.portrait) {
+        // 毛色在设计台上选好了，跟着设计一起交回来。
+        this.coat = coatById(m.coat);
+        this.offer(m.design, m.portrait);
+      }
     });
   }
 
@@ -119,23 +108,6 @@ export class DeskFrame {
     input.placeholder = '给它起个名字';
     input.value = this.name;
     nameRow.append('名字 ', input);
-    // 毛色：一排色片，点哪个是哪个（岛上的纸偶照它上色）。
-    const coats = document.createElement('div');
-    coats.className = 'desk-coats';
-    coats.append('毛色 ');
-    for (const c of COATS) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.title = c.name;
-      b.className = 'coat';
-      b.style.background = `linear-gradient(135deg, ${hex(c.main)} 0 55%, ${hex(c.stripe)} 55% 75%, ${hex(c.pale)} 75%)`;
-      b.classList.toggle('on', c === this.coat);
-      b.addEventListener('click', () => {
-        this.coat = c;
-        for (const x of coats.querySelectorAll('.coat')) x.classList.toggle('on', x === b);
-      });
-      coats.append(b);
-    }
     /** 物种 id 由设计内容决定：同样的设计同一个 id（再放只是多放几只），改了就是另一种。 */
     const build = (): { design: Design; species: SpeciesParams } => {
       const { id: _, ...rest } = { ...raw, name: input.value.trim() || '新设计', color: hex(this.coat.main) as Design['color'] };
@@ -173,7 +145,7 @@ export class DeskFrame {
       picker.button.disabled = !q.ok;
     };
     showQuote(this.count);
-    card.replaceChildren(title, img, nameRow, coats, hints, picker.row, picker.note, this.backButton());
+    card.replaceChildren(title, img, nameRow, hints, picker.row, picker.note, this.backButton());
     card.hidden = false;
     input.focus();
   }

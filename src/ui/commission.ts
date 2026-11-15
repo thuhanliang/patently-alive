@@ -3,6 +3,7 @@ import { QUARTERS_PER_YEAR, SCORE_KEYS, SEASON_NAMES, type Quarter } from '../si
 import type { SessionReadout } from '../runtime/remote';
 import { SCORE_LABELS, scoreRows } from './scoreText';
 import { replyKeyOf, speciesBlock, wishList, wishesOf } from './verdict';
+import { postageStamp, seal, sparkline, svgEl } from './paperArt';
 
 /**
  * 委托的流程卡片：开局的历史卡与委托信、每季的结算单、委托结束的总结。
@@ -17,7 +18,7 @@ export class CommissionCards {
     /** 物种 id，顺序和各方法收到的 names 一致；引进新物种后换掉。 */
     public speciesIds: readonly string[],
     /** "立足"型委托用：岛上有什么（开局卡上写给设计的人看）、去设计台、回事务所。 */
-    private readonly extra: { facts?: readonly string[]; desk?: () => void; office?: () => void; ended?: (reply: string, count: number) => void } = {},
+    private readonly extra: { facts?: readonly string[]; desk?: () => void; office?: () => void; ended?: (reply: string, count: number) => void; portrait?: (id: string) => string | undefined } = {},
   ) {}
 
   get isOpen(): boolean {
@@ -34,19 +35,26 @@ export class CommissionCards {
   briefing(names: readonly string[]): void {
     const { history, client, goal } = this.scenario;
     if (goal.establish) {
-      // 先读信：委托人要什么；再是岛上有什么（设计要用）；历史卡放最后，当作档案馆的提醒。
+      // 先读信：委托人要什么；再是岛上有什么（设计要用）；历史卡折起来，想看再翻。
+      const letter = div('letter');
+      letter.append(svgEl(postageStamp('island')), ...client.letter.map((t) => para(t)), para(`—— ${client.name}`, 'sign'));
+      const blank = { targetCount: 0, detail: { targetRatio: 0, boom: null, nativesLow: [], habitat: 1, spentShare: 0, sufferingShare: 0 } };
+      const island = div('note-kraft');
+      island.append(...(this.extra.facts ?? []).map((t) => para(t)));
+      const card = document.createElement('details');
+      card.className = 'archive-card';
+      const sum = document.createElement('summary');
+      sum.textContent = history.title;
+      card.append(sum, ...history.paragraphs.map((t) => para(t)), para(`出处：${history.source}`, 'note'));
       const body: HTMLElement[] = [
-        heading(`来信 · ${client.name}`),
-        ...client.letter.map((t) => para(t)),
+        letter,
         heading('他要的四件事'),
-        wishList(wishesOf({ targetCount: 0, detail: { targetRatio: 0, boom: null, nativesLow: [], habitat: 1, spentShare: 0, sufferingShare: 0 } }, goal, names).map((w) => ({ ...w, ok: true, note: '' }))),
-        ...(this.extra.facts?.length ? [heading('岛上有什么'), ...this.extra.facts.map((t) => para(t))] : []),
-        heading(history.title),
-        ...history.paragraphs.map((t) => para(t)),
-        para(`出处：${history.source}`, 'note'),
-        para(`${goal.years} 年为期，每季度出一张验收单：你的动物生了多少、死了多少、是怎么死的。`, 'note'),
+        wishList(wishesOf(blank, goal, names).map((w) => ({ ...w, note: '' })), true),
+        ...(this.extra.facts?.length ? [heading('岛上有什么'), island] : []),
+        card,
+        para(`${goal.years} 年为期。每一季出一张验收单：你的动物生了多少、死了多少、是怎么死的。`, 'note'),
       ];
-      this.show(`${this.scenario.name} · 新委托`, body, [['去设计台', () => (this.close(), this.extra.desk?.())]]);
+      this.show(`${this.scenario.name}的来信`, body, [['去设计台', () => (this.close(), this.extra.desk?.())]]);
       return;
     }
     const target = this.nameOf(goal.target, names);
@@ -81,11 +89,25 @@ export class CommissionCards {
     const year = Math.floor((q.index - 1) / QUARTERS_PER_YEAR) + 1;
     const season = SEASON_NAMES[(q.index - 1) % QUARTERS_PER_YEAR]!;
     if (goal.establish) {
-      const body = [...this.verdicts(q, names), heading('委托人要的四件事'), wishList(wishesOf(q, goal, names)), para(`预算还有 ${q.budget.toLocaleString('zh-CN')} 元。还剩 ${session.totalQuarters - q.index} 季。`, 'note')];
-      this.show(`验收单 · 第 ${year} 年${season}季`, body, [
-        ['继续', () => this.close()],
-        ['回设计台改一版', () => (this.close(), this.extra.desk?.())],
-      ]);
+      const head = div('form-head');
+      const title = div('modal-title');
+      title.textContent = '验收单';
+      const no = div('no');
+      no.textContent = `第 ${year} 年 · ${season}季　No. ${String(q.index).padStart(2, '0')} / ${session.totalQuarters}`;
+      head.append(title, no);
+      const wishes = wishesOf(q, goal, names);
+      const body = [head, ...this.verdicts(q, names), heading('委托人要的四件事'), wishList(wishes), para(`预算还有 ${q.budget.toLocaleString('zh-CN')} 元。还剩 ${session.totalQuarters - q.index} 季。`, 'note')];
+      // 图章：四件事都做到盖"合格"，一只不剩盖"落空"，其余"待定"。
+      const mark = q.targetCount === 0 ? seal('落空', 'brown') : wishes.every((w) => w.ok) ? seal('合格', 'blue') : seal('待定', 'brown');
+      this.show(
+        '',
+        body,
+        [
+          ['回设计台改一版', () => (this.close(), this.extra.desk?.())],
+          ['继续', () => this.close()],
+        ],
+        svgEl(mark),
+      );
       return;
     }
     const target = this.nameOf(goal.target, names);
@@ -108,22 +130,30 @@ export class CommissionCards {
     if (goal.establish) {
       const key = replyKeyOf(last, goal);
       const reply = this.scenario.client.replies?.[key] ?? [];
+      const letter = div('letter');
+      letter.append(svgEl(postageStamp('island')), ...reply.map((t) => para(t)), para(`—— ${this.scenario.client.name}`, 'sign'));
+      const chart = div('');
+      chart.append(svgEl(sparkline(session.quarters.map((x) => x.targetCount), goal.establish.settle)));
       const body = [
-        heading(`回信 · ${this.scenario.client.name}`),
-        ...reply.map((t) => para(t)),
+        letter,
         heading('他要的四件事'),
         wishList(wishesOf(last, goal, names)),
+        heading('三年里它们的只数'),
+        chart,
         heading('最后一季的验收单'),
         ...this.verdicts(last, names),
-        heading('三年里的数量'),
-        para(session.quarters.map((x) => x.targetCount).join(' → ')),
       ];
       this.extra.ended?.(key, last.targetCount);
-      this.show('委托结束', body, [
-        ['再接一次这份委托', () => location.reload()],
-        ['回事务所', () => this.extra.office?.()],
-        ['留下来再看看', () => this.close()],
-      ]);
+      this.show(
+        '委托结束 · 回信',
+        body,
+        [
+          ['留下来再看看', () => this.close()],
+          ['回事务所', () => this.extra.office?.()],
+          ['再接一次这份委托', () => location.reload()],
+        ],
+        svgEl(key === 'success' ? seal('办成了', 'blue') : seal('没办成', 'brown')),
+      );
       return;
     }
     const target = this.nameOf(goal.target, names);
@@ -156,7 +186,7 @@ export class CommissionCards {
     const rows = q.species ?? [];
     const mine = rows.filter((x) => x.id.startsWith('d_'));
     const others = rows.filter((x) => !x.id.startsWith('d_'));
-    const block = (x: (typeof rows)[number], own: boolean): HTMLElement => speciesBlock(x, names, this.nameOf(x.id, names), own);
+    const block = (x: (typeof rows)[number], own: boolean): HTMLElement => speciesBlock(x, names, this.nameOf(x.id, names), own, own ? this.extra.portrait?.(x.id) : undefined);
     return [
       ...(mine.length ? mine.map((x) => block(x, true)) : [para('这一季你还没有往岛上放任何动物。委托人在等。')]),
       ...others.map((x) => block(x, false)),
@@ -167,7 +197,8 @@ export class CommissionCards {
     return names[this.speciesIds.indexOf(id)] ?? id;
   }
 
-  private show(title: string, body: HTMLElement[], buttons: Array<[string, () => void]>): void {
+  /** 弹出一张纸。按钮里最后一个是主要的那个（蓝图蓝）；stamp 是盖在右上角的图章。 */
+  private show(title: string, body: HTMLElement[], buttons: Array<[string, () => void]>, stamp?: Element): void {
     this.open = true;
     const card = document.createElement('div');
     card.className = 'modal-card';
@@ -176,16 +207,23 @@ export class CommissionCards {
     h.textContent = title;
     const bar = document.createElement('div');
     bar.className = 'bar';
-    for (const [label, action] of buttons) {
+    buttons.forEach(([label, action], i) => {
       const b = document.createElement('button');
       b.textContent = label;
+      if (i === buttons.length - 1) b.className = 'primary';
       b.addEventListener('click', action);
       bar.appendChild(b);
-    }
-    card.append(h, ...body, bar);
+    });
+    card.append(...(title ? [h] : []), ...body, ...(stamp ? [stamp] : []), bar);
     this.el.replaceChildren(card);
     this.el.style.display = '';
   }
+}
+
+function div(className: string): HTMLElement {
+  const e = document.createElement('div');
+  if (className) e.className = className;
+  return e;
 }
 
 function heading(text: string): HTMLElement {

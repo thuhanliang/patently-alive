@@ -1,4 +1,5 @@
 import type { Scenario } from '../data';
+import { postageStamp, sleepingCat, svgEl } from './paperArt';
 
 /**
  * 事务所（2026-11-10，先是一个很简单的壳）：桌上摆着几封委托信，拆开一封就去那座岛。
@@ -40,39 +41,56 @@ const RECORD_TEXT: { [reply: string]: string } = {
 
 export function showOffice(el: HTMLElement, scenarios: readonly Scenario[], open: (id: string) => void): void {
   const records = readRecords();
-  const card = document.createElement('div');
-  card.className = 'modal-card office';
-  const title = document.createElement('div');
-  title.className = 'modal-title';
-  title.textContent = '生生事务所';
+  const scene = document.createElement('div');
+  scene.className = 'office-scene';
+  const sign = document.createElement('div');
+  sign.className = 'office-sign';
+  const h1 = document.createElement('h1');
+  h1.textContent = '生生事务所';
   const sub = document.createElement('p');
-  sub.className = 'note';
-  sub.textContent = '设计一种动物，看世界怎么验收它。';
-  const cat = document.createElement('p');
-  cat.textContent = '糖饼趴在今天的信上。你把信从它肚子底下抽了出来。';
-  card.append(title, sub, cat);
+  sub.textContent = '设计一种动物，看世界怎么验收它';
+  sign.append(h1, sub);
+  const desk = document.createElement('div');
+  desk.className = 'office-desk';
   scenarios.forEach((s, i) => {
     const letter = document.createElement('button');
-    letter.className = 'office-letter';
-    const from = document.createElement('b');
-    from.textContent = `${s.name} · ${s.client.name}`;
-    const first = document.createElement('span');
-    first.textContent = s.client.letter.slice(1, 3).join('');
-    const tag = document.createElement('span');
-    tag.className = 'note';
+    letter.className = 'envelope';
+    letter.style.setProperty('--tilt', `${i % 2 === 0 ? -1.6 : 1.3}deg`);
+    letter.style.setProperty('--delay', `${0.12 + i * 0.12}s`);
+    const to = document.createElement('span');
+    to.className = 'to';
+    to.textContent = `${s.name} 寄来`;
+    const from = document.createElement('span');
+    from.className = 'from';
+    from.textContent = s.client.name;
+    const excerpt = document.createElement('span');
+    excerpt.className = 'excerpt';
+    excerpt.textContent = `${s.client.letter.slice(1, 3).join('').slice(0, 58)}……`;
+    const rec = document.createElement('span');
+    rec.className = 'rec';
     const r = records[s.id];
-    tag.textContent = [i === 0 ? '第一份委托，从这里开始' : s.goal.establish ? '' : '大一些的委托：兽医的工具都在这里', r ? `${RECORD_TEXT[r.reply] ?? '上次办过'}${r.count > 0 ? `（${r.count} 只）` : ''}` : '']
-      .filter((t) => t)
-      .join(' · ');
-    letter.append(from, first, tag);
+    if (r) {
+      const b = document.createElement('b');
+      b.textContent = `${RECORD_TEXT[r.reply] ?? '上次办过'}${r.count > 0 ? `（${r.count} 只）` : ''}`;
+      rec.append(b);
+    } else rec.textContent = i === 0 ? '第一份委托，从这里开始' : s.goal.establish ? '' : '大一些的委托：兽医的工具都在这里';
+    const go = document.createElement('span');
+    go.className = 'open';
+    go.textContent = '拆开 →';
+    letter.append(svgEl(postageStamp(s.goal.establish ? 'island' : 'bird')), to, from, excerpt, rec, go);
     letter.addEventListener('click', () => open(s.id));
-    card.append(letter);
+    desk.append(letter);
   });
+  const foot = document.createElement('div');
+  foot.className = 'office-foot';
+  const cat = document.createElement('div');
+  cat.className = 'cat-line';
+  cat.textContent = '糖饼趴在桌角，尾巴压着今天的信。';
   const toy = document.createElement('a');
-  toy.className = 'note';
   toy.href = `${import.meta.env.BASE_URL}desk.html?cut=P11-cat`;
   toy.textContent = '不接委托，只想在设计台上摆弄一会儿 →';
-  card.append(toy);
-  el.replaceChildren(card);
+  foot.append(cat, toy);
+  scene.append(sign, desk, foot, svgEl(sleepingCat()));
+  el.replaceChildren(scene);
   el.style.display = '';
 }

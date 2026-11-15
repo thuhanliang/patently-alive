@@ -7,6 +7,8 @@ import type { PaperView } from './render/paper/view';
 import { colorOf } from './render/palette';
 import { AlertBanner } from './ui/alertBanner';
 import { ArchivePanel } from './ui/archive';
+import './ui/style/theme.css';
+import { COMMON_GLYPHS, warm } from './render/font';
 import { DeskFrame, type Coat } from './ui/deskFrame';
 import { bodyPlan } from './render/puppet/plan';
 import { loadRigKit } from './render/puppet/actor';
@@ -71,6 +73,8 @@ function chosenWorld(): { world: WorldParams; seed: number; rules: Rules; proble
 
 /** 看着岛上过日子的倍速：一季（90 天）二十秒上下。 */
 const WATCH_SPEED = 5;
+/** 快进到季末用的倍速。 */
+const FAST_SPEED = 60;
 
 /** 事务所桌上摆的委托，按这个顺序。 */
 const OFFICE_SCENARIOS = ['garden-island', 'bird-island'];
@@ -92,6 +96,7 @@ async function main(): Promise<void> {
   }
   const { world, seed: defaultSeed, rules, problem, scenario } = chosenWorld();
   const species = speciesFor(world);
+  void warm(COMMON_GLYPHS + species.map((x) => x.name).join(''));
   // 设计编译的数据：设计台用它，也放进配置，让操作接口能重新编译、核对投放的设计物种（存档、日志自带一份）。
   const kit = makeDesignKit(
     partLibrary,
@@ -157,12 +162,15 @@ async function main(): Promise<void> {
     `住着${species.map((s) => s.name).join('、')}：${species.some((s) => s.reproduction.nest === 'ground') ? '在地面的浅坑里下蛋，' : ''}开局大约 ${session.sim.state.lastDay.map((d) => d.total).join('、')} 只。`,
     '没有别的动物：没有会来抓它的，也没有可以给它抓的小兽。',
   ];
+  /** 事务所设计的动物在设计台上的样子（验收单上贴的画像）。 */
+  const portraits = new Map<string, string>();
   const cards = scenario
     ? new CommissionCards(el('modal'), scenario, session.species.map((s) => s.params.id), {
         facts,
         desk: () => desk.show(),
         office: backToOffice,
         ended: (reply, count) => writeRecord(scenario.id, { reply, count }),
+        portrait: (id) => portraits.get(id),
       })
     : null;
   let shownQuarters = 0;
@@ -383,7 +391,7 @@ async function main(): Promise<void> {
     ? new Guide(el('guide'), {
         desk: () => desk.show(),
         play: () => void submit({ type: 'setSpeed', speed: WATCH_SPEED }),
-        fast: () => void submit({ type: 'setSpeed', speed: 60 }),
+        fast: () => void submit({ type: 'setSpeed', speed: FAST_SPEED }),
       })
     : null;
   document.body.classList.toggle('establish', establish);
@@ -425,6 +433,7 @@ async function main(): Promise<void> {
           return;
         }
         // 现场就画成设计台上那只纸偶的样子。
+        if (portrait) portraits.set(species.id, portrait);
         if (view.isLive && design && coat) {
           // 岛上的它就是设计台上那只纸偶：同一个身体，自己走、吃、趴。
           const compiled = compileDesign(design, kit);
@@ -464,6 +473,8 @@ async function main(): Promise<void> {
     () => {
       if (!cards?.isOpen && !caseCards.isOpen && !archive.isOpen && !desk.isOpen) session.stepDay();
     },
+    // 小岛上的委托只留三颗钮：停、慢慢看、快进。
+    establish ? [[WATCH_SPEED, '慢慢看'], [FAST_SPEED, '快进']] : undefined,
   );
 
   // 镜头放大到地块档时，以画面中心为准请求关注区；拉远时全部收拢。

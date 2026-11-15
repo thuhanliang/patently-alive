@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { HAND } from '../../render/font';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import type { BodyAllocation } from '../../sim';
 import { BLUEPRINT } from '../../render/palette';
@@ -45,8 +46,8 @@ export class AllocPie {
   readonly view = new Container();
   private readonly g = new Graphics();
   private readonly labels = new Map<BodySystem, Text>();
-  private readonly value = new Text({ text: '', style: { fontFamily: 'system-ui, sans-serif', fontSize: 12, fill: BLUEPRINT, fontWeight: '600' } });
-  private readonly title = new Text({ text: '体重分配', style: { fontFamily: 'system-ui, sans-serif', fontSize: 12, fill: 0x8a7458, fontWeight: '600' } });
+  private readonly value = new Text({ text: '', style: { fontFamily: HAND, fontSize: 12, fill: BLUEPRINT, fontWeight: '600' } });
+  private readonly title = new Text({ text: '体重分配', style: { fontFamily: HAND, fontSize: 12, fill: 0x8a7458, fontWeight: '600' } });
   /** 中心（屏幕）和"×1"的半径。 */
   cx = 0;
   cy = 0;
@@ -55,7 +56,7 @@ export class AllocPie {
   constructor(private readonly names: Record<BodySystem, string>) {
     this.view.addChild(this.g, this.title, this.value);
     for (const s of BODY_SYSTEMS) {
-      const t = new Text({ text: names[s], style: { fontFamily: 'system-ui, sans-serif', fontSize: 11, fill: 0x6e5a44 } });
+      const t = new Text({ text: names[s], style: { fontFamily: HAND, fontSize: 11, fill: 0x6e5a44 } });
       this.labels.set(s, t);
       this.view.addChild(t);
     }
