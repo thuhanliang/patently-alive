@@ -78,6 +78,11 @@ export class PuppetActor {
     this.last = standPose(plan);
   }
 
+  /** 底下的切图纸偶（3D 纸偶照着它摆）。 */
+  get rig(): CutoutPuppet {
+    return this.puppet;
+  }
+
   /** 身长（头体长）在画面上占多少像素。 */
   setLength(px: number): void {
     this.puppet.setScale(px / this.plan.bodyLen);

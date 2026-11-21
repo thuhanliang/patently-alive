@@ -459,6 +459,16 @@ export class CutoutPuppet {
     if (this.plan) this.build(this.plan);
   }
 
+  /** 底下那一套纸片（3D 纸偶照着它摆）。 */
+  get cutout(): Cutout {
+    return this.cut;
+  }
+
+  /** 米 / 成品图像素。 */
+  get metersPerPx(): number {
+    return this.s;
+  }
+
   setScale(pxPerM: number): void {
     this.pxPerM = pxPerM;
     this.view.scale.set(pxPerM * this.s);
