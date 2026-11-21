@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -12,6 +12,9 @@ import { COMMON_GLYPHS, warm } from './render/font';
 import { DeskFrame, type Coat } from './ui/deskFrame';
 import { bodyPlan } from './render/puppet/plan';
 import { loadRigKit } from './render/puppet/actor';
+import { bodyLengthM } from './render/puppet/gait';
+import { PaperTheatre, type TheatreCast } from './render/theatre/theatre';
+import { TERRAIN, TERRAIN_NAMES } from './sim/terrain';
 import { Guide } from './ui/guide';
 import { showOffice, writeRecord } from './ui/office';
 import { deadOf } from './ui/verdict';
@@ -259,7 +262,9 @@ async function main(): Promise<void> {
       t.blur();
       return;
     }
-    if (archive.isOpen || desk.isOpen) {
+    if (theatre.isOpen) {
+      closeTheatre();
+    } else if (archive.isOpen || desk.isOpen) {
       archive.close();
       desk.close();
     } else if (dock.kind) {
@@ -435,14 +440,124 @@ async function main(): Promise<void> {
     : null;
   document.body.classList.toggle('establish', establish);
   // "立足"型的小岛：动物由活的图层画（一小群自己走动的演员），设计的动物是会动的纸偶。
+  const templatePlan = (template: string) => {
+    const d = designTemplates.find((t) => t.species === template)!.design;
+    return bodyPlan(d, partsOf(d, kit), compileDesign(d, kit).bird, viabilityRules, gaitRules);
+  };
+  /** 纸偶的切图零件（岛上的活图层和纸剧场共用）。 */
+  const rigKit = loadRigKit('P11-cat', templatePlan);
   if (establish) {
-    const templatePlan = (template: string) => {
-      const d = designTemplates.find((t) => t.species === template)!.design;
-      return bodyPlan(d, partsOf(d, kit), compileDesign(d, kit).bird, viabilityRules, gaitRules);
-    };
-    view.useLive(gaitRules, loadRigKit('P11-cat', templatePlan), (kind) => sound.play(kind === 'birth' ? 'pop' : 'sigh'));
+    view.useLive(gaitRules, rigKit, (kind) => sound.play(kind === 'birth' ? 'pop' : 'sigh'));
     sound.ambience(true);
   }
+
+  // ---- 纸剧场（2026-11-21，handoff/009）：地图上点一处，镜头落下去，看那一带的动物在台上过日子。 ----
+  /** 剧场里看的是哪一格一带；null 是没在看。 */
+  let theatreCell: { x: number; y: number } | null = null;
+  /** 摇手摇把以前的倍速（停手时回到它）。 */
+  let crankFrom: number | null = null;
+  let crankSent = -1;
+  let crankAt = 0;
+  const theatre = new PaperTheatre(
+    view.app,
+    {
+      crank: (speed) => {
+        if (speed === null) {
+          if (crankFrom !== null) void submit({ type: 'setSpeed', speed: crankFrom });
+          crankFrom = null;
+          crankSent = -1;
+          return;
+        }
+        if (crankFrom === null) crankFrom = session.speed;
+        // 倍速只往上加，摇慢了不会比原来更慢；操作日志里不要每帧记一条：变得够多、隔够久才发。
+        const want = Math.max(crankFrom, speed);
+        const now = performance.now();
+        if (Math.abs(want - crankSent) >= 3 && now - crankAt > 150) {
+          crankSent = want;
+          crankAt = now;
+          void submit({ type: 'setSpeed', speed: want });
+        }
+      },
+      close: () => closeTheatre(),
+    },
+    gaitRules,
+    view.sheets.P7,
+  );
+  void rigKit.then((k) => theatre.setKit(k));
+  // 地图画好以后，空下来再在后台搭剧场。
+  window.setTimeout(() => theatre.preload(), 1500);
+  const openTheatre = (cell: { x: number; y: number }): void => {
+    theatreCell = cell;
+    castAt = -1;
+    document.body.classList.add('theatre-on');
+    sound.play('flip');
+    void theatre.show();
+  };
+  const closeTheatre = (): void => {
+    if (!theatre.isOpen) return;
+    theatre.close();
+    document.body.classList.remove('theatre-on');
+    sound.play('paper');
+  };
+  /** 一格一带（半径 R 格）的情况：各物种多少只、窝里几只、草多高。 */
+  const CAST_R = 6;
+  let cast: TheatreCast | null = null;
+  let castAt = -1;
+  const castOf = (c: { x: number; y: number }): TheatreCast => {
+    const state = session.sim.state;
+    const { width, height, terrain } = state.grid;
+    const cells: number[] = [];
+    for (let dy = -CAST_R; dy <= CAST_R; dy++)
+      for (let dx = -CAST_R; dx <= CAST_R; dx++) {
+        const x = c.x + dx;
+        const y = c.y + dy;
+        if (x >= 0 && y >= 0 && x < width && y < height && dx * dx + dy * dy <= CAST_R * CAST_R) cells.push(y * width + x);
+      }
+    let kits = 0;
+    const list = session.species.map((sp, s) => {
+      const pop = state.populations[s]!;
+      let n = 0;
+      for (const i of cells) n += countAt(pop, i);
+      if (sp.params.id.startsWith('d_') && sp.params.reproduction.nest === 'burrow') {
+        let k = 0;
+        for (let st = 0; st < sp.nestStages; st++) for (const i of cells) k += pop.juveniles[st]![i]!;
+        kits = Math.max(kits, k);
+      }
+      return { id: sp.params.id, name: sp.params.name, count: n, massKg: sp.params.bodyMassKg, bodyLenM: bodyLengthM(gaitRules, sp.params.bodyMassKg) };
+    });
+    const hi = herbIndex(world);
+    const herb = state.grid.plants[hi]!;
+    const max = world.plants[hi]!.maxBiomass;
+    let g = 0;
+    let land = 0;
+    for (const i of cells)
+      if (terrain[i] !== TERRAIN.water) {
+        g += Math.min(1, herb[i]! / max);
+        land += 1;
+      }
+    // 地方的名字：岛的哪一边、什么地形。
+    const ns = c.y < height / 3 ? '北' : c.y > (2 * height) / 3 ? '南' : '';
+    const ew = c.x < width / 3 ? '西' : c.x > (2 * width) / 3 ? '东' : '';
+    const t = terrain[c.y * width + c.x] as keyof typeof TERRAIN_NAMES;
+    const cal = calendar(state.tick);
+    return {
+      place: `${scenario?.name ?? '岛'}${ns || ew ? ` · ${ns}${ew}边的${TERRAIN_NAMES[t]}` : ` · 中间的${TERRAIN_NAMES[t]}`}`,
+      species: list,
+      kits,
+      grass: land ? g / land : 0,
+      dayOfYear: cal.dayOfYear,
+      hour: cal.hour,
+      speed: session.speed,
+    };
+  };
+  // 往外滚（缩小）也是回到地图。
+  view.canvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (theatre.isOpen && e.deltaY > 0) closeTheatre();
+    },
+    { capture: true },
+  );
   // 左边的笔记本：记录、死因、曲线、文件（种子、存档、校验和）。
   bindNotebook(el('nb-tabs'), el('nb-page'), [
     ['记录', el('nb-log')],
@@ -452,6 +567,7 @@ async function main(): Promise<void> {
   ]);
   const viewCard = bindViewCard(el('view-card'), view.camera, view.angles);
   const syncCamera = bindCameraControls(view.canvas, view.camera, viewCard.presets, (screen) => {
+    if (theatre.isOpen) return;
     const pos = view.camera.screenToWorld(screen);
     const cell = worldToCell(pos);
     if (!introducing && !field.isPlacing() && !tools.isReleasing()) {
@@ -459,6 +575,12 @@ async function main(): Promise<void> {
       const id = caseCards.at(cell);
       if (id) {
         caseCards.show(id);
+        return;
+      }
+      // 点到岛上别处：走近看看（纸剧场）。
+      const { grid } = session.sim.state;
+      if (cell.x >= 0 && cell.y >= 0 && cell.x < grid.width && cell.y < grid.height && grid.terrain[cell.y * grid.width + cell.x] !== TERRAIN.water) {
+        openTheatre(cell);
         return;
       }
     }
@@ -479,7 +601,9 @@ async function main(): Promise<void> {
         if (view.isLive && design && coat) {
           // 岛上的它就是设计台上那只纸偶：同一个身体，自己走、吃、趴。
           const compiled = compileDesign(design, kit);
-          view.setRig(species.id, { plan: bodyPlan(design, partsOf(design, kit), compiled.bird, viabilityRules, gaitRules), dye: coat, speedFactor: compiled.params.body?.speed ?? 1 });
+          const spec = { plan: bodyPlan(design, partsOf(design, kit), compiled.bird, viabilityRules, gaitRules), dye: coat, speedFactor: compiled.params.body?.speed ?? 1 };
+          view.setRig(species.id, spec);
+          theatre.setRig(species.id, spec);
         } else if (portrait) void view.setPortrait(species.id, portrait);
         // "立足"型的委托：放出去以后时间自己走起来（一季二十秒上下，够看清岛上在发生什么），不用玩家再找按钮。
         if (establish && session.speed < WATCH_SPEED) void submit({ type: 'setSpeed', speed: WATCH_SPEED });
@@ -562,7 +686,15 @@ async function main(): Promise<void> {
     view.setFenceStart(field.fenceStart());
     alertBanner.update(session.sim.day, session.alerts);
     view.setAlertAt(session.alerts[0]?.at ?? null);
-    view.draw(state);
+    // 纸剧场开着（或正在淡入淡出）：整个盖住地图的时候不画地图。
+    const now = performance.now();
+    if (theatreCell && (now - castAt > 250 || castAt < 0)) {
+      cast = castOf(theatreCell);
+      castAt = now;
+    }
+    const mapNeeded = cast ? theatre.update(cast, Math.min(0.1, view.ticker.deltaMS / 1000)) : true;
+    view.setHidden(!mapNeeded);
+    if (mapNeeded) view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
     view.setTally(session.soFar);

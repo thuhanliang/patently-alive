@@ -221,3 +221,7 @@ body.office #modal { background: none; backdrop-filter: none; align-items: stret
 /* ---- 声音开关：左下角一颗小纸钮 ---- */
 .mute { position: fixed; left: 12px; bottom: 12px; z-index: 12; font-size: 13px; padding: 4px 10px; border: 1px solid rgba(74, 58, 40, 0.38); background: var(--grain), var(--paper); border-radius: 2px 6px 3px 5px / 5px 2px 6px 3px; box-shadow: 1px 2px 0 rgba(20, 12, 4, 0.3); cursor: pointer; color: var(--ink); }
 .mute.off { opacity: 0.6; text-decoration: line-through; }
+
+/* ---- 纸剧场开着：地图上的工具、视角、笔记本都收起来 ---- */
+body.theatre-on #dock, body.theatre-on #notebook, body.theatre-on #right, body.theatre-on #tool-pop, body.theatre-on #status, body.theatre-on #exam-card { display: none !important; }
+body.theatre-on #ribbon { opacity: 0.9; }

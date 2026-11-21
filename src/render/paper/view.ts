@@ -278,6 +278,17 @@ export class PaperView {
     old?.dispose();
   }
 
+  /** 素材图集（纸剧场画真实物种用 P7）。 */
+  get sheets(): { P6: Sheet | null; P7: Sheet | null } {
+    return { P6: this.assets.P6, P7: this.assets.P7 };
+  }
+
+  /** 藏起剪纸地图（纸剧场整个盖住时，不用再画它）。 */
+  setHidden(hidden: boolean): void {
+    if (this.scene) this.scene.root.visible = !hidden;
+    this.vignette.visible = !hidden;
+  }
+
   private live: LiveLayer | null = null;
   private liveSeed = 1;
 
