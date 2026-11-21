@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>纸雕岛 · 3D 原型</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #f1dfbd; }
+      #stage { position: fixed; inset: 0; }
+      #hud { position: fixed; left: 18px; bottom: 16px; color: #4a3424; font: 14px/1.6 'LXGW WenKai Screen', 'Kaiti SC', serif; letter-spacing: 1px; pointer-events: none;
+        background: #f6ead0; padding: 8px 14px 9px; box-shadow: 0 2px 0 #d9c49c, 0 6px 14px rgba(60, 40, 20, 0.18); clip-path: polygon(0 3%, 3% 0, 97% 2%, 100% 6%, 99% 96%, 96% 100%, 2% 98%, 0 94%); }
+      #hud b { font-size: 17px; letter-spacing: 3px; }
+      #veil { position: fixed; inset: 0; background: #f1dfbd; display: grid; place-items: center; color: #4a3424; font: 16px 'LXGW WenKai Screen', serif; letter-spacing: 3px; transition: opacity 0.8s; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="hud"></div>
+    <div id="veil">裁纸、叠岛……</div>
+    <script type="module" src="/src/proto/island3d/main.ts"></script>
+  </body>
+</html>
