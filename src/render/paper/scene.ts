@@ -57,6 +57,18 @@ export class PaperScene {
     return s;
   }
 
+  /** 地形图是切成小块的（tiledCanvas.ts）：整块放在最底下，贴图归场景管。 */
+  setBaseView(view: Container, textures: Texture[]): void {
+    this.owned.push(...textures);
+    this.spin.addChildAt(view, 0);
+    if (!this.shadowLayer.parent) this.spin.addChildAt(this.shadowLayer, 1);
+  }
+
+  /** 这张贴图归场景管（拆场景时一起释放）。 */
+  own(tex: Texture): void {
+    this.owned.push(tex);
+  }
+
   place(obj: Container, x: number, y: number, bias = 0): Bill {
     const b = { obj, x, y, bias };
     this.bills.push(b);

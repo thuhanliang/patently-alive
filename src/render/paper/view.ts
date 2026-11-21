@@ -10,7 +10,9 @@ import { PITCH_LIMIT, YAW_LIMIT, anchor, rotate, tiltFor, type Cam } from './cam
 import { LeafKit } from './leaves';
 import { PaintPool } from './painter';
 import { PaperScene } from './scene';
-import { PX, buildFields, type Palette } from './terrain';
+import { PX, buildFields, type Fields, type Palette } from './terrain';
+import { readTerrain, terrainKey, writeTerrain } from './terrainCache';
+import { TiledCanvas } from './tiledCanvas';
 import { tokenLengthCells } from './tokens';
 import { placeVegetation } from './vegetation';
 import { AnimalLayer } from './animalLayer';
@@ -26,6 +28,14 @@ import { LiveLayer, type RigSpec } from './liveLayer';
  */
 export function detailOf(w: number, h: number): number {
   return Math.max(1, Math.min(3, Math.round(144 / Math.max(w, h))));
+}
+
+/** 把 H 行切成每条 64 行，按离 centre 行的远近排（近的先画）。 */
+function bandsFrom(H: number, centre: number): [number, number][] {
+  const STEP = 64;
+  const out: [number, number][] = [];
+  for (let y = 0; y < H; y += STEP) out.push([y, Math.min(H, y + STEP)]);
+  return out.sort((a, b) => Math.abs((a[0] + a[1]) / 2 - centre) - Math.abs((b[0] + b[1]) / 2 - centre));
 }
 
 /** 两张地形图内容一样吗。 */
@@ -240,15 +250,50 @@ export class PaperView {
     // 小地图细分以后再画（见 detailOf）。
     const r = this.detail;
     const fields = buildFields({ width: w * r, height: h * r, terrain: refineTerrain(terrain, w, h, r), herb: refine(herb, w, h, r), shrub: refine(shrub, w, h, r) });
-    const img = await pool.paint(fields, seed, { softVegetation: !!kit, sculpt: !!kit });
-    const base = document.createElement('canvas');
-    base.width = img.width;
-    base.height = img.height;
-    const ctx = base.getContext('2d')!;
-    ctx.putImageData(img, 0, 0);
+    const W = fields.width * PX;
+    const H = fields.height * PX;
+    const opts = { softVegetation: !!kit, sculpt: !!kit };
+    const gen = ++this.paintGen;
+    const first = !this.scene;
+    const key = terrainKey(world.name, seed, r, herb, shrub);
+    const base = new TiledCanvas(W, H);
+    const cached = await readTerrain(key);
+    /** 还要不要一块块补细的（先放了一张粗的）。 */
+    let refineLater = false;
+    if (cached) {
+      base.drawImage(cached);
+      cached.close();
+    } else if (first) {
+      // 第一次打开、没有缓存：先秒出一张粗的（原来的格子、不铺叶子），细的等场景搭好以后按瓦片补（refineTerrainTiles）。
+      const coarse = r === 1 ? fields : buildFields({ width: w, height: h, terrain: Uint8Array.from(terrain as ArrayLike<number>), herb, shrub });
+      const img = await pool.paint(coarse, seed, { ...opts, noLeaves: true });
+      const tmp = document.createElement('canvas');
+      tmp.width = img.width;
+      tmp.height = img.height;
+      tmp.getContext('2d')!.putImageData(img, 0, 0);
+      base.drawImage(tmp);
+      refineLater = true;
+    } else {
+      // 换季重画：旧的那张留着，新的在后台整张画好再换。
+      await pool.paintBands(fields, seed, opts, bandsFrom(H, H / 2), (y0, _y1, data) => base.putRows(y0, data));
+      if (gen !== this.paintGen) return;
+      void writeTerrain(key, base.toCanvas());
+    }
+    // 地上的贴片（草皮、卵石）另画一张，盖在地形上：地形补细的时候不会把它们擦掉。
+    // 半分辨率就够了（贴片本来就是半透明的一片片），省一半多的显存。
+    const decal = document.createElement('canvas');
+    decal.width = Math.ceil(W / 2);
+    decal.height = Math.ceil(H / 2);
+    const dctx = decal.getContext('2d')!;
+    dctx.scale(0.5, 0.5);
     const scene = new PaperScene();
-    const baseTex = Texture.from(base);
-    scene.setBase(baseTex);
+    base.flush();
+    scene.setBaseView(base.view, base.textures);
+    const decalTex = Texture.from(decal);
+    const decalSprite = new Sprite(decalTex);
+    decalSprite.scale.set(2);
+    scene.spin.addChildAt(decalSprite, 1);
+    scene.own(decalTex);
     if (kit) {
       const rabbit = state.config.species.find((sp) => sp.id === 'rabbit');
       placeVegetation(scene, {
@@ -262,11 +307,11 @@ export class PaperView {
         P2: this.assets.P2,
         P3: this.assets.P3,
         art: 'lovart',
-        base: ctx,
+        base: dctx,
       });
-      baseTex.source.update();
+      decalTex.source.update();
     }
-    scene.bakeShadows(this.app.renderer, img.width, img.height);
+    scene.bakeShadows(this.app.renderer, W, H);
     this.animals.seed = seed;
     this.animals.redraw();
     this.animals.attach(scene);
@@ -276,6 +321,29 @@ export class PaperView {
     this.scene = scene;
     this.app.stage.addChildAt(scene.root, 0);
     old?.dispose();
+    if (refineLater) void this.refineTerrainTiles(gen, fields, seed, opts, base, key);
+  }
+
+  /** 正在画的是第几张（换了一张就停掉旧的那张的补细）。 */
+  private paintGen = 0;
+
+  /**
+   * 按瓦片补细：一条一条（每条 64 行）地画，屏幕中间那一带先画；每画好几条就更新一次贴图。全部画完存进浏览器。
+   */
+  private async refineTerrainTiles(gen: number, fields: Fields, seed: number, opts: { softVegetation: boolean; sculpt: boolean }, base: TiledCanvas, key: string): Promise<void> {
+    // 屏幕中心对着剪纸里的哪一行。
+    const centre = Math.max(0, Math.min(base.height, this.camera.center.y * this.K));
+    const timer = window.setInterval(() => gen === this.paintGen && base.flush(), 200);
+    try {
+      await this.assets.pool.paintBands(fields, seed, opts, bandsFrom(base.height, centre), (y0, _y1, data) => {
+        if (gen === this.paintGen) base.putRows(y0, data);
+      });
+    } finally {
+      window.clearInterval(timer);
+    }
+    if (gen !== this.paintGen) return;
+    base.flush();
+    void writeTerrain(key, base.toCanvas());
   }
 
   /** 素材图集（纸剧场画真实物种用 P7）。 */

@@ -8,7 +8,7 @@ import { paintTerrain, type Fields, type Palette } from './terrain';
  */
 export type PainterMessage =
   | { type: 'init'; pal: Palette; leaves: ImageBitmap[][] | null }
-  | { type: 'paint'; id: number; fields: Fields; seed: number; opts: { softVegetation?: boolean; sculpt?: boolean }; band: [number, number] };
+  | { type: 'paint'; id: number; fields: Fields; seed: number; opts: { softVegetation?: boolean; sculpt?: boolean; noLeaves?: boolean }; band: [number, number] };
 
 export interface PaintResult {
   id: number;
@@ -28,7 +28,7 @@ self.onmessage = (e: MessageEvent<PainterMessage>): void => {
   }
   const { id, fields, seed, opts, band } = msg;
   const painted = paintTerrain(fields, pal!, seed, opts, band);
-  if (kit) {
+  if (kit && !opts.noLeaves) {
     const W = painted.width;
     const H = fields.height * (W / fields.width);
     applyCarpet(painted, paveGround(kit, W, H, groundKindAt(fields, seed), seed + 50, 9, band), band[0]);

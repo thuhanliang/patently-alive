@@ -1,7 +1,7 @@
 import { PX, type Fields, type Palette } from './terrain';
 import type { PaintResult, PainterMessage } from './painter.worker';
 
-type Opts = { softVegetation?: boolean; sculpt?: boolean };
+type Opts = { softVegetation?: boolean; sculpt?: boolean; noLeaves?: boolean };
 
 /**
  * 地形分条并行地画：按行切成几条，每条交给一个 Worker（painter.worker.ts）画地形、铺叶，再拼回一张。
@@ -63,6 +63,29 @@ export class PaintPool {
       }),
     );
     return out;
+  }
+
+  /**
+   * 一块一块地画（瓦片的思路，2026-11-22）：bands 是一组行区间，按给的顺序排队，哪个 Worker 空了就领下一块；
+   * 每画好一块就交给 onBand（这一块的像素，从第 y0 行起），可以马上贴到画面上。全部画完后结束。
+   * 这样大图不用等整张画完才看得见，先画的（屏幕中间）先出来。
+   */
+  async paintBands(fields: Fields, seed: number, opts: Opts, bands: readonly [number, number][], onBand: (y0: number, y1: number, data: Uint8ClampedArray) => void): Promise<void> {
+    const queue = [...bands];
+    await Promise.all(
+      this.workers.map(async (worker) => {
+        for (let band = queue.shift(); band; band = queue.shift()) {
+          const b = band;
+          const data = await new Promise<Uint8ClampedArray>((resolve, reject) => {
+            const id = this.nextId++;
+            this.pending.set(id, { resolve, reject });
+            const job: PainterMessage = { type: 'paint', id, fields, seed, opts, band: b };
+            worker.postMessage(job);
+          });
+          onBand(b[0], b[1], data);
+        }
+      }),
+    );
   }
 
   dispose(): void {
