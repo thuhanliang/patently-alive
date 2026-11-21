@@ -143,15 +143,16 @@ export function paveGround(
   seed: number,
   step = 9,
   /**
-   * 只画第 y0 到 y1 行附近的叶子（分条并行用），用 applyCarpet 的 y0 读回这一条。
-   * 画布仍是整张大小、坐标不平移：图片取样的舍入和画布上的绝对坐标有关，平移了会差一两级；
-   * 不平移、叶子的顺序也一样，拼起来就和整张画逐像素相同。
+   * 只画第 y0 到 y1 行附近的叶子（分条、分块画用）；返回的画布只有这一条高。
    */
   band: [number, number] = [0, H],
 ): Canvas {
   const [y0, y1] = band;
-  const c = canvas(W, H);
+  // 画布只有这一条那么高（以前是整张大小：小岛细分以后一条要 2304×2304，好几个 Worker 一起开就卡死了）。
+  // 往上平移 y0，叶子的坐标照旧按整张算；取样的舍入会和整张画差一两级，看不出来。
+  const c = canvas(W, Math.max(1, y1 - y0));
   const ctx = ctx2d(c, { willReadFrequently: true });
+  ctx.translate(0, -y0);
   ctx.fillStyle = 'rgb(128,128,128)';
   ctx.fillRect(0, y0, W, y1 - y0);
   const grey = (v: number): Rgb => [v, v, v];
@@ -194,7 +195,8 @@ export function paveGround(
 
 /** 把铺叶的明暗图乘到地形图上：亮的叶子再往黄绿偏一点，暗的往蓝绿偏一点。img 是明暗图里从第 y0 行开始的一条。 */
 export function applyCarpet(img: { data: Uint8ClampedArray; width: number; height: number }, carpet: Canvas, y0 = 0): void {
-  const m = ctx2d(carpet, { willReadFrequently: true }).getImageData(0, y0, img.width, img.height).data;
+  void y0;
+  const m = ctx2d(carpet, { willReadFrequently: true }).getImageData(0, 0, img.width, img.height).data;
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
     const k = m[i]! / 128;

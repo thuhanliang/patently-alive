@@ -9,7 +9,8 @@ export type Sheet = { rows: number[][][]; tex: Texture[][] };
 /** 一张素材表打成一张图集（scripts/art/pack_atlas.py）：一个请求，同一图集里的素材能合批绘制。 */
 export async function loadSheet(name: string): Promise<Sheet | null> {
   try {
-    const sheet = await Assets.load<Spritesheet>(`proto/paper/${name}.json`);
+    // 每张图集的帧都叫 0_0、0_1……：加个前缀，免得不同图集在全局缓存里撞名（控制台一屏警告）。
+    const sheet = await Assets.load<Spritesheet>({ src: `proto/paper/${name}.json`, data: { cachePrefix: `${name}/` } });
     const rows = (sheet.data.meta as unknown as { rows: number[][][] }).rows;
     const tex = rows.map((row, r) => row.map((_, c) => sheet.textures[`${r}_${c}`]!));
     return { rows, tex };
