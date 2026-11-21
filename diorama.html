@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>纸剧场 · 3D 原型</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0d18; }
+      #stage { position: fixed; inset: 0; }
+      #hud { position: fixed; left: 16px; bottom: 14px; color: #e9d7b0; font: 14px/1.5 'LXGW WenKai Screen', 'Kaiti SC', serif; letter-spacing: 1px; opacity: 0.85; pointer-events: none; }
+      #hud b { color: #ffd38a; font-weight: 600; }
+      #veil { position: fixed; inset: 0; background: #0a0d18; display: grid; place-items: center; color: #e9d7b0; font: 16px 'LXGW WenKai Screen', serif; letter-spacing: 3px; transition: opacity 0.8s; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="hud"></div>
+    <div id="veil">搭纸剧场……</div>
+    <script type="module" src="/src/proto/diorama/main.ts"></script>
+  </body>
+</html>

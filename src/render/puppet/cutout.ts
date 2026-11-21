@@ -86,11 +86,17 @@ export class Cutout {
   readonly view = new Container();
   private readonly pieces = new Map<string, Piece>();
   private readonly byZ: Piece[] = [];
+  private readonly rivetSpots = new Map<string, [number, number, number][]>();
   /**
    * 细节的比例：白边、影子的偏移、纸纹、铆钉的描边按原图的像素画，零件缩小（10 克的小兽）时它们要一起缩，
    * 不然白边和铆钉比身体还粗。1 是原图的大小；setDetail 以后下一次 setShape 生效。
    */
   private detail = 1;
+  /**
+   * 每次重画一片零件时通知外面（3D 纸偶照着它重建这片纸的形状，2026-11-22）。
+   * outline、stripe、pale 是零件自己坐标里的多边形（成品图像素）；shade 是明暗（远侧的腿调暗）。
+   */
+  onPaint: ((id: string, outline: number[], stripe: number[][], pale: number[][], shade: number) => void) | null = null;
 
   constructor(
     readonly data: CutData,
@@ -151,6 +157,7 @@ export class Cutout {
     const piece = target ?? this.pieces.get(id);
     if (!piece) return;
     piece.shape = shape;
+    this.rivetSpots.set(id, rivets);
     let reach = 0;
     for (let i = 0; i < shape.outline.length; i += 2) reach = Math.max(reach, Math.hypot(shape.outline[i]!, shape.outline[i + 1]!));
     piece.reach = reach;
@@ -203,6 +210,7 @@ export class Cutout {
     for (const s of stripe) piece.body.poly(s).fill(dye.stripe);
     for (const s of pale) piece.body.poly(s).fill(dye.pale);
     piece.mask.clear().poly(outline).fill(0xffffff);
+    this.onPaint?.(piece.part.id, outline, stripe, pale, k);
   }
 
   /**
@@ -292,6 +300,29 @@ export class Cutout {
     piece.view.scale.set(1, sy);
     piece.shadow.position.set(x + SHADOW.x * this.detail, y + SHADOW.y * this.detail);
     piece.shadow.rotation = rotation;
+  }
+
+  /**
+   * 每一片零件（按前后顺序，后面的在前）：它的数据、在纸偶里的位置和转角、显不显示，以及它上面的铆钉（零件坐标）。
+   * 3D 纸偶每帧照着它摆（2026-11-22）。
+   */
+  pieceStates(): { id: string; x: number; y: number; rotation: number; sx: number; sy: number; visible: boolean; z: number }[] {
+    return this.byZ.map((p, z) => ({ id: p.part.id, x: p.view.position.x, y: p.view.position.y, rotation: p.view.rotation, sx: p.view.scale.x, sy: p.view.scale.y, visible: p.view.visible, z }));
+  }
+
+  /** 每片零件按现在的形状再画一遍（3D 纸偶接上来时，把已经画过的形状要一份）。 */
+  repaintAll(): void {
+    for (const p of this.byZ) this.paint(p, p.shape.outline, p.shape.stripe, p.shape.pale);
+  }
+
+  /** 每片零件上的铆钉（零件坐标，半径）。 */
+  rivetsOf(id: string): [number, number, number][] {
+    return this.rivetSpots.get(id) ?? [];
+  }
+
+  /** 现在的颜色（三档）。 */
+  get colors(): Dye {
+    return this.dye;
   }
 
   /** 零件的数据。 */

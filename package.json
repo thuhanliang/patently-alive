@@ -20,8 +20,10 @@
     "routes": "vitest run --config vitest.sweep.config.ts --silent=false scripts/routes.bench.ts"
   },
   "dependencies": {
+    "@types/three": "^0.181.0",
     "lxgw-wenkai-screen-webfont": "^1.7.0",
     "pixi.js": "^8.22.0",
+    "three": "^0.181.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
