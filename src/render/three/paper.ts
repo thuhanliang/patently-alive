@@ -81,8 +81,28 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
       fib[i * N + j] = Math.min(1, fib[i * N + j]! + w);
     }
   }
+  // 纸浆里的小斑点（手工纸的样子）：几百个亮的、暗的小点，只进颜色。
+  const fleck = new Float32Array(N * N);
+  for (let f = 0; f < 900; f++) {
+    const cx = rnd() * N;
+    const cy = rnd() * N;
+    const r = 0.6 + rnd() * rnd() * 2.2;
+    const v = rnd() < 0.55 ? -(0.05 + rnd() * 0.08) : 0.04 + rnd() * 0.05;
+    for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++)
+      for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
+        const d = Math.hypot(x - cx, y - cy);
+        if (d > r) continue;
+        const k = ((((y % N) + N) % N) * N + (((x % N) + N) % N)) | 0;
+        fleck[k] = fleck[k]! + v * (1 - d / (r + 0.5));
+      }
+  }
+  // 纸的"齿"：冷压水彩纸那种一粒一粒的小凸起，斜光一照就看得见。
+  const tooth = tileNoise(N, 41, 2, 48);
   const h = new Float32Array(N * N);
-  for (let i = 0; i < h.length; i++) h[i] = low[i]! * 0.55 + fine[i]! * 0.3 + fib[i]! * 0.35;
+  for (let i = 0; i < h.length; i++) {
+    const t = tooth[i]!;
+    h[i] = low[i]! * 0.4 + fine[i]! * 0.25 + fib[i]! * 0.14 + t * t * 0.6;
+  }
   const at = (x: number, y: number): number => h[(((y + N) % N) * N + ((x + N) % N))]!;
   const normal = document.createElement('canvas');
   normal.width = normal.height = N;
@@ -93,7 +113,7 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
   const nd = normal.getContext('2d')!.createImageData(N, N);
   const rd = rough.getContext('2d')!.createImageData(N, N);
   const md = mottle.getContext('2d')!.createImageData(N, N);
-  const strength = 3.2;
+  const strength = 4.2;
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
@@ -108,7 +128,7 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
       rd.data[i] = rd.data[i + 1] = rd.data[i + 2] = r;
       rd.data[i + 3] = 255;
       // 斑驳：颜色乘上去，0.9–1.04 之间，纤维处略亮。
-      const m = Math.round((0.9 + low[y * N + x]! * 0.1 + fib[y * N + x]! * 0.05) * 245);
+      const m = Math.round((0.88 + low[y * N + x]! * 0.13 + fib[y * N + x]! * 0.05 + fleck[y * N + x]!) * 245);
       md.data[i] = md.data[i + 1] = md.data[i + 2] = Math.min(255, m);
       md.data[i + 3] = 255;
     }
@@ -126,38 +146,113 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
 }
 
 let maps: ReturnType<typeof paperMaps> | null = null;
+
+/**
+ * 所有纸共用的"天光"：飘过的云在纸上投下的柔和暗斑（一张可平铺的软噪声，按世界 x、z 铺，随时间挪）。
+ * uCloudAmt 为 0 时没有（纸剧场里不用）。
+ */
+export const paperGlobals = {
+  uCloudTex: { value: null as Texture | null },
+  uCloudOff: { value: new Vector2(0, 0) },
+  uCloudAmt: { value: 0 },
+  uCloudScale: { value: 1 / 60 },
+};
+
+function cloudTexture(): Texture {
+  const N = 256;
+  const v = tileNoise(N, 23, 4, 3);
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(N, N);
+  for (let i = 0; i < v.length; i++) {
+    const t = Math.min(1, Math.max(0, (v[i]! - 0.5) / 0.16));
+    const k = t * t * (3 - 2 * t);
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = Math.round(k * 255);
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.colorSpace = LinearSRGBColorSpace;
+  return t;
+}
 const cache = new Map<string, MeshStandardMaterial>();
 
 /**
  * 一种颜色的纸。scale 是纸纹的疏密（世界单位里一块纹理多大：米）；edge 为真是纸的断面（白一点、更粗糙）。
  * 同样的参数共用一个材质。
  */
-export function paperMaterial(color: number | string, opts: { scale?: number; edge?: boolean; emissive?: number } = {}): MeshStandardMaterial {
+export interface PaperAo {
+  /** 一张灰度图：铺在地面上（世界的 x、z），颜色乘上它（层与层接缝处的暗、整张纸上的斑驳）。 */
+  tex: Texture;
+  x0: number;
+  z0: number;
+  size: number;
+}
+
+export function paperMaterial(
+  color: number | string,
+  opts: { scale?: number; edge?: boolean; emissive?: number; ao?: PaperAo; bump?: number; variant?: string; patch?: (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }) => void } = {},
+): MeshStandardMaterial {
   const scale = opts.scale ?? 0.35;
-  const key = `${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}`;
+  const bump = opts.bump ?? 1;
+  const key = `${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}|${opts.ao ? opts.ao.tex.id : ''}|${bump}|${opts.variant ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   maps ??= paperMaps();
+  paperGlobals.uCloudTex.value ??= cloudTexture();
   const c = new Color(color);
-  if (opts.edge) c.lerp(new Color(0xf7f0e2), 0.55);
+  if (opts.edge) c.lerp(new Color(0xf7f0e2), 0.22);
   const m = new MeshStandardMaterial({
     side: DoubleSide,
     shadowSide: DoubleSide,
     color: c,
-    roughness: opts.edge ? 1 : 0.92,
+    roughness: 1,
     metalness: 0,
     map: maps.mottle,
     normalMap: maps.normal,
-    normalScale: new Vector2(0.55, 0.55),
+    normalScale: new Vector2(0.9 * bump, 0.9 * bump),
     roughnessMap: maps.rough,
     ...(opts.emissive ? { emissive: new Color(opts.emissive), emissiveIntensity: 0.6 } : {}),
   });
   // 纹理坐标按世界尺寸铺（ExtrudeGeometry 的 uv 是形状的坐标）。
+  // 纸纹取两种尺度叠起来（细的纤维 + 大一号的纸浆起伏），远看近看都不是光滑的塑料。
+  const ao = opts.ao;
   m.onBeforeCompile = (sh) => {
     sh.uniforms['uPaperScale'] = { value: 1 / scale };
-    sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vMapUv * uPaperScale;\n#endif\n#ifdef USE_NORMALMAP\nvNormalMapUv = vNormalMapUv * uPaperScale;\n#endif\n#ifdef USE_ROUGHNESSMAP\nvRoughnessMapUv = vRoughnessMapUv * uPaperScale;\n#endif').replace('void main() {', 'uniform float uPaperScale;\nvoid main() {');
+    Object.assign(sh.uniforms, paperGlobals);
+    let vs = sh.vertexShader
+      .replace(
+        '#include <uv_vertex>',
+        '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vMapUv * uPaperScale;\n#endif\n#ifdef USE_NORMALMAP\nvNormalMapUv = vNormalMapUv * uPaperScale;\n#endif\n#ifdef USE_ROUGHNESSMAP\nvRoughnessMapUv = vRoughnessMapUv * uPaperScale;\n#endif',
+      )
+      .replace('void main() {', 'uniform float uPaperScale;\nvarying vec3 vPaperWorld;\nvoid main() {');
+    vs = vs.replace(
+      '#include <worldpos_vertex>',
+      '#include <worldpos_vertex>\n{ vec4 pw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\npw = instanceMatrix * pw;\n#endif\nvPaperWorld = (modelMatrix * pw).xyz; }',
+    );
+    sh.vertexShader = vs;
+    let fs = sh.fragmentShader
+      .replace('void main() {', 'varying vec3 vPaperWorld;\nuniform sampler2D uAo;\nuniform vec4 uAoBox;\nuniform sampler2D uCloudTex;\nuniform vec2 uCloudOff;\nuniform float uCloudAmt;\nuniform float uCloudScale;\nvoid main() {')
+      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - uCloudAmt * texture2D(uCloudTex, vPaperWorld.xz * uCloudScale + uCloudOff).r;')
+      .replace(
+        'vec4 sampledDiffuseColor = texture2D( map, vMapUv );',
+        'vec4 sampledDiffuseColor = texture2D( map, vMapUv ) * (0.55 + 0.5 * texture2D( map, vMapUv * 0.231 + 0.37 ));',
+      )
+      .replace(
+        'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+        'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;\nvec3 mapN2 = texture2D( normalMap, vNormalMapUv * 0.219 + 0.53 ).xyz * 2.0 - 1.0;\nmapN = vec3(mapN.xy + mapN2.xy * 0.75, mapN.z);',
+      );
+    if (ao) {
+      sh.uniforms['uAo'] = { value: ao.tex };
+      sh.uniforms['uAoBox'] = { value: [ao.x0, ao.z0, 1 / ao.size, 0] };
+      fs = fs.replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= texture2D(uAo, (vPaperWorld.xz - uAoBox.xy) * uAoBox.z).r;');
+    }
+    sh.fragmentShader = fs;
+    opts.patch?.(sh);
   };
-  m.customProgramCacheKey = () => `paper${scale}`;
+  m.customProgramCacheKey = () => `paper${scale}|${ao ? ao.tex.id : ''}|${opts.variant ?? ''}`;
   cache.set(key, m);
   return m;
 }
