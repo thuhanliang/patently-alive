@@ -57,63 +57,129 @@ function tileNoise(size: number, seed: number, octaves: number, base: number): F
   return out;
 }
 
-/** 纸纹：一张高度图（低频的起伏 + 细的纤维），转成法线贴图、粗糙度贴图、颜色上的一点斑驳。 */
-function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
-  const N = 512;
+/**
+ * 纸的种类（2026-11-22，用户："更像硬卡纸、木纹纸、大地纸"）。都是代码生成的可平铺贴图（法线、粗糙度、颜色斑驳）：
+ * - card：硬卡纸。面细，有一点点齿，颜色很匀。地形、植物、大部分纸片用它。
+ * - kraft：大地纸（牛皮纸一类）。纤维、深浅斑点看得见，颜色更花。沙滩、土、信封用它。
+ * - wood：木纹纸。顺着一个方向的木纹。工作台、抽屉、相框用它。
+ * - edge：纸的断面。和正面不是一回事：顺着边走的一道道细纹（压实的纤维），没有齿。
+ */
+export type PaperKind = 'card' | 'kraft' | 'wood' | 'edge';
+
+interface Recipe {
+  low: number;
+  fine: number;
+  fiber: number;
+  fibers: number;
+  tooth: number;
+  toothCells: number;
+  flecks: number;
+  mottle: number;
+  strength: number;
+}
+
+const RECIPES: Record<Exclude<PaperKind, 'wood' | 'edge'>, Recipe> = {
+  card: { low: 0.3, fine: 0.25, fiber: 0.05, fibers: 700, tooth: 0.32, toothCells: 64, flecks: 220, mottle: 0.07, strength: 3.2 },
+  kraft: { low: 0.4, fine: 0.25, fiber: 0.28, fibers: 2600, tooth: 0.22, toothCells: 56, flecks: 1600, mottle: 0.16, strength: 3.6 },
+};
+
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 0x1_0000_0000);
+}
+
+/** 高度图 + 颜色斑驳（0–1 附近）。 */
+function paperFields(kind: PaperKind, N: number): { h: Float32Array; m: Float32Array; strength: number } {
+  const h = new Float32Array(N * N);
+  const m = new Float32Array(N * N);
+  if (kind === 'wood') {
+    // 木纹：沿 x 的年轮条带，被低频噪声扭弯；再加细的导管纹。
+    const warp = tileNoise(N, 61, 3, 2);
+    const warp2 = tileNoise(N, 67, 2, 8);
+    const pores = tileNoise(N, 71, 2, 128);
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const k = y * N + x;
+        const t = (y / N) * 14 + warp[k]! * 3.2 + warp2[k]! * 0.6;
+        const ring = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+        const late = Math.pow(ring, 6);
+        h[k] = late * 0.5 + pores[k]! * 0.25;
+        m[k] = 0.84 + 0.2 * (1 - late) - pores[k]! * 0.06 + warp2[k]! * 0.05;
+      }
+    return { h, m, strength: 2.2 };
+  }
+  if (kind === 'edge') {
+    // 断面：一道道顺着边（u 方向）的细纹，宽窄、深浅不一。
+    const rows = tileNoise(N, 83, 1, 64);
+    const along = tileNoise(N, 89, 3, 4);
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const k = y * N + x;
+        // 每一行在 x 方向变化很慢：取同一行的噪声，只在 x 上做低频调制。
+        const r = rows[y * N + ((x >> 5) % N)]!;
+        h[k] = r * 0.7 + along[k]! * 0.3;
+        m[k] = 0.95 + (r - 0.5) * 0.08;
+      }
+    return { h, m, strength: 2.0 };
+  }
+  const R = RECIPES[kind];
   const low = tileNoise(N, 7, 4, 4);
   const fine = tileNoise(N, 19, 3, 64);
-  // 纤维：沿一个方向拉长的细线（几百条随机的短弧）。
+  const tooth = tileNoise(N, 41, 2, R.toothCells);
   const fib = new Float32Array(N * N);
-  let s = 12345;
-  const rnd = (): number => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 0x1_0000_0000);
-  for (let f = 0; f < 1400; f++) {
+  const fibTone = new Float32Array(N * N);
+  const rnd = rng(12345);
+  for (let f = 0; f < R.fibers; f++) {
     let x = rnd() * N;
     let y = rnd() * N;
     let a = rnd() * Math.PI * 2;
-    const len = 10 + rnd() * 40;
+    const len = 8 + rnd() * 36;
     const w = 0.25 + rnd() * 0.5;
+    const tone = rnd() < 0.5 ? -1 : 1;
     for (let t = 0; t < len; t++) {
       a += (rnd() - 0.5) * 0.3;
       x += Math.cos(a);
       y += Math.sin(a);
-      const i = ((Math.floor(y) % N) + N) % N;
-      const j = ((Math.floor(x) % N) + N) % N;
-      fib[i * N + j] = Math.min(1, fib[i * N + j]! + w);
+      const k = (((Math.floor(y) % N) + N) % N) * N + (((Math.floor(x) % N) + N) % N);
+      fib[k] = Math.min(1, fib[k]! + w);
+      fibTone[k] = tone;
     }
   }
-  // 纸浆里的小斑点（手工纸的样子）：几百个亮的、暗的小点，只进颜色。
   const fleck = new Float32Array(N * N);
-  for (let f = 0; f < 900; f++) {
+  for (let f = 0; f < R.flecks; f++) {
     const cx = rnd() * N;
     const cy = rnd() * N;
-    const r = 0.6 + rnd() * rnd() * 2.2;
-    const v = rnd() < 0.55 ? -(0.05 + rnd() * 0.08) : 0.04 + rnd() * 0.05;
+    const r = 0.5 + rnd() * rnd() * 2;
+    const v = rnd() < 0.6 ? -(0.04 + rnd() * 0.08) : 0.03 + rnd() * 0.05;
     for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++)
       for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
         const d = Math.hypot(x - cx, y - cy);
         if (d > r) continue;
-        const k = ((((y % N) + N) % N) * N + (((x % N) + N) % N)) | 0;
+        const k = (((y % N) + N) % N) * N + (((x % N) + N) % N);
         fleck[k] = fleck[k]! + v * (1 - d / (r + 0.5));
       }
   }
-  // 纸的"齿"：冷压水彩纸那种一粒一粒的小凸起，斜光一照就看得见。
-  const tooth = tileNoise(N, 41, 2, 48);
-  const h = new Float32Array(N * N);
-  for (let i = 0; i < h.length; i++) {
-    const t = tooth[i]!;
-    h[i] = low[i]! * 0.4 + fine[i]! * 0.25 + fib[i]! * 0.14 + t * t * 0.6;
+  for (let k = 0; k < h.length; k++) {
+    const t = tooth[k]!;
+    h[k] = low[k]! * R.low + fine[k]! * R.fine + fib[k]! * R.fiber + t * t * R.tooth;
+    m[k] = 1 - R.mottle + low[k]! * R.mottle * 1.6 + fib[k]! * fibTone[k]! * R.mottle * 0.5 + fleck[k]! * (R.mottle / 0.1);
   }
-  const at = (x: number, y: number): number => h[(((y + N) % N) * N + ((x + N) % N))]!;
-  const normal = document.createElement('canvas');
-  normal.width = normal.height = N;
-  const rough = document.createElement('canvas');
-  rough.width = rough.height = N;
-  const mottle = document.createElement('canvas');
-  mottle.width = mottle.height = N;
-  const nd = normal.getContext('2d')!.createImageData(N, N);
-  const rd = rough.getContext('2d')!.createImageData(N, N);
-  const md = mottle.getContext('2d')!.createImageData(N, N);
-  const strength = 4.2;
+  return { h, m, strength: R.strength };
+}
+
+/** 纸纹贴图：法线、粗糙度、颜色斑驳。 */
+function paperMaps(kind: PaperKind): { normal: Texture; rough: Texture; mottle: Texture } {
+  const N = 512;
+  const { h, m, strength } = paperFields(kind, N);
+  const at = (x: number, y: number): number => h[((y + N) % N) * N + ((x + N) % N)]!;
+  const mk = (): [HTMLCanvasElement, ImageData] => {
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    return [c, c.getContext('2d')!.createImageData(N, N)];
+  };
+  const [normal, nd] = mk();
+  const [rough, rd] = mk();
+  const [mottle, md] = mk();
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
@@ -124,12 +190,11 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
       nd.data[i + 1] = Math.round(((dy / l) * 0.5 + 0.5) * 255);
       nd.data[i + 2] = Math.round(((1 / l) * 0.5 + 0.5) * 255);
       nd.data[i + 3] = 255;
-      const r = Math.round((0.78 + fine[y * N + x]! * 0.2) * 255);
-      rd.data[i] = rd.data[i + 1] = rd.data[i + 2] = r;
+      const r = Math.round((0.86 + at(x, y) * 0.12) * 255);
+      rd.data[i] = rd.data[i + 1] = rd.data[i + 2] = Math.min(255, r);
       rd.data[i + 3] = 255;
-      // 斑驳：颜色乘上去，0.9–1.04 之间，纤维处略亮。
-      const m = Math.round((0.88 + low[y * N + x]! * 0.13 + fib[y * N + x]! * 0.05 + fleck[y * N + x]!) * 245);
-      md.data[i] = md.data[i + 1] = md.data[i + 2] = Math.min(255, m);
+      const v = Math.max(0, Math.min(255, Math.round(m[y * N + x]! * 245)));
+      md.data[i] = md.data[i + 1] = md.data[i + 2] = v;
       md.data[i + 3] = 255;
     }
   normal.getContext('2d')!.putImageData(nd, 0, 0);
@@ -139,13 +204,19 @@ function paperMaps(): { normal: Texture; rough: Texture; mottle: Texture } {
     const t = new CanvasTexture(c);
     t.wrapS = t.wrapT = RepeatWrapping;
     t.colorSpace = srgb ? SRGBColorSpace : LinearSRGBColorSpace;
-    t.anisotropy = 4;
+    t.anisotropy = 8;
     return t;
   };
   return { normal: tex(normal, false), rough: tex(rough, false), mottle: tex(mottle, true) };
 }
 
-let maps: ReturnType<typeof paperMaps> | null = null;
+const mapsByKind = new Map<PaperKind, ReturnType<typeof paperMaps>>();
+function mapsOf(kind: PaperKind): ReturnType<typeof paperMaps> {
+  let m = mapsByKind.get(kind);
+  if (!m) mapsByKind.set(kind, (m = paperMaps(kind)));
+  return m;
+}
+
 
 /**
  * 所有纸共用的"天光"：飘过的云在纸上投下的柔和暗斑（一张可平铺的软噪声，按世界 x、z 铺，随时间挪）。
@@ -189,21 +260,24 @@ export interface PaperAo {
   x0: number;
   z0: number;
   size: number;
+  /** z 方向的大小（不写就和 size 一样）。 */
+  sizeZ?: number;
 }
 
 export function paperMaterial(
   color: number | string,
-  opts: { scale?: number; edge?: boolean; emissive?: number; ao?: PaperAo; bump?: number; variant?: string; patch?: (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }) => void } = {},
+  opts: { kind?: PaperKind; scale?: number; edge?: boolean; emissive?: number; ao?: PaperAo; bump?: number; variant?: string; patch?: (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }) => void } = {},
 ): MeshStandardMaterial {
   const scale = opts.scale ?? 0.35;
   const bump = opts.bump ?? 1;
-  const key = `${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}|${opts.ao ? opts.ao.tex.id : ''}|${bump}|${opts.variant ?? ''}`;
+  const kind: PaperKind = opts.edge ? 'edge' : (opts.kind ?? 'card');
+  const key = `${kind}|${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}|${opts.ao ? opts.ao.tex.id : ''}|${bump}|${opts.variant ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  maps ??= paperMaps();
+  const maps = mapsOf(kind);
   paperGlobals.uCloudTex.value ??= cloudTexture();
   const c = new Color(color);
-  if (opts.edge) c.lerp(new Color(0xf7f0e2), 0.22);
+  if (opts.edge) c.lerp(new Color(0xf7f0e2), 0.12);
   const m = new MeshStandardMaterial({
     side: DoubleSide,
     shadowSide: DoubleSide,
@@ -227,32 +301,34 @@ export function paperMaterial(
         '#include <uv_vertex>',
         '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vMapUv * uPaperScale;\n#endif\n#ifdef USE_NORMALMAP\nvNormalMapUv = vNormalMapUv * uPaperScale;\n#endif\n#ifdef USE_ROUGHNESSMAP\nvRoughnessMapUv = vRoughnessMapUv * uPaperScale;\n#endif',
       )
-      .replace('void main() {', 'uniform float uPaperScale;\nvarying vec3 vPaperWorld;\nvoid main() {');
+      .replace('void main() {', 'uniform float uPaperScale;\nvarying vec3 vPaperWorld;\nvarying vec3 vPaperLocal;\nvoid main() {');
     vs = vs.replace(
       '#include <worldpos_vertex>',
-      '#include <worldpos_vertex>\n{ vec4 pw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\npw = instanceMatrix * pw;\n#endif\nvPaperWorld = (modelMatrix * pw).xyz; }',
+      '#include <worldpos_vertex>\n{ vec4 pw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\npw = instanceMatrix * pw;\n#endif\nvPaperLocal = pw.xyz;\nvPaperWorld = (modelMatrix * pw).xyz; }',
     );
     sh.vertexShader = vs;
     let fs = sh.fragmentShader
-      .replace('void main() {', 'varying vec3 vPaperWorld;\nuniform sampler2D uAo;\nuniform vec4 uAoBox;\nuniform sampler2D uCloudTex;\nuniform vec2 uCloudOff;\nuniform float uCloudAmt;\nuniform float uCloudScale;\nvoid main() {')
+      .replace('void main() {', 'varying vec3 vPaperWorld;\nvarying vec3 vPaperLocal;\nuniform sampler2D uAo;\nuniform vec4 uAoBox;\nuniform sampler2D uCloudTex;\nuniform vec2 uCloudOff;\nuniform float uCloudAmt;\nuniform float uCloudScale;\nvoid main() {')
       .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= 1.0 - uCloudAmt * texture2D(uCloudTex, vPaperWorld.xz * uCloudScale + uCloudOff).r;')
       .replace(
         'vec4 sampledDiffuseColor = texture2D( map, vMapUv );',
-        'vec4 sampledDiffuseColor = texture2D( map, vMapUv ) * (0.55 + 0.5 * texture2D( map, vMapUv * 0.231 + 0.37 ));',
+        kind === 'edge' || kind === 'wood'
+          ? 'vec4 sampledDiffuseColor = texture2D( map, vMapUv );'
+          : 'vec4 sampledDiffuseColor = texture2D( map, vMapUv ) * (0.6 + 0.42 * texture2D( map, vMapUv * 0.231 + 0.37 ));',
       )
       .replace(
         'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
-        'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;\nvec3 mapN2 = texture2D( normalMap, vNormalMapUv * 0.219 + 0.53 ).xyz * 2.0 - 1.0;\nmapN = vec3(mapN.xy + mapN2.xy * 0.75, mapN.z);',
+        'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;\nvec3 mapN2 = texture2D( normalMap, vNormalMapUv * 0.219 + 0.53 ).xyz * 2.0 - 1.0;\nmapN = vec3(mapN.xy + mapN2.xy * ' + (kind === 'edge' || kind === 'wood' ? '0.0' : '0.5') + ', mapN.z);',
       );
     if (ao) {
       sh.uniforms['uAo'] = { value: ao.tex };
-      sh.uniforms['uAoBox'] = { value: [ao.x0, ao.z0, 1 / ao.size, 0] };
-      fs = fs.replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= texture2D(uAo, (vPaperWorld.xz - uAoBox.xy) * uAoBox.z).r;');
+      sh.uniforms['uAoBox'] = { value: [ao.x0, ao.z0, 1 / ao.size, 1 / (ao.sizeZ ?? ao.size)] };
+      fs = fs.replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= texture2D(uAo, (vPaperLocal.xz - uAoBox.xy) * uAoBox.zw).r;');
     }
     sh.fragmentShader = fs;
     opts.patch?.(sh);
   };
-  m.customProgramCacheKey = () => `paper${scale}|${ao ? ao.tex.id : ''}|${opts.variant ?? ''}`;
+  m.customProgramCacheKey = () => `paper${kind}${scale}|${ao ? ao.tex.id : ''}|${opts.variant ?? ''}`;
   cache.set(key, m);
   return m;
 }
@@ -285,54 +361,74 @@ export function shapeOf(points: ArrayLike<number>, holes: ArrayLike<number>[] = 
 }
 
 /**
- * 一片薄纸的快速几何：正面一张三角化的面 + 一圈侧边（不要背面：纸偶贴着别的纸，看不到背面）。
- * 纸偶的零件每次变形都要重建，用 ExtrudeGeometry 太慢，这里自己拼：正面的三角形交给 ShapeUtils，侧边是一圈四边形。
- * 返回的几何有两组：0 正面、1 侧边。
+ * 一张纸（xy 平面里剪出形状，朝 +z 有 depth 厚）：正面一张三角化的面（可以有洞）+ 一圈断面（不要背面：贴着别的纸，看不到）。
+ * 断面的纹理坐标顺着边走（u = 沿边的长度，v = 高度），所以断面上的细纹是顺着纸边的，不会像正面的纹理被竖着拉长。
+ * 断面的法线在平缓的弯处取两边的平均（圆滑），在尖角处分开（剪刀剪出的角是尖的）。
+ * 返回的几何有两组：0 正面、1 断面。
  */
-export function thinPiece(points: ArrayLike<number>, depth: number, geom?: BufferGeometry): BufferGeometry {
-  const n = points.length / 2;
-  const contour: Vector2[] = [];
-  for (let i = 0; i < n; i++) contour.push(new Vector2(points[i * 2]!, points[i * 2 + 1]!));
-  // 正面朝 +z；ShapeUtils 要求逆时针。
-  let area = 0;
-  for (let i = 0; i < n; i++) {
-    const a = contour[i]!;
-    const b = contour[(i + 1) % n]!;
-    area += a.x * b.y - b.x * a.y;
-  }
-  if (area < 0) contour.reverse();
-  const tris = triangulate(contour);
+export function sheetGeometry(shapes: Array<{ outer: ArrayLike<number>; holes?: ArrayLike<number>[] }>, depth: number, geom?: BufferGeometry): BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
   const uv: number[] = [];
-  for (const t of tris)
-    for (const k of t) {
-      const p = contour[k]!;
-      pos.push(p.x, p.y, depth);
-      nor.push(0, 0, 1);
-      uv.push(p.x, p.y);
-    }
+  const side: Array<{ pts: Vector2[] }> = [];
+  for (const sh of shapes) {
+    const outer = toVecs(sh.outer);
+    if (outer.length < 3) continue;
+    if (ShapeUtils.isClockWise(outer)) outer.reverse();
+    const holes = (sh.holes ?? []).map(toVecs).filter((h) => h.length >= 3);
+    for (const h of holes) if (!ShapeUtils.isClockWise(h)) h.reverse();
+    const all = [...outer, ...holes.flat()];
+    for (const t of ShapeUtils.triangulateShape(outer, holes))
+      for (const k of t) {
+        const p = all[k]!;
+        pos.push(p.x, p.y, depth);
+        nor.push(0, 0, 1);
+        uv.push(p.x, p.y);
+      }
+    side.push({ pts: outer }, ...holes.map((pts) => ({ pts })));
+  }
   const faceCount = pos.length / 3;
-  for (let i = 0; i < n; i++) {
-    const a = contour[i]!;
-    const b = contour[(i + 1) % n]!;
-    const ex = b.x - a.x;
-    const ey = b.y - a.y;
-    const l = Math.hypot(ex, ey) || 1;
-    const nx = ey / l;
-    const ny = -ex / l;
-    const quad: [number, number, number][] = [
-      [a.x, a.y, 0],
-      [b.x, b.y, 0],
-      [b.x, b.y, depth],
-      [a.x, a.y, 0],
-      [b.x, b.y, depth],
-      [a.x, a.y, depth],
-    ];
-    for (const q of quad) {
-      pos.push(...q);
-      nor.push(nx, ny, 0);
-      uv.push(q[0] + q[2], q[1]);
+  for (const { pts } of side) {
+    const n = pts.length;
+    const segN: Vector2[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = pts[i]!;
+      const b = pts[(i + 1) % n]!;
+      const e = new Vector2(b.x - a.x, b.y - a.y);
+      const l = e.length() || 1;
+      segN.push(new Vector2(e.y / l, -e.x / l));
+    }
+    // 每个顶点在两条边之间：弯得缓就用平均的法线。
+    const vn = (i: number, seg: number): Vector2 => {
+      const prev = segN[(i + n - 1) % n]!;
+      const next = segN[i % n]!;
+      if (prev.dot(next) < 0.64) return segN[seg]!;
+      return prev.clone().add(next).normalize();
+    };
+    let arc = 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const a = pts[i]!;
+      const b = pts[j]!;
+      const len = a.distanceTo(b);
+      const na = vn(i, i);
+      const nb = vn(j, i);
+      const u0 = arc;
+      const u1 = arc + len;
+      arc = u1;
+      const quad: Array<[Vector2, number, Vector2, number]> = [
+        [a, 0, na, u0],
+        [b, 0, nb, u1],
+        [b, depth, nb, u1],
+        [a, 0, na, u0],
+        [b, depth, nb, u1],
+        [a, depth, na, u0],
+      ];
+      for (const [p, z, nn, u] of quad) {
+        pos.push(p.x, p.y, z);
+        nor.push(nn.x, nn.y, 0);
+        uv.push(u, z);
+      }
     }
   }
   const g = geom ?? new BufferGeometry();
@@ -346,7 +442,18 @@ export function thinPiece(points: ArrayLike<number>, depth: number, geom?: Buffe
   return g;
 }
 
-/** 三角化（three 自带的 earcut，快）。 */
-function triangulate(pts: Vector2[]): [number, number, number][] {
-  return ShapeUtils.triangulateShape(pts, []) as [number, number, number][];
+function toVecs(points: ArrayLike<number>): Vector2[] {
+  const out: Vector2[] = [];
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    const p = new Vector2(points[i]!, points[i + 1]!);
+    const last = out[out.length - 1];
+    if (!last || last.distanceToSquared(p) > 1e-12) out.push(p);
+  }
+  if (out.length > 1 && out[0]!.distanceToSquared(out[out.length - 1]!) < 1e-12) out.pop();
+  return out;
+}
+
+/** 一片没有洞的薄纸（纸偶零件、植物）。 */
+export function thinPiece(points: ArrayLike<number>, depth: number, geom?: BufferGeometry): BufferGeometry {
+  return sheetGeometry([{ outer: points }], depth, geom);
 }
