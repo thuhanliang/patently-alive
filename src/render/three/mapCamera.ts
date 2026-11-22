@@ -154,6 +154,11 @@ export class MapCamera {
     }
   }
 
+  /** 现在看的点（地面上）。 */
+  lookTarget(): Vector3 {
+    return this.target.clone();
+  }
+
   /** 设定看哪儿（立刻到位）。 */
   set(x: number, z: number, dist: number, yaw = 0, tiltAdd = 0): void {
     this.goal.tiltAdd = this.tiltAdd = tiltAdd;

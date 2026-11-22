@@ -34,7 +34,7 @@ vec3 transformed = vec3( position );
   vec3 io = (mi * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
   vec3 p = vec3(position.x * length(mi[0].xyz) * sign(instanceMatrix[0][0]), position.y * length(mi[1].xyz), position.z * length(mi[2].xyz));
   float sway = sin(uTime * 1.6 + io.x * 0.73 + io.z * 1.31) * 0.6 + sin(uTime * 2.7 + io.x * 1.9) * 0.4;
-  p.x += sway * uSway * position.y * position.y;
+  p.x += sway * uSway * position.y * position.y * length(mi[1].xyz);
   float a = -uLean;
   p = vec3(p.x, p.y * cos(a) - p.z * sin(a), p.y * sin(a) + p.z * cos(a));
   vec3 d = uCam - io;
@@ -137,6 +137,11 @@ export interface PlantSpot {
 export function plantField(outline: number[], depth: number, spots: PlantSpot[], sway: number, scale = 0.5): InstancedMesh {
   const geom: BufferGeometry = thinPiece(outline, depth);
   geom.translate(0, 0, -depth / 2);
+  return plantMesh(geom, spots, sway, scale);
+}
+
+/** 同上，形状已经做好（flora.ts 的一张纸）。 */
+export function plantMesh(geom: BufferGeometry, spots: PlantSpot[], sway: number, scale = 0.5): InstancedMesh {
   const mesh = new InstancedMesh(geom, plantMaterials(sway, scale), Math.max(1, spots.length));
   mesh.count = spots.length;
   const m = new Matrix4();

@@ -28,8 +28,10 @@ import { VerticalTiltShiftShader } from 'three/examples/jsm/shaders/VerticalTilt
 import { TERRAIN } from '../../sim/terrain';
 import { MapCamera } from './mapCamera';
 import { paperGlobals, paperMaterial, thinPiece } from './paper';
-import { bushOutline, plantField, plantUniforms, tuftOutline, type PlantSpot } from './plants';
-import { DEEP, LAND, SEA_LEVELS, SEA_SHALLOW, bakeAo, buildRelief, levelTop, noise2, reliefField, type ReliefField, type ReliefLayer } from './relief';
+import { buildVegetation, type IslandInput } from './vegetation';
+import { plantUniforms } from './plants';
+export type { IslandInput };
+import { CARD, DEEP, LAND, SEA_LEVELS, SEA_SHALLOW, bakeAo, buildRelief, fbm, levelTop, noise2, reliefField, type ReliefField, type ReliefLayer } from './relief';
 
 /**
  * 纸雕岛（2026-11-22）：一整座岛按等高线切成纸板叠起来，放在桌上的一盏斜阳下。
@@ -37,15 +39,6 @@ import { DEEP, LAND, SEA_LEVELS, SEA_SHALLOW, bakeAo, buildRelief, levelTop, noi
  * 推演只给每格的地形和植被（见 IslandInput）；高度、形状、草丛的位置都是画面自己按种子推出来的。
  */
 
-export interface IslandInput {
-  width: number;
-  height: number;
-  terrain: Uint8Array;
-  /** 每格草本、灌木的茂盛程度（0–1）；没有就当作中等。 */
-  herb?: ArrayLike<number>;
-  shrub?: ArrayLike<number>;
-  seed: number;
-}
 
 const GRAIN = {
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new Vector2(1, 1) } },
@@ -84,6 +77,7 @@ export class Island3D {
   constructor(
     private readonly host: HTMLElement,
     inp: IslandInput,
+    field?: ReliefField,
   ) {
     const t0 = performance.now();
     this.renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -116,7 +110,7 @@ export class Island3D {
     this.scene.add(new HemisphereLight(0xd3e4ff, 0x7a6644, 1.0));
 
     // 地形。
-    this.field = reliefField(inp);
+    this.field = field ?? reliefField(inp);
     const ao = bakeAo(this.field, inp.seed);
     const relief = buildRelief(this.field, ao, inp.seed);
     this.scene.add(relief.group);
@@ -125,11 +119,11 @@ export class Island3D {
     // 远海：一大张最深的蓝纸，铺到地平线，交给雾。
     const deep = new Mesh(new CircleGeometry(1200, 96), paperMaterial(DEEP, { scale: 6, bump: 0.5 }));
     deep.rotation.x = -Math.PI / 2;
-    deep.position.y = levelTop(-SEA_LEVELS) - 0.31;
+    deep.position.y = levelTop(-SEA_LEVELS) - CARD - 0.002;
     deep.receiveShadow = true;
     this.scene.add(deep);
 
-    this.vegetation(inp);
+    this.scene.add(buildVegetation(this.field, inp));
     this.farIslands(inp.seed, Math.max(inp.width, inp.height));
     paperGlobals.uCloudAmt.value = 0.2;
 
@@ -167,76 +161,6 @@ export class Island3D {
     this.scene.add(s);
   }
 
-  /** 立着的剪纸：每格按地形、茂盛程度撒草丛和灌丛，落在那一点所在那层纸的顶面上。 */
-  private vegetation(inp: IslandInput): void {
-    const { width: W, height: H, terrain, seed } = inp;
-    let s = (seed * 2654435761) >>> 0;
-    const rnd = (): number => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 0x1_0000_0000);
-    const pick = <T,>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)]!;
-    const tufts: PlantSpot[] = [];
-    const bushes: PlantSpot[][] = [[], [], []];
-    const rocks: PlantSpot[] = [];
-    const f = this.field;
-    const ground = (x: number, z: number): number | null => {
-      const L = f.levelAt(x, z);
-      if (L < 0) return null;
-      // 不放在两层纸的交界上（会半截悬空）。
-      for (const [dx, dz] of [[0.14, 0], [-0.14, 0], [0, 0.14], [0, -0.14]] as const) if (f.levelAt(x + dx, z + dz) !== L) return null;
-      return levelTop(L);
-    };
-    const GRASS = [0x9fca5e, 0x8dbd52, 0xb4d46c, 0xc9d478, 0x7fb04b];
-    const DUNE = [0xd8cf8e, 0xc9c27a, 0xe3d9a0];
-    const BUSH = [
-      [0x3b6b3c, 0x416f3e, 0x365f37],
-      [0x55893f, 0x5e9445, 0x4f7f3c],
-      [0x7fb053, 0x8aba5a, 0x76a64d],
-    ] as const;
-    for (let cy = 0; cy < H; cy++)
-      for (let cx = 0; cx < W; cx++) {
-        const i = cy * W + cx;
-        const t = terrain[i]!;
-        if (t === TERRAIN.water) continue;
-        const herb = inp.herb ? Math.max(0, Math.min(1, inp.herb[i]!)) : 0.6;
-        const shrub = inp.shrub ? Math.max(0, Math.min(1, inp.shrub[i]!)) : 0.7;
-        const wx = cx - W / 2;
-        const wz = cy - H / 2;
-        const nTuft = t === TERRAIN.coast ? 2 : t === TERRAIN.shrub ? 3 : Math.round(4 + herb * 9);
-        for (let k = 0; k < nTuft; k++) {
-          const x = wx + rnd();
-          const z = wz + rnd();
-          const y = ground(x, z);
-          if (y === null) continue;
-          const big = 0.7 + rnd() * 0.6 + herb * 0.3;
-          tufts.push({ x, y, z, w: 0.2 * big, h: 0.2 * big, color: t === TERRAIN.coast || f.levelAt(x, z) === 0 ? pick(DUNE) : pick(GRASS), flip: rnd() < 0.5 });
-        }
-        if (t === TERRAIN.shrub) {
-          const nBush = Math.round(1 + shrub * 3);
-          for (let k = 0; k < nBush; k++) {
-            const x = wx + 0.15 + rnd() * 0.7;
-            const z = wz + 0.15 + rnd() * 0.7;
-            const y = ground(x, z);
-            if (y === null) continue;
-            const sz = (0.55 + rnd() * 0.45) * (0.7 + shrub * 0.5);
-            // 一丛是前后三张：后面大而深，前面小而亮。
-            bushes[0]!.push({ x, y, z, w: 0.8 * sz, h: 0.7 * sz, color: pick(BUSH[0]), flip: rnd() < 0.5 });
-            bushes[1]!.push({ x: x + (rnd() - 0.5) * 0.12, y, z: z + 0.07, w: 0.62 * sz, h: 0.55 * sz, color: pick(BUSH[1]), flip: rnd() < 0.5 });
-            bushes[2]!.push({ x: x + (rnd() - 0.5) * 0.2, y, z: z + 0.14, w: 0.42 * sz, h: 0.36 * sz, color: pick(BUSH[2]), flip: rnd() < 0.5 });
-          }
-        }
-        if (t === TERRAIN.coast && rnd() < 0.18) {
-          const x = wx + rnd();
-          const z = wz + rnd();
-          const L = f.levelAt(x, z);
-          if (L >= 0) rocks.push({ x, y: levelTop(L), z, w: 0.3 + rnd() * 0.25, h: 0.16 + rnd() * 0.1, color: pick([0x9a978e, 0x8a877f, 0xaaa69b]), flip: rnd() < 0.5 });
-        }
-      }
-    const group = new Group();
-    group.add(plantField(tuftOutline(3), 0.012, tufts, 0.05, 0.4));
-    bushes.forEach((b, k) => group.add(plantField(bushOutline(k * 7 + 2), 0.03, b, 0.015, 0.6)));
-    group.add(plantField(bushOutline(11), 0.05, rocks, 0, 0.5));
-    this.scene.add(group);
-  }
-
   /**
    * 远处的小岛：不在推演里，只是让桌上这片海更大——每座是几张同心的纸（浅水、浪花、沙、两三层绿）。
    * 放在岛的两侧和后面，镜头拉远、转过去时看得见，雾把最远的融进天。
@@ -263,21 +187,18 @@ export class Island3D {
       const cz = Math.sin(ang) * dist * 0.9 - size * 0.25;
       const R = 2 + rnd() * rnd() * 13;
       const k0 = i * 13;
-      const layers: Array<[number, number, number]> = [
-        [R * 2.0, levelTop(-4), SEA_SHALLOW[3]!],
-        [R * 1.6, levelTop(-2), SEA_SHALLOW[1]!],
-        [R * 1.3, levelTop(-1), SEA_SHALLOW[0]!],
-        [R * 1.07, levelTop(-1) + 0.03, 0xfbf6ea],
-        [R, levelTop(0), LAND[0]!],
-      ];
-      const hills = 1 + Math.floor(rnd() * 3 + R / 5);
-      for (let h = 1; h <= hills; h++) layers.push([R * (1 - h / (hills + 1.2)), levelTop(h), LAND[Math.min(LAND.length - 1, h)]!]);
-      layers.forEach(([r, top, color], j) => {
-        const prevTop = j === 0 ? top - 0.15 : layers[j - 1]![1];
-        const thick = Math.max(0.03, top - prevTop);
+      // 和主岛一样一层一张卡纸：海从深到浅，一条浪花，沙，再一层层绿。
+      const layers: Array<[number, number, number, number]> = [];
+      const seaN = 7;
+      for (let L = -seaN; L <= -1; L++) layers.push([R * (1.12 + (-L - 1) * 0.16), levelTop(L), SEA_SHALLOW[Math.min(SEA_SHALLOW.length - 1, -L - 1)]!, CARD]);
+      layers.push([R * 1.07, levelTop(-1) + 0.025, 0xfbf6ea, 0.025]);
+      layers.push([R, levelTop(0), LAND[0]!, CARD]);
+      const hills = 2 + Math.floor(rnd() * 5 + R / 2.5);
+      for (let h = 1; h <= hills; h++) layers.push([R * (0.92 - (0.8 * h) / (hills + 1)), levelTop(h), LAND[Math.min(LAND.length - 1, h)]!, CARD]);
+      layers.forEach(([r, top, color, thick], j) => {
         const geom = thinPiece(blob(r, k0 + j * 0.37), thick);
         geom.rotateX(-Math.PI / 2);
-        const m = new Mesh(geom, [paperMaterial(color, { scale: 2.6 }), paperMaterial(color, { scale: 1.3, edge: true })]);
+        const m = new Mesh(geom, [paperMaterial(color, { scale: 2.6, kind: j === seaN + 1 ? 'kraft' : 'card' }), paperMaterial(color, { scale: 0.8, edge: true })]);
         m.position.set(cx, top - thick, cz);
         m.castShadow = true;
         m.receiveShadow = true;
@@ -304,7 +225,7 @@ export class Island3D {
     this.grain.uniforms['uRes']!.value.set(w * pr, h * pr);
   }
 
-  update(dt: number): void {
+  update(dt: number, render = true): void {
     this.time += dt;
     this.cam.apply(dt);
     const t = this.time;
@@ -326,6 +247,6 @@ export class Island3D {
     this.tiltV.uniforms['v']!.value = blur / h;
     this.tiltH.uniforms['r']!.value = this.tiltV.uniforms['r']!.value = 0.5;
     this.grain.uniforms['uTime']!.value = t;
-    this.composer.render(dt);
+    if (render) this.composer.render(dt);
   }
 }
