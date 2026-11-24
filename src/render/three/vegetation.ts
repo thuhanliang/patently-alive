@@ -20,7 +20,8 @@ export interface IslandInput {
  * 灌丛里是几种灌木，偶尔一棵矮松或小树；岛上水塘边长香蒲。
  * 每株落在它所在那层纸的顶面上，不放在两层纸的交界上。
  */
-export function buildVegetation(f: ReliefField, inp: IslandInput): Group {
+/** sparse：只要灌丛、树、花丛（桌上那件 A4 小模型用：草丛太小看不见，又最费三角形）。 */
+export function buildVegetation(f: ReliefField, inp: IslandInput, sparse = false): Group {
   const { width: W, height: H, terrain, seed } = inp;
   const flora = buildFlora(seed);
   let s = (seed * 2654435761) >>> 0;
@@ -33,6 +34,8 @@ export function buildVegetation(f: ReliefField, inp: IslandInput): Group {
     return levelTop(L);
   };
   const put = (id: string, x: number, z: number, tone: number, scale = 1): void => {
+    // 小模型：只要看得见的大东西（灌丛、树），而且稀一点。
+    if (sparse && (!['shrub', 'berry', 'gorse', 'pine', 'tree'].includes(id) || rnd() < 0.55)) return;
     const k = flora.get(id)!;
     const h = (k.h[0] + rnd() * (k.h[1] - k.h[0])) * scale;
     const y = ground(x, z, Math.max(0.06, h * k.aspect * 0.35));
@@ -85,8 +88,8 @@ export function buildVegetation(f: ReliefField, inp: IslandInput): Group {
         continue;
       }
       const nGrass = t === TERRAIN.shrub ? 2 : Math.round(3 + herb * 7);
-      for (let k = 0; k < nGrass; k++) put('grass', ...at(), tone);
-      if (tall > 0.55) for (let k = 0; k < Math.round(1 + herb * 5); k++) put('tallgrass', ...at(), tone);
+      if (!sparse) for (let k = 0; k < nGrass; k++) put('grass', ...at(), tone);
+      if (tall > 0.55 && !sparse) for (let k = 0; k < Math.round(1 + herb * 5); k++) put('tallgrass', ...at(), tone);
       if (t === TERRAIN.grass && patch > 0.42) {
         const kind = FLOWERS[Math.min(2, Math.floor(((patch - 0.42) / 0.3) * 3))]!;
         for (let k = 0; k < Math.round(1 + herb * 5); k++) put(kind, ...at(), tone);

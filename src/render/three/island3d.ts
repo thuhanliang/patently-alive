@@ -15,10 +15,13 @@ import {
   ShaderMaterial,
   SphereGeometry,
   SRGBColorSpace,
+  Raycaster,
+  PMREMGenerator,
   Vector2,
   WebGLRenderTarget,
   WebGLRenderer,
 } from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -108,6 +111,9 @@ export class Island3D {
     this.sun.shadow.intensity = 0.72;
     this.scene.add(this.sun, this.sun.target);
     this.scene.add(new HemisphereLight(0xd3e4ff, 0x7a6644, 1.0));
+    // 一点环境反射：岸边那辆车的黄铜才不发黑（纸几乎不受影响）。
+    this.scene.environment = new PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.3;
 
     // 地形。
     this.field = field ?? reliefField(inp);
@@ -212,6 +218,42 @@ export class Island3D {
   debug(k: string, v: unknown): void {
     if (k === 'shadows') this.sun.castShadow = !!v;
     if (k === 'clouds') paperGlobals.uCloudAmt.value = v ? 0.2 : 0;
+  }
+
+  /**
+   * 岸边的营地：事务所的车停在岛的南岸（找最南边的一块沙滩），支开着、打盹。
+   * 车的尺寸放大到地图上一眼看得见（像地图上的一个标记）。点它回家。
+   */
+  readonly camp = new Group();
+  campPick: (() => void) | null = null;
+  placeCamp(obj: Group, scale: number): void {
+    const f = this.field;
+    let best: [number, number, number] | null = null;
+    for (let x = -20; x <= 20; x += 0.5)
+      for (let z = 30; z > 0; z -= 0.25) {
+        const L = f.levelAt(x, z);
+        if (L >= 0) {
+          const ok = [-1.2, 1.2].every((dx) => f.levelAt(x + dx, z - 0.4) === L) && L <= 1;
+          if (ok && (!best || z > best[1])) best = [x, z, L];
+          break;
+        }
+      }
+    const [x, z, L] = best ?? [0, 20, 0];
+    obj.scale.setScalar(scale);
+    obj.rotation.y = -0.3;
+    this.camp.position.set(x, levelTop(L), z - 0.6);
+    this.camp.add(obj);
+    this.scene.add(this.camp);
+    const el = this.renderer.domElement;
+    const ray = new Raycaster();
+    let down: { x: number; y: number } | null = null;
+    el.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    el.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+      const r = el.getBoundingClientRect();
+      ray.setFromCamera(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+      if (ray.intersectObject(this.camp, true).length) this.campPick?.();
+    });
   }
 
   resize(): void {
