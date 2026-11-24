@@ -4,28 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <title>生生事务所 · 工作室</title>
+    <title>生生事务所 · 阿宝</title>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #15161c; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #efe6d2; }
       #studio, #map { position: fixed; inset: 0; }
       #map { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
       #map.on { opacity: 1; pointer-events: auto; }
       #tag { position: fixed; pointer-events: none; padding: 7px 13px 8px; background: #f3e9d2; color: #3a2618; font: 14px/1.45 'LXGW WenKai Screen', 'Kaiti SC', serif; letter-spacing: 1px;
-        box-shadow: 0 2px 0 #d6c29c, 0 8px 18px rgba(20, 12, 6, 0.35); transform: translate(14px, 16px) rotate(-1.2deg); opacity: 0; transition: opacity 0.15s; max-width: 260px;
+        box-shadow: 0 2px 0 #d6c29c, 0 8px 18px rgba(20, 12, 6, 0.25); transform: translate(14px, 16px) rotate(-1.2deg); opacity: 0; transition: opacity 0.15s; max-width: 260px;
         clip-path: polygon(0 4%, 4% 0, 96% 2%, 100% 7%, 99% 95%, 95% 100%, 3% 98%, 0 93%); }
       #tag b { font-size: 16px; letter-spacing: 2px; display: block; }
-      #back { position: fixed; left: 18px; top: 16px; padding: 7px 14px; background: #f3e9d2; color: #3a2618; font: 15px 'LXGW WenKai Screen', serif; letter-spacing: 2px; border: 0; cursor: pointer;
-        box-shadow: 0 2px 0 #d6c29c, 0 6px 14px rgba(20, 12, 6, 0.3); opacity: 0; pointer-events: none; transition: opacity 0.4s; clip-path: polygon(0 6%, 5% 0, 95% 3%, 100% 9%, 98% 94%, 94% 100%, 3% 97%, 0 90%); }
-      #back.on { opacity: 1; pointer-events: auto; }
-      #veil { position: fixed; inset: 0; background: #15161c; display: grid; place-items: center; color: #e9d7b0; font: 16px 'LXGW WenKai Screen', serif; letter-spacing: 3px; transition: opacity 0.9s; }
+      #hint { position: fixed; left: 18px; bottom: 16px; padding: 7px 14px; background: #f3e9d2; color: #3a2618; font: 14px 'LXGW WenKai Screen', serif; letter-spacing: 1px;
+        box-shadow: 0 2px 0 #d6c29c, 0 6px 14px rgba(20, 12, 6, 0.2); transition: opacity 0.4s; }
+      #veil { position: fixed; inset: 0; background: #efe6d2; display: grid; place-items: center; color: #3a2618; font: 16px 'LXGW WenKai Screen', serif; letter-spacing: 3px; transition: opacity 0.9s; }
     </style>
   </head>
   <body>
     <div id="studio"></div>
     <div id="map"></div>
     <div id="tag"></div>
-    <button id="back">← 回到桌前</button>
-    <div id="veil">开灯……</div>
+    <div id="hint">鼠标停在车里的东西上看看 · 点托盘里的岛走进去 · 在岛上点岸边的车回来</div>
+    <div id="veil">阿宝醒了……</div>
     <script type="module" src="/src/proto/studio/main.ts"></script>
   </body>
 </html>

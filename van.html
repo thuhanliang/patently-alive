@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>阿宝 · 事务所的车</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #efe6d2; }
+      #stage { position: fixed; inset: 0; }
+      #bar { position: fixed; left: 16px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+      #bar button { font: 14px 'LXGW WenKai Screen', 'Kaiti SC', serif; letter-spacing: 1px; padding: 6px 12px; border: 0; background: #f6eedb; color: #3a2618; cursor: pointer;
+        box-shadow: 0 2px 0 #d6c29c, 0 6px 12px rgba(60, 40, 20, 0.18); }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="bar"></div>
+    <script type="module" src="/src/proto/van/main.ts"></script>
+  </body>
+</html>

@@ -302,10 +302,10 @@ export function bakeAo(f: ReliefField, seed: number): PaperAo {
 }
 
 /** 一段环：采样坐标 → 世界坐标，圆滑，再加一点手剪的抖动。 */
-function worldLoop(f: ReliefField, loop: number[], seed: number, wobble: number): number[] {
+function worldLoop(f: ReliefField, loop: number[], seed: number, wobble: number, minSeg = 0.06): number[] {
   const w: number[] = [];
   for (let i = 0; i < loop.length; i += 2) w.push(f.x0 + loop[i]! * f.step, f.z0 + loop[i + 1]! * f.step);
-  let s = thin(chaikin(thin(w, f.step * 0.45)), 0.06);
+  let s = thin(chaikin(thin(w, Math.max(f.step * 0.45, minSeg * 0.5))), minSeg);
   if (wobble > 0) {
     const out: number[] = [];
     const m = s.length / 2;
@@ -343,7 +343,8 @@ export interface ReliefLayer {
 }
 
 /** 按层切纸。返回一组网格（每层一个），水的几层另外记下，用来让它们轻轻起伏。 */
-export function buildRelief(f: ReliefField, ao: PaperAo, seed: number): { group: Group; layers: ReliefLayer[]; foam: Mesh } {
+/** minSeg：轮廓上两点最近隔多远（岛的单位）；桌上的小模型用大一点，三角形少很多。 */
+export function buildRelief(f: ReliefField, ao: PaperAo, seed: number, minSeg = 0.06): { group: Group; layers: ReliefLayer[]; foam: Mesh } {
   const group = new Group();
   const layers: ReliefLayer[] = [];
   const field = { w: f.nx, h: f.nz, v: f.v };
@@ -351,9 +352,9 @@ export function buildRelief(f: ReliefField, ao: PaperAo, seed: number): { group:
     const rs = regions(isoLoops(field, iso));
     const shapes: Array<{ outer: number[]; holes: number[][] }> = [];
     for (const r of rs) {
-      const outer = worldLoop(f, r.outer, s, wobble);
+      const outer = worldLoop(f, r.outer, s, wobble, minSeg);
       if (outer.length < 8) continue;
-      const holes = r.holes.map((h) => worldLoop(f, h, s + 3, wobble)).filter((h) => h.length >= 8);
+      const holes = r.holes.map((h) => worldLoop(f, h, s + 3, wobble, minSeg)).filter((h) => h.length >= 8);
       // 剪纸在 xy 平面里剪，(x, −z)；转平以后厚度朝上。
       const flip = (l: number[]): number[] => l.map((v, i) => (i % 2 ? -v : v));
       shapes.push({ outer: flip(outer), holes: holes.map(flip) });
