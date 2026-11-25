@@ -2,7 +2,7 @@ import { BufferAttribute, BufferGeometry, Matrix4, Mesh, type Material, type Obj
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * 把一组里不会动的零件按材质合成几个大网格（2026-11-25）：「阿宝」有上千块纸片和铜条，
+ * 把一组里不会动的零件按材质合成几个大网格（2026-11-25）：「勾勾」有上千块纸片和铜条，
  * 一块一次绘制、再乘上两盏灯的阴影，iPad 吃不消。合完以后外观一样，绘制次数降到几十次。
  * userData.noBake 的子树不动（会动的眼皮、门、篷子……），它们自己可以另外再合。
  */

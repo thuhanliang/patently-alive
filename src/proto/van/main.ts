@@ -1,9 +1,10 @@
+import { Vector3 } from 'three';
 import { VanScene, type VanView } from '../../render/three/van/scene';
 import { islandOf } from '../../render/three/van/islandData';
 import '../../ui/style/theme.css';
 
 /**
- * 「阿宝」的看车页（2026-11-25）：转着看车，切几个视角；?view=front|side|back|top|inside|camp；?manual=1 给截图脚本一帧一帧地推。
+ * 「勾勾」的看车页（2026-11-25）：转着看车，切几个视角；?view=front|side|back|top|inside|camp；?manual=1 给截图脚本一帧一帧地推。
  */
 const q = new URLSearchParams(location.search);
 const sc = new VanScene(document.getElementById('stage')!, { orbit: true, island: islandOf('garden-island') });
@@ -32,6 +33,9 @@ if (q.get('manual') === '1') {
   (window as unknown as { vs: unknown }).vs = {
     step(dt: number, k: number): void {
       for (let i = 0; i < k; i++) sc.update(dt, i === k - 1);
+    },
+    pose(px: number, py: number, pz: number, tx: number, ty: number, tz: number, fov = 30): void {
+      sc.flyTo({ pos: new Vector3(px, py, pz), target: new Vector3(tx, ty, tz), fov }, 0);
     },
     view(v: VanView): void {
       sc.setView(v, true);

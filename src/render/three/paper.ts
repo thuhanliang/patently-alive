@@ -100,27 +100,43 @@ function paperFields(kind: PaperKind, N: number): { h: Float32Array; m: Float32A
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
         const k = y * N + x;
-        const t = (y / N) * 14 + warp[k]! * 3.2 + warp2[k]! * 0.6;
+        const t = (y / N) * 36 + warp[k]! * 1.1 + warp2[k]! * 0.35;
         const ring = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-        const late = Math.pow(ring, 6);
-        h[k] = late * 0.5 + pores[k]! * 0.25;
-        m[k] = 0.84 + 0.2 * (1 - late) - pores[k]! * 0.06 + warp2[k]! * 0.05;
+        const late = Math.pow(ring, 4);
+        h[k] = late * 0.35 + pores[k]! * 0.3;
+        m[k] = 0.9 + 0.12 * (1 - late) - pores[k]! * 0.08 + warp2[k]! * 0.05;
       }
     return { h, m, strength: 2.2 };
   }
   if (kind === 'edge') {
-    // 断面：一道道顺着边（u 方向）的细纹，宽窄、深浅不一。
-    const rows = tileNoise(N, 83, 1, 64);
-    const along = tileNoise(N, 89, 3, 4);
+    // 断面（2026-11-25 重做）：纹理的 v 正好横跨一张纸的厚度（0 → 1），u 顺着边走（以纸厚为单位）。
+    // 看得见的东西：三层纸浆压在一起的分层线、两侧切口被压实的一道暗线、顺着边的短纤维、小斑点。
+    const fibers = new Float32Array(N * N);
+    const rnd = rng(9137);
+    for (let f = 0; f < 5200; f++) {
+      const x0 = rnd() * N;
+      const y0 = rnd() * N;
+      const len = 6 + rnd() * 40;
+      const v = (rnd() - 0.5) * 0.5;
+      for (let t = 0; t < len; t++) {
+        const x = Math.floor(x0 + t) % N;
+        const y = Math.floor(y0 + Math.sin((x0 + t) * 0.07) * 1.5 + N) % N;
+        fibers[y * N + x] = fibers[y * N + x]! + v * (1 - Math.abs(t / len - 0.5) * 2);
+      }
+    }
+    const speck = tileNoise(N, 97, 2, 96);
+    const wav = tileNoise(N, 101, 2, 6);
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
         const k = y * N + x;
-        // 每一行在 x 方向变化很慢：取同一行的噪声，只在 x 上做低频调制。
-        const r = rows[y * N + ((x >> 5) % N)]!;
-        h[k] = r * 0.7 + along[k]! * 0.3;
-        m[k] = 0.95 + (r - 0.5) * 0.08;
+        const v = y / (N - 1) + (wav[k]! - 0.5) * 0.04;
+        const ply = Math.exp(-Math.pow((v - 0.34) / 0.018, 2)) + Math.exp(-Math.pow((v - 0.67) / 0.018, 2)) * 0.8;
+        const rim = Math.exp(-v / 0.035) + Math.exp(-(1 - v) / 0.035);
+        const sheen = Math.exp(-Math.pow((v - 0.07) / 0.03, 2)) + Math.exp(-Math.pow((v - 0.93) / 0.03, 2));
+        h[k] = 0.6 - ply * 0.35 - rim * 0.5 + fibers[k]! * 0.6 + speck[k]! * 0.15;
+        m[k] = 1.0 - ply * 0.1 - rim * 0.26 + sheen * 0.05 + fibers[k]! * 0.2 + (speck[k]! - 0.5) * 0.06;
       }
-    return { h, m, strength: 2.0 };
+    return { h, m, strength: 2.6 };
   }
   const R = RECIPES[kind];
   const low = tileNoise(N, 7, 4, 4);
@@ -266,24 +282,26 @@ export interface PaperAo {
 
 export function paperMaterial(
   color: number | string,
-  opts: { kind?: PaperKind; scale?: number; edge?: boolean; emissive?: number; ao?: PaperAo; bump?: number; variant?: string; patch?: (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }) => void } = {},
+  opts: { kind?: PaperKind; scale?: number; edge?: boolean; metal?: number; core?: number; emissive?: number; ao?: PaperAo; bump?: number; variant?: string; patch?: (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }) => void } = {},
 ): MeshStandardMaterial {
-  const scale = opts.scale ?? 0.35;
+  // 断面的纹理坐标以纸厚为单位：一块纹理沿边铺 8 个纸厚，横跨正好一个纸厚。
+  const scale = opts.edge ? 8 : (opts.scale ?? 0.35);
   const bump = opts.bump ?? 1;
   const kind: PaperKind = opts.edge ? 'edge' : (opts.kind ?? 'card');
-  const key = `${kind}|${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}|${opts.ao ? opts.ao.tex.id : ''}|${bump}|${opts.variant ?? ''}`;
+  const key = `${kind}|${new Color(color).getHexString()}|${scale}|${opts.edge ? 1 : 0}|${opts.emissive ?? 0}|${opts.ao ? opts.ao.tex.id : ''}|${bump}|${opts.variant ?? ''}|${opts.metal ?? 0}|${opts.core ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const maps = mapsOf(kind);
   paperGlobals.uCloudTex.value ??= cloudTexture();
   const c = new Color(color);
-  if (opts.edge) c.lerp(new Color(0xf7f0e2), 0.12);
+  // 断面是纸芯的颜色：比正面浅一些（染透的彩纸），覆膜的金卡纸芯是白的（core 给更大的值）。
+  if (opts.edge) c.lerp(new Color(0xf3ecdc), opts.core ?? 0.28);
   const m = new MeshStandardMaterial({
     side: DoubleSide,
     shadowSide: DoubleSide,
     color: c,
-    roughness: 1,
-    metalness: 0,
+    roughness: opts.metal ? 0.42 : 1,
+    metalness: opts.metal ?? 0,
     map: maps.mottle,
     normalMap: maps.normal,
     normalScale: new Vector2(0.9 * bump, 0.9 * bump),
@@ -306,6 +324,7 @@ export function paperMaterial(
       '#include <worldpos_vertex>',
       '#include <worldpos_vertex>\n{ vec4 pw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\npw = instanceMatrix * pw;\n#endif\nvPaperLocal = pw.xyz;\nvPaperWorld = (modelMatrix * pw).xyz; }',
     );
+    if (kind === 'edge') vs = vs.split('* uPaperScale;').join('* vec2(uPaperScale, 1.0);');
     sh.vertexShader = vs;
     let fs = sh.fragmentShader
       .replace('void main() {', 'varying vec3 vPaperWorld;\nvarying vec3 vPaperLocal;\nuniform sampler2D uAo;\nuniform vec4 uAoBox;\nuniform sampler2D uCloudTex;\nuniform vec2 uCloudOff;\nuniform float uCloudAmt;\nuniform float uCloudScale;\nvoid main() {')
@@ -427,7 +446,7 @@ export function sheetGeometry(shapes: Array<{ outer: ArrayLike<number>; holes?: 
       for (const [p, z, nn, u] of quad) {
         pos.push(p.x, p.y, z);
         nor.push(nn.x, nn.y, 0);
-        uv.push(u, z);
+        uv.push(u / depth, z / depth);
       }
     }
   }

@@ -1,10 +1,11 @@
 import { type Group, type Mesh } from 'three';
+import { Pendulum, Spring } from '../craft';
 import { bake } from './bake';
 import { buildVan, type VanParts } from './body';
 import { buildInterior, type Interior } from './interior';
 
 /**
- * 「阿宝」：车身 + 里面 + 它的表情（2026-11-25）。
+ * 「勾勾」：车身 + 里面 + 它的表情（2026-11-25）。
  * 表情就是游戏的反馈（docs/research/studio.md）：平时眼皮半闭、轻轻呼吸；来信时耳朵朝前、眼睛睁圆、铃铛晃、嘴里叼出信；
  * 停下来支开（营地）：后门打开、雕花板放下成桌、篷子展开。
  */
@@ -19,8 +20,10 @@ export class Van {
   private ringT = 0;
   private camp = 0;
   private campGoal = 0;
-  private doors = 0;
-  private doorsGoal = 0;
+  /** 后门、雕花板、铃铛：弹簧和单摆带着走（开到合页的极限会顿一下，铃铛被碰了会自己晃停）。 */
+  private readonly doorS = new Spring(0, 0, 40, 7);
+  private readonly flapS = new Spring(0, 0, 50, 8);
+  private readonly bellP = new Pendulum(0.09, 1.5);
   private pingT = 0;
   private blinkT = 3;
   night = 0;
@@ -52,11 +55,11 @@ export class Van {
 
   setCamp(on: boolean): void {
     this.campGoal = on ? 1 : 0;
-    this.doorsGoal = on ? 1 : this.doorsGoal;
+    if (on) this.doorS.target = 1;
   }
 
   setDoors(open: boolean): void {
-    this.doorsGoal = open ? 1 : 0;
+    this.doorS.target = open ? 1 : 0;
   }
 
   /** 眼皮：0 闭上，1 睁开。 */
@@ -64,10 +67,21 @@ export class Van {
     this.lidGoal = open;
   }
 
+  get doorsOpen(): boolean {
+    return this.doorS.target > 0.5;
+  }
+
+  /** 摇一下车（方向盘、有人上车）：挂着的东西都晃一晃，铃铛响。 */
+  jostle(v = 1): void {
+    this.bellP.kick(4 * v);
+    this.inside.jostle(v);
+  }
+
   /** 来信了。 */
   ping(): void {
     this.pingT = 3.2;
     this.ringT = 1.6;
+    this.bellP.kick(6);
   }
 
   update(dt: number): void {
@@ -95,7 +109,7 @@ export class Van {
     });
     // 铃铛：来信时晃。
     this.ringT = Math.max(0, this.ringT - dt);
-    p.bell.rotation.x = Math.sin(this.t * 18) * 0.5 * this.ringT * this.ringT;
+    p.bell.rotation.x = this.bellP.step(dt);
     p.letter.visible = pinging || this.lidGoal > 0.2;
     p.letter.position.y = 0.98 + (pinging ? Math.min(1, (3.2 - this.pingT) * 4) * 0.04 : 0);
     // 呼吸：车身轻轻起伏。
@@ -117,14 +131,18 @@ export class Van {
     tassel.rotation.x = Math.sin(this.t * 0.9) * 0.1;
     // 营地：篷子、雕花板、后门。
     this.camp += (this.campGoal - this.camp) * k(3);
-    this.doors += (this.doorsGoal - this.doors) * k(3);
+    this.doorS.step(dt);
+    const doors = this.doorS.clamp(0, 1.04);
+    this.flapS.target = this.campGoal;
+    this.flapS.step(dt);
+    const flap = this.flapS.clamp(0, 1);
     p.awning.visible = this.camp > 0.02;
     p.awning.scale.set(1, 0.3 + 0.7 * this.camp, 0.2 + 0.8 * this.camp);
     p.awning.position.set(0, (1 - this.camp) * 1.6, (1 - this.camp) * 0.8);
     p.awningRoll.visible = this.camp < 0.98;
     p.awningRoll.scale.setScalar(1 - 0.6 * this.camp);
-    p.flap.rotation.x = this.camp * (Math.PI / 2);
-    p.doors.forEach((d, i) => (d.rotation.y = (i === 0 ? 1 : -1) * 1.5 * this.doors));
+    p.flap.rotation.x = flap * (Math.PI / 2);
+    p.doors.forEach((d, i) => (d.rotation.y = (i === 0 ? 1 : -1) * 1.5 * doors));
     // 夜里眼睛是暖的。
     p.eyeGlow.emissiveIntensity = 0.15 + this.night * 1.4;
     this.inside.update(dt, this.t);

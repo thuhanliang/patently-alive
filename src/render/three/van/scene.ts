@@ -28,11 +28,11 @@ import { paperGlobals, paperMaterial } from '../paper';
 import { plantMesh, plantUniforms, type PlantSpot } from '../plants';
 import { CARD, DEEP, SEA_LEVELS, bakeAo, buildRelief, cropField, levelTop, noise2, type ReliefField } from '../relief';
 import { buildVegetation, type IslandInput } from '../vegetation';
-import { V3, flat, mesh, card, rng } from './kit';
+import { V3, flat, mesh, card, rng } from '../craft';
 import { Van } from './van';
 
 /**
- * 「阿宝」所在的小场景（2026-11-25）：一块剪纸的草地和沙滩，车停在上面；一盏斜阳、天光、车里的灯。
+ * 「勾勾」所在的小场景（2026-11-25）：一块剪纸的草地和沙滩，车停在上面；一盏斜阳、天光、车里的灯。
  * 看车页和"家"共用它。家的主视角是"剖开的娃娃屋"：-z 那一侧的墙藏起来，从侧上方看进车里。
  */
 
@@ -91,6 +91,11 @@ export class VanScene {
   private flyT = 1;
   private time = 0;
   view: VanView = 'hero';
+  /** 镜头由外面摆（第一人称）。飞行时照样由这里接管。 */
+  external = false;
+  get groundLevel(): number {
+    return this.groundY;
+  }
   /** 鼠标在画面里的位置（-1..1），家的视角随它轻轻错开。 */
   readonly mouse = new Vector2();
 
@@ -219,7 +224,7 @@ export class VanScene {
     put('pine', 5.0, 1.2, top, 2.0);
     for (const [id, arr] of lists) {
       const k = flora.get(id)!;
-      k.parts.forEach((part, j) => this.scene.add(plantMesh(part.geom, arr[j]!, k.sway * 4, 0.5)));
+      k.parts.forEach((part, j) => this.scene.add(plantMesh(part.geom, arr[j]!, k.sway * 4, 0.5, 0.012)));
     }
   }
 
@@ -266,7 +271,8 @@ export class VanScene {
 
   flyTo(p: Pose, ms: number, done?: () => void): void {
     this.flyDone = done ?? null;
-    this.from = { pos: this.camera.position.clone(), target: this.controls ? this.controls.target.clone() : this.pose.target.clone(), fov: this.camera.fov };
+    const ahead = this.camera.position.clone().add(this.camera.getWorldDirection(new Vector3()).multiplyScalar(1.5));
+    this.from = { pos: this.camera.position.clone(), target: this.controls ? this.controls.target.clone() : this.external ? ahead : this.pose.target.clone(), fov: this.camera.fov };
     this.goal = { pos: p.pos.clone(), target: p.target.clone(), fov: p.fov };
     this.flyT = ms <= 0 ? 1 : 0;
     this.flyMs = ms;
@@ -322,6 +328,8 @@ export class VanScene {
       }
     } else if (this.controls) {
       this.controls.update();
+    } else if (this.external) {
+      // 第一人称：镜头归外面（Walker）摆。
     } else {
       // 家的视角：随鼠标轻轻错开（像坐着歪一下头）。
       this.camera.position.copy(this.pose.pos).add(V3(this.mouse.x * 0.18, this.mouse.y * 0.08, 0));

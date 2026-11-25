@@ -108,7 +108,7 @@ export function buildVegetation(f: ReliefField, inp: IslandInput, sparse = false
     const k = flora.get(id)!;
     for (const part of k.parts) {
       const ps: PlantSpot[] = list.map((p) => ({ x: p.x, y: p.y, z: p.z, w: p.h * k.aspect, h: p.h, flip: p.flip, color: part.colors[p.tone % part.colors.length]! }));
-      group.add(plantMesh(part.geom, ps, k.sway * 4, 0.5));
+      group.add(plantMesh(part.geom, ps, k.sway * 4, 0.5, 0.03));
     }
   }
   return group;

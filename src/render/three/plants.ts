@@ -77,7 +77,12 @@ function plantMaterials(sway: number, scale: number): Material[] {
       .replace('#include <beginnormal_vertex>', BILLBOARD_NORMAL);
   };
   const variant = `plant${sway}`;
-  return [paperMaterial(0xffffff, { scale, variant, patch }), paperMaterial(0xffffff, { scale, edge: true, variant, patch })];
+  // 断面：纸芯比纸面浅（实例色往米白里掺一些），剪纸的边才读得出来。
+  const edgePatch = (sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }): void => {
+    patch(sh);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.93, 0.86), 0.4);');
+  };
+  return [paperMaterial(0xffffff, { scale, variant, patch }), paperMaterial(0xffffff, { scale, edge: true, variant: `${variant}e`, patch: edgePatch })];
 }
 
 function depthMaterial(sway: number): MeshDepthMaterial {
@@ -122,6 +127,9 @@ export function tuftOutline(seed: number, blades = 6): number[] {
   return pts;
 }
 
+/** flora.ts 里一张植物纸片的厚度（植物自己的单位，高 = 1）。 */
+export const PLANT_PAPER = 0.016;
+
 export interface PlantSpot {
   x: number;
   y: number;
@@ -141,13 +149,17 @@ export function plantField(outline: number[], depth: number, spots: PlantSpot[],
 }
 
 /** 同上，形状已经做好（flora.ts 的一张纸）。 */
-export function plantMesh(geom: BufferGeometry, spots: PlantSpot[], sway: number, scale = 0.5): InstancedMesh {
+/**
+ * thick：纸的厚度（世界单位）。不给就按宽度缩放（旧的做法，纸会薄得看不见）；
+ * 给了就是真的纸厚：几株大小不一的植物用的是同一种卡纸，厚度一样。
+ */
+export function plantMesh(geom: BufferGeometry, spots: PlantSpot[], sway: number, scale = 0.5, thick?: number): InstancedMesh {
   const mesh = new InstancedMesh(geom, plantMaterials(sway, scale), Math.max(1, spots.length));
   mesh.count = spots.length;
   const m = new Matrix4();
   const c = new Color();
   spots.forEach((p, i) => {
-    m.makeScale(p.flip ? -p.w : p.w, p.h, p.w);
+    m.makeScale(p.flip ? -p.w : p.w, p.h, thick !== undefined ? thick / PLANT_PAPER : p.w);
     m.setPosition(p.x, p.y, p.z);
     mesh.setMatrixAt(i, m);
     mesh.setColorAt(i, c.setHex(p.color));
