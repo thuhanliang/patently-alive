@@ -1,4 +1,7 @@
 import {
+  ExtrudeGeometry,
+  Path,
+  Shape,
   BufferAttribute,
   EdgesGeometry,
   LineBasicMaterial,
@@ -913,5 +916,21 @@ export function patchwork(
     }
     y += rh;
   }
+  return g;
+}
+
+// ———— 倒角块（2026-11-26，部件实验台）：真的纸模和效果图里，每条棱都是圆的、接得住光；锋利的棱就是 SketchUp 感的来源 ————
+
+/**
+ * 一个有倒角的块：二维轮廓 pts（xy 平面）挤出 depth 厚，四周倒一个 bevel 宽的圆角（几段），正面朝 +z。
+ * 原点在背面（z = 0），正面在 z = depth。纹理坐标按世界尺寸铺。
+ */
+export function bev(pts: Vector2[], depth: number, bevel: number, holes: Vector2[][] = [], segs = 3): BufferGeometry {
+  const sh = new Shape(pts);
+  for (const h of holes) sh.holes.push(new Path(h));
+  const b = Math.min(bevel, depth * 0.45);
+  const g = new ExtrudeGeometry(sh, { depth: Math.max(0.0001, depth - 2 * b), bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: segs, curveSegments: 4 });
+  g.translate(0, 0, b);
+  g.computeVertexNormals();
   return g;
 }
