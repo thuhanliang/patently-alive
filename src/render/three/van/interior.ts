@@ -2,6 +2,7 @@ import { CatmullRomCurve3, CylinderGeometry, Group, Mesh, MeshStandardMaterial, 
 import { paperMaterial } from '../paper';
 import {
   C,
+  bead,
   Pendulum,
   Rivets,
   Spring,
@@ -95,7 +96,11 @@ function drawAnimal(g: CanvasRenderingContext2D, kind: number, cx: number, cy: n
   g.fill();
 }
 
+const faceCache = new Map<string, MeshStandardMaterial>();
 function cardFace(kind: number, tint: string): MeshStandardMaterial {
+  const key = `${kind % 4}|${tint}`;
+  const hit = faceCache.get(key);
+  if (hit) return hit;
   const tex = canvasTex(256, 320, (g) => {
     g.fillStyle = tint;
     g.fillRect(0, 0, 256, 320);
@@ -111,7 +116,9 @@ function cardFace(kind: number, tint: string): MeshStandardMaterial {
     g.arc(200, 274, 14, 0, Math.PI * 2);
     g.fill();
   });
-  return new MeshStandardMaterial({ map: tex, roughness: 0.95 });
+  const m = new MeshStandardMaterial({ map: tex, roughness: 0.95 });
+  faceCache.set(key, m);
+  return m;
 }
 
 /** 一张有图案的纸（正面贴图、断面是纸芯）。w×h，躺在 xz 平面（朝 +y）或立在 xy 平面（朝 +z）。 */
@@ -211,6 +218,11 @@ export function buildInterior(parent: Group, seed: number): Interior {
       const fx = dx0 + dw * (c + 0.5);
       const fy = Y0 + dh * (r + 0.5);
       dr.add(put(cardBox(dw - 0.02, dh - 0.02, 0.022, r === 2 ? C.blue : C.drawer, 0.4), { position: V3(0, 0, 0.011) }));
+      {
+        const hw = (dw - 0.02) / 2;
+        const hh = (dh - 0.02) / 2;
+        dr.add(bead([V3(-hw, -hh, -0.0005), V3(hw, -hh, -0.0005), V3(hw, hh, -0.0005), V3(-hw, hh, -0.0005)], V3(0, 0, -1), 0.02, 0.008, 0.002, 0x8aa0a4));
+      }
       // 抽屉的盒身（拉出来才看得见）：底、两侧、后板。
       dr.add(put(cardBox(dw - 0.05, 0.012, 0.42, 0xd9c7a0, 0.3, 'kraft'), { position: V3(0, -dh / 2 + 0.03, 0.23) }));
       for (const sx of [-1, 1]) dr.add(put(cardBox(0.012, dh * 0.55, 0.42, 0xd9c7a0, 0.3, 'kraft'), { position: V3(sx * (dw / 2 - 0.03), -dh / 2 + 0.03 + dh * 0.27, 0.23) }));
@@ -438,6 +450,7 @@ export function buildInterior(parent: Group, seed: number): Interior {
   lampG.add(lamp);
   lamp.target.position.set(0.88 - 0.55, TABLE_Y, 0.86 - 0.25);
   g.add(lampG, lamp.target);
+  head.userData['inkRoot'] = true;
   const nod = new Pendulum(0.12, 3);
   swings.push({ p: nod, o: head, axis: 'z' });
   items.push({
@@ -477,6 +490,11 @@ export function buildInterior(parent: Group, seed: number): Interior {
       const fx = wx0 + cw * (c + 0.5);
       const fy = wy0 + ch * (r + 0.5);
       dr.add(put(cardBox(cw - 0.016, ch - 0.016, 0.02, [C.woodLight, 0xb98a5a, 0xc8a070][(c + r) % 3]!, 0.4, 'wood'), { position: V3(0, 0, -0.01) }));
+      {
+        const hw = (cw - 0.016) / 2;
+        const hh = (ch - 0.016) / 2;
+        dr.add(bead([V3(-hw, -hh, -0.0205), V3(hw, -hh, -0.0205), V3(hw, hh, -0.0205), V3(-hw, hh, -0.0205)], V3(0, 0, -1), 0.012, 0.006, 0.002, 0x9c6e44));
+      }
       // 抽屉的盒身（卡纸折的）和里面竖着的一排卡。
       dr.add(put(cardBox(cw - 0.03, 0.01, wd - 0.03, 0xd9b48a, 0.3, 'kraft'), { position: V3(0, -ch * 0.35, (wd - 0.03) / 2) }));
       for (const sx of [-1, 1]) dr.add(put(cardBox(0.008, ch * 0.5, wd - 0.03, 0xd9b48a, 0.3, 'kraft'), { position: V3(sx * (cw / 2 - 0.02), -ch * 0.12, (wd - 0.03) / 2) }));
@@ -581,6 +599,7 @@ export function buildInterior(parent: Group, seed: number): Interior {
   }
   wheelSpin.add(put(tack(0.03), { position: V3(0, 0, 0.01) }));
   add(wheel, put(rolled(0.015, 0.015, 0.3, 0.003, 0x5b544d, 10), { position: V3(1.86, 1.42, 0.46), rotation: { z: 2.4 } }));
+  wheelSpin.userData['inkRoot'] = true;
   const steer = sprung(0, (x) => (wheelSpin.rotation.z = x), -4, 4, 30, 5);
   const dash = cardBox(0.16, 0.2, 1.8, C.woodDark, 0.5, 'wood');
   dash.position.set(2.0, 1.28, 0);
@@ -695,23 +714,11 @@ export function buildInterior(parent: Group, seed: number): Interior {
   // 水壶：灰卡纸叠圈的壶身、卷锥的壶嘴、一片剪出来的把手、叠圈的壶盖钮；点它烧水，冒热气。
   const kettle = new Group();
   kettle.position.set(-1.08, 1.393, ZW - 0.1);
-  kettle.add(
-    stackRound(
-      [
-        [0, 0.06],
-        [0.02, 0.072],
-        [0.05, 0.075],
-        [0.08, 0.066],
-        [0.1, 0.045],
-        [0.115, 0.02],
-        [0.125, 0.012],
-        [0.135, 0.006],
-      ],
-      0.005,
-      0xa9b0ad,
-      { mats: [new MeshStandardMaterial({ color: 0xa9b0ad, metalness: 0.5, roughness: 0.45 }), paperMaterial(0xdedad0, { edge: true })] },
-    ),
-  );
+  // 壶身是一张纸卷的筒，壶肩是一张纸卷的锥，盖子是一片圆纸加一颗钮——纸模型里圆东西的做法。
+  kettle.add(rolled(0.072, 0.072, 0.075, 0.003, 0xa9b0ad, 22));
+  kettle.add(put(rolled(0.072, 0.022, 0.045, 0.003, 0xa9b0ad, 22), { position: V3(0, 0.075, 0) }));
+  kettle.add(put(mesh(flat(ngon(22, 0.024), 0.004), card(0xa9b0ad, 0.2)), { rotation: { x: -Math.PI / 2 }, position: V3(0, 0.12, 0) }));
+  kettle.add(put(tack(0.012, 0x2a2420), { rotation: { x: -Math.PI / 2 }, position: V3(0, 0.124, 0) }));
   const spout = rolled(0.016, 0.007, 0.09, 0.002, 0xa9b0ad, 10);
   spout.position.set(0.06, 0.04, 0);
   spout.rotation.z = -0.8;
@@ -823,6 +830,7 @@ export function buildInterior(parent: Group, seed: number): Interior {
   for (const sx of [-0.16, 0.16]) suitcase.add(put(hinge(0.07, 0.025, 0.003), { position: V3(sx, SH, -SD / 2 - 0.004), rotation: { z: Math.PI / 2 } }));
   // 提手：一段皮带弯成的拱，两头钉在箱盖的前沿。
   lid.add(put(strip([V3(-0.07, 0.012, SD + 0.0), V3(-0.06, 0.06, SD + 0.0), V3(0.06, 0.06, SD + 0.0), V3(0.07, 0.012, SD + 0.0)], V3(0, 0, 1), 0.02, 0.006, false, card(0x5a3220, 0.2, 'kraft')), {}));
+  lid.userData['inkRoot'] = true;
   const lidS = sprung(0, (x) => (lid.rotation.x = -x), 0, 1.95, 70, 9);
   g.add(suitcase);
   items.push({ id: 'vet', name: '出诊皮箱', hint: '兽医的东西：打开看看', obj: suitcase, act: () => (lidS.target = lidS.target > 0.5 ? 0 : 1.85) });
@@ -954,7 +962,10 @@ export function buildInterior(parent: Group, seed: number): Interior {
   // 合批：能点的东西各自一组；会晃、会动的不合进去。
   for (const it of items) it.obj.userData['noBake'] = true;
   bake(g);
-  for (const it of items) if (!it.inspect && !it.act) bake(it.obj);
+  // 能点的东西也各自合成一块（整块一起动）；里面会单独动的小部件（箱盖、方向盘、灯头）再各合各的。
+  for (const sub of [lid, wheelSpin, head]) sub.userData['noBake'] = true;
+  for (const it of items) bake(it.obj);
+  for (const sub of [lid, wheelSpin, head]) bake(sub);
 
   // 热气。
   const steam: Mesh[] = [];

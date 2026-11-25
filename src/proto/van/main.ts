@@ -43,6 +43,21 @@ if (q.get('manual') === '1') {
     ping(): void {
       sc.van.ping();
     },
+    count(): string {
+      const c = new Map<string, number>();
+      sc.scene.traverse((o) => {
+        if (!(o as { isMesh?: boolean }).isMesh) return;
+        const path: string[] = [];
+        let q: typeof o | null = o;
+        while (q && q !== sc.scene) {
+          if (q.name) path.push(q.name);
+          q = q.parent;
+        }
+        const k = `${path.reverse().slice(0, 2).join('/')}|${o.parent?.type}|${(o as { geometry?: { type: string } }).geometry?.type}`;
+        c.set(k, (c.get(k) ?? 0) + 1);
+      });
+      return [...c].sort((a, b) => b[1] - a[1]).slice(0, 15).map((x) => x.join(' ')).join('\n');
+    },
     info(): unknown {
       const info = sc.renderer.info;
       info.autoReset = false;
