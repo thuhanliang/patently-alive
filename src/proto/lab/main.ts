@@ -20,7 +20,7 @@ interface PartDef {
 const PARTS: Record<string, PartDef> = {
   nose: {
     // 车头正面朝着左前方的太阳（效果图里车头是亮的）。
-    sun: [-3, 9, 3],
+    sun: [-2.5, 9, 3.5],
     build: () => {
       const g = new Group();
       const n = buildNose();
@@ -73,8 +73,10 @@ st.scene.add(ground);
 st.scene.add(def.build());
 if (def.sun) st.sun.position.set(...def.sun);
 if (part === 'nose') {
-  st.sun.intensity = 2.1;
-  st.renderer.toneMappingExposure = 0.88;
+  // 太阳强一点、天光弱一点：零件下面要有清楚的投影（审核意见：没有投影，零件像贴在墙上）。
+  st.sun.intensity = 3.0;
+  st.sky.intensity = 0.5;
+  st.renderer.toneMappingExposure = 0.9;
 }
 st.camera.fov = def.cam.fov;
 st.camera.position.set(...def.cam.pos);

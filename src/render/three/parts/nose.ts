@@ -1,156 +1,40 @@
-import { CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, SRGBColorSpace, Vector2, Vector3, type BufferGeometry, type Material } from 'three';
+import { CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, ShapeUtils, SphereGeometry, SRGBColorSpace, Vector2, Vector3, type BufferGeometry, type Material } from 'three';
 import { bev, rng } from '../craft';
 import { paperMaterial } from '../paper';
 
 /**
  * 车鼻子正面（2026-11-26 部件实验台第 2 件，照 6-overall.jpg 的车头）。
- * 比例：在效果图上量 14 个点，和镜头一起最小二乘拟合（平均误差约 3 像素），以灯玻璃高 0.25 定尺度：
- * - 面板宽 1.18、高 0.89；两只灯中心在 ±0.467、高 1.124，灯的外框略探出面板边，胡须也伸到面板外；
- * - 大灯是瘦高的八角：外框 0.28 × 0.40，玻璃 0.15 × 0.25；灯筒浅（伸出 0.11）；金框、深色内框都是斜面，玻璃几乎齐平；
- * - 雨檐：一片平的金帽檐（宽 0.23 ≈ 0.8 灯宽），在灯顶上方约 4 厘米，后沿折下来钉在面板上，伸出灯面约 0.08，前沿略低、一道小折边；
- * - 格栅：开口 0.40 宽，顶在 1.356（比灯顶略高）；边框是很窄（2.7 厘米）的一圈切角米色边，几乎和面板齐平；八根圆金棍；
- * - 方鼻头：棱台，背面 0.34 × 0.29，正面 0.30 × 0.25，伸出 0.235；背后一圈底板；
- * - 胡须：每侧三根，从 x = ±0.3 伸到 ±0.64，外端间距 0.12（往外略张开）；
- * - 面板是一块块瓷砖样的卡纸拼成（米色、浅灰绿深浅不一），四周是圆润的包边，转角处有金色包角。
+ * 大的尺寸：在效果图上量点、和镜头一起拟合；细节：按独立审核员（子 agent，只看左右对比和放大图）的意见改，
+ * 设计图（AI 画的）里含糊或不合理的地方按好看、合理来做。
+ * - 面板宽 1.28、高 0.89：一块块有厚度的卡纸拼到边（灰白、米白、浅灰），切边露浅色纸芯，底排有的块凸出一点；不做整圈金框，只在上两角各一片 L 形金角片；
+ * - 大灯：中心 ±0.44、高 1.124；八角高宽比约 1.3，斜边约为竖边的 0.8；灯筒浅（伸出 0.09），侧壁金棕色，根部略大、侧壁垂直于面板；
+ *   金框一圈（宽约灯宽 1/8，内沿一道斜面）→ 深紫褐内框一圈 → 细金压边 → 暖黄灯玻璃（宽约灯宽一半，放射细线）；两侧金铰链耳片钉在面板上；
+ * - 雨檐：一整张折过两道的金卡纸（截面 /‾‾\），罩住灯的顶边和上斜边的上半段，离灯筒一道缝，后端立在面板上、后沿折出粘贴舌，前沿探出灯面 8 厘米；
+ *   金框外侧两个顶点上各一颗黄铜圆钉；
+ * - 格栅：7 根浅牛皮纸条（条:缝约 0.6:1），缝是深褐，顶上一根横档压住条头；外框是一整块 U 形厚纸板、上两角切斜角；
+ * - 方鼻头是个信箱：横长（0.44 × 0.25），伸出 0.15，折痕级小倒角，背后一圈和面板同色的窄压边；前脸一道投信口（金翻盖挂在细卷轴上）、一块小金名牌；
+ * - 胡须：黄铜八棱卷纸管（悬臂），每侧三根近乎平行、往外略上扬，根部各一个圆座钉在面板上，外端多面纸珠，伸出车身轮廓外约 0.1。
+ * 所有倒角都是单段的（一条干净的折痕）——多段倒角在墨线里会描成一圈圈"等高线"。
  * 正面朝 +z，原点在面板正中的地面高度上（y 是离地高度）。
  */
 
-// 金卡纸：效果图里的金是亮的黄金色（受光面接近 #e7b86d），金属感不强——是印了金的卡纸，不是镜面铜。
-export const gold = new MeshStandardMaterial({ color: 0xf0bb55, metalness: 0.3, roughness: 0.42, emissive: 0x4a2e08 });
-export const goldDark = new MeshStandardMaterial({ color: 0xc08c3c, metalness: 0.3, roughness: 0.5, emissive: 0x2a1a06 });
+// 金卡纸：浅香槟金（背光、朝下的面用 goldDark 深铜褐）；金属感不强——是印了金的卡纸，不是镜面铜。
+export const gold = new MeshStandardMaterial({ color: 0xeec676, metalness: 0.3, roughness: 0.42, emissive: 0x3e2a0a });
+export const goldDark = new MeshStandardMaterial({ color: 0xc28838, metalness: 0.3, roughness: 0.5, emissive: 0x2a1806 });
+// 黄铜：胡须用，和金件同族，略暗、偏橙；平面着色——胡须是卷纸管和多面纸珠，不是光滑的金属杆。
+export const brass = new MeshStandardMaterial({ color: 0xd9a050, metalness: 0.35, roughness: 0.45, emissive: 0x3a2206, flatShading: true });
+const boltDot = new MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8 });
 
-function m(g: ReturnType<typeof bev>, mats: Material | Material[], z = 0): Mesh {
-  const x = new Mesh(g, mats);
+/** 单段倒角的挤出（一条干净的折痕）。 */
+const pb = (pts: Vector2[], depth: number, bevel: number, holes: Vector2[][] = []): BufferGeometry => bev(pts, depth, bevel, holes, 1);
+
+function m(geo: BufferGeometry, mats: Material | Material[], z = 0): Mesh {
+  const x = new Mesh(geo, mats);
   x.position.z = z;
   x.castShadow = x.receiveShadow = true;
   return x;
 }
 const rect = (x0: number, y0: number, x1: number, y1: number): Vector2[] => [new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1)];
-
-let glassTex: CanvasTexture | null = null;
-function lampGlass(): MeshStandardMaterial {
-  glassTex ??= (() => {
-    const c = document.createElement('canvas');
-    c.width = c.height = 256;
-    const g = c.getContext('2d')!;
-    const gr = g.createRadialGradient(128, 128, 10, 128, 128, 128);
-    gr.addColorStop(0, '#fff2b0');
-    gr.addColorStop(0.5, '#f6d16a');
-    gr.addColorStop(1, '#b7832f');
-    g.fillStyle = gr;
-    g.fillRect(0, 0, 256, 256);
-    g.strokeStyle = 'rgba(150,100,40,0.55)';
-    g.lineWidth = 3;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-      g.beginPath();
-      g.moveTo(128, 128);
-      g.lineTo(128 + Math.cos(a) * 130, 128 + Math.sin(a) * 130);
-      g.stroke();
-    }
-    g.beginPath();
-    g.arc(128, 128, 46, 0, Math.PI * 2);
-    g.stroke();
-    const t = new CanvasTexture(c);
-    t.colorSpace = SRGBColorSpace;
-    return t;
-  })();
-  return new MeshStandardMaterial({ map: glassTex, emissiveMap: glassTex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3 });
-}
-
-/** 瘦高的八角（上下、左右的平边各占一半）。 */
-function oct(hw: number, hh: number): Vector2[] {
-  return chamfered(-hw, -hh, hw, hh, hw / 2, hh / 2);
-}
-
-/**
- * 一只大灯：中心在原点，正面朝 +z，外框半宽 hw、半高 hh（瘦高的八角），灯筒从面板伸出 depth（浅）。
- * 效果图量的：外框 0.28 × 0.40，玻璃 0.15 × 0.25；金框和深色内框都是斜面，玻璃几乎齐平。
- */
-export function headlamp(hw = 0.14, hh = 0.2, depth = 0.11): Group {
-  const g = new Group();
-  const mauve = [paperMaterial(0x7c6158, { scale: 0.1 }), paperMaterial(0x6a5048, { scale: 0.1 })];
-  const k = (f: number): Vector2[] => oct(hw * f, hh * f);
-  const gi = (hw - 0.04) / hw; // 金框内沿（金框宽 4 厘米）
-  const giy = (hh - 0.042) / hh;
-  // 灯筒：八角金筒，背光的侧面。
-  g.add(m(bev(k(0.97), depth - 0.02, 0.005, [oct(hw * gi, hh * giy).reverse()]), [goldDark, goldDark], 0));
-  // 正面金框：斜面（像画框），从外沿往里斜下去。
-  g.add(m(bev(k(1), 0.03, 0.02, [oct(hw * gi, hh * giy).reverse()]), [gold, goldDark], depth - 0.026));
-  // 深色内框：斜面，退后一点。
-  g.add(m(bev(oct(hw * gi + 0.004, hh * giy + 0.004), 0.02, 0.012, [oct(0.075, 0.125).reverse()]), mauve, depth - 0.032));
-  // 灯玻璃：几乎齐平。
-  const glass = new Mesh(bev(oct(0.077, 0.127), 0.008, 0.002), [lampGlass(), goldDark]);
-  const uv = glass.geometry.getAttribute('uv');
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 0.154 + 0.5, uv.getY(i) / 0.254 + 0.5);
-  glass.position.z = depth - 0.028;
-  g.add(glass);
-  // 灯左侧两颗金铰钉（灯像一扇小门）。
-  for (const y of [0.1, -0.1]) {
-    const kn = new Mesh(new SphereGeometry(0.018, 12, 8), gold);
-    kn.position.set(-hw - 0.004, y, depth * 0.55);
-    g.add(kn);
-  }
-  // 雨檐：一片平的金帽檐，搭在灯筒顶上往前伸出灯面约 0.1，前沿略低、往下折一道小边。
-  // （效果图里雨檐右边那块棕色的斜面不是雨檐，是八角灯筒右上的斜侧面，背光所以发棕。）
-  const t = 0.012;
-  const D = depth + 0.08;
-  const visor = new Group();
-  visor.position.set(0, hh + 0.045, 0);
-  visor.rotation.x = 0.07;
-  const brim = m(bev(rect(-0.115, -D, 0.115, 0), t, 0.004), [gold, goldDark]);
-  brim.rotation.x = -Math.PI / 2;
-  const lip = m(bev(rect(-0.115, -0.028, 0.115, t), t, 0.003), [gold, goldDark], D - t);
-  // 后沿一条竖的折边贴在面板上（帽檐是钉在车头上的，不是浮着的）。
-  const back = m(bev(rect(-0.115, -0.07, 0.115, 0), t, 0.003), [gold, goldDark], 0);
-  visor.add(brim, lip, back);
-  g.add(visor);
-  // 金框右上、左上的斜角上各一片带铆钉的小金片。
-  for (const s of [-1, 1]) {
-    const tab = m(bev(rect(-0.02, -0.016, 0.02, 0.016), 0.01, 0.003), [gold, goldDark], depth);
-    tab.position.x = s * hw * 0.82;
-    tab.position.y = hh * 0.68;
-    tab.rotation.z = s * -0.9;
-    g.add(tab);
-    const rv = new Mesh(new SphereGeometry(0.007, 8, 6), goldDark);
-    rv.position.set(s * hw * 0.82, hh * 0.68, depth + 0.012);
-    g.add(rv);
-  }
-  return g;
-}
-
-/** 一根铜胡须：从 a 到 b 的圆杆，两头各一颗铜珠。 */
-function whisker(g: Group, a: Vector3, b: Vector3): void {
-  const len = a.distanceTo(b);
-  const rod = new Mesh(new CylinderGeometry(0.014, 0.014, len, 12), gold);
-  rod.position.copy(a).add(b).multiplyScalar(0.5);
-  rod.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), b.clone().sub(a).normalize());
-  rod.castShadow = true;
-  g.add(rod);
-  for (const [p, rr] of [
-    [a, 0.024],
-    [b, 0.03],
-  ] as const) {
-    const ball = new Mesh(new SphereGeometry(rr, 12, 8), gold);
-    ball.position.copy(p);
-    ball.castShadow = true;
-    g.add(ball);
-  }
-}
-
-/** 倒角的盒子往前收成棱台：z = 0 处是原尺寸，z = depth 处横向按 kx、竖向按 ky 缩（绕中心）。 */
-function frustum(x0: number, y0: number, x1: number, y1: number, depth: number, bevel: number, kx: number, ky: number): BufferGeometry {
-  const geo = bev(rect(x0, y0, x1, y1), depth, bevel);
-  const cx = (x0 + x1) / 2;
-  const cy = (y0 + y1) / 2;
-  const p = geo.getAttribute('position');
-  for (let i = 0; i < p.count; i++) {
-    const z = p.getZ(i) / depth;
-    p.setXY(i, cx + (p.getX(i) - cx) * (1 + (kx - 1) * z), cy + (p.getY(i) - cy) * (1 + (ky - 1) * z));
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
 
 /** 切角的矩形（八角形的矩形版）：横向切 cx，竖向切 cy。 */
 function chamfered(x0: number, y0: number, x1: number, y1: number, cx: number, cy = cx): Vector2[] {
@@ -160,96 +44,312 @@ function chamfered(x0: number, y0: number, x1: number, y1: number, cx: number, c
   ];
 }
 
-/** 车鼻子正面：面板正面在 z = F。尺寸见文件开头（从效果图上量点、和镜头一起拟合出来的）。 */
+/** 空间里一块平的四边形卡纸（四个角 c，朝 n 那面是正面，厚 t 往背面长）。 */
+function plate(c: Vector3[], n: Vector3, t: number, mats: Material[]): Mesh {
+  const ctr = c.reduce((a, p) => a.add(p), new Vector3()).multiplyScalar(1 / c.length);
+  const u = c[1]!.clone().sub(c[0]!).normalize();
+  const v = new Vector3().crossVectors(n, u).normalize();
+  const pts = c.map((p) => new Vector2(p.clone().sub(ctr).dot(u), p.clone().sub(ctr).dot(v)));
+  if (ShapeUtils.isClockWise(pts)) pts.reverse();
+  const x = new Mesh(pb(pts, t, Math.min(0.002, t * 0.3)), mats);
+  x.matrixAutoUpdate = false;
+  x.matrix.makeBasis(u, v, n).setPosition(ctr.clone().addScaledVector(n, -t));
+  x.castShadow = x.receiveShadow = true;
+  return x;
+}
+
+/** 大螺栓：一圈垫圈 + 扁圆帽 + 中心一个深色凹点，贴在 z 朝外的面上。 */
+function bolt(g: Group, x: number, y: number, z: number, r = 0.014): void {
+  const washer = new Mesh(new CylinderGeometry(r * 1.6, r * 1.6, 0.003, 24), goldDark);
+  washer.rotation.x = Math.PI / 2;
+  washer.position.set(x, y, z + 0.0015);
+  const cap = new Mesh(new SphereGeometry(r, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), gold);
+  cap.rotation.x = Math.PI / 2;
+  cap.scale.set(1, 0.4, 1);
+  cap.position.set(x, y, z + 0.003);
+  const dot = new Mesh(new CylinderGeometry(r * 0.3, r * 0.3, 0.002, 12), boltDot);
+  dot.rotation.x = Math.PI / 2;
+  dot.position.set(x, y, z + 0.003 + r * 0.4);
+  washer.castShadow = cap.castShadow = true;
+  g.add(washer, cap, dot);
+}
+
+let glassTex: CanvasTexture | null = null;
+function lampGlass(): MeshStandardMaterial {
+  glassTex ??= (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    // 暖黄，中心只亮一点（不发白），往边上略暗。
+    const gr = g.createRadialGradient(128, 128, 8, 128, 128, 140);
+    gr.addColorStop(0, '#ffe7a0');
+    gr.addColorStop(0.55, '#f6cf6c');
+    gr.addColorStop(1, '#dca246');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 256, 256);
+    // 12 条放射细线（菲涅耳灯罩的感觉），黄褐色，看得清。
+    g.strokeStyle = 'rgba(150,95,35,0.55)';
+    g.lineWidth = 2.5;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      g.beginPath();
+      g.moveTo(128 + Math.cos(a) * 8, 128 + Math.sin(a) * 8);
+      g.lineTo(128 + Math.cos(a) * 150, 128 + Math.sin(a) * 150);
+      g.stroke();
+    }
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  })();
+  return new MeshStandardMaterial({ map: glassTex, emissiveMap: glassTex, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.35 });
+}
+
+/** 点在 oct(hw, hh) 里面吗？ */
+function insideOct(x: number, y: number, hw: number, hh: number): boolean {
+  const ax = Math.abs(x);
+  const ay = Math.abs(y);
+  if (ax > hw + 1e-6 || ay > hh + 1e-6) return false;
+  const cx = hw * 0.5;
+  const cy = hh * 0.56;
+  return Math.max(0, ax - (hw - cx)) / cx + Math.max(0, ay - (hh - cy)) / cy <= 1 + 1e-6;
+}
+
+/** 斜面框：外沿竖直、正面从外沿往内沿斜下去 drop（像画框；外沿不往里收）。 */
+function slopeRing(ohw: number, ohh: number, ihw: number, ihh: number, thick: number, drop: number, mats: Material[]): Mesh {
+  const geo = pb(oct(ohw, ohh), thick, 0.001, [oct(ihw, ihh).reverse()]);
+  const p = geo.getAttribute('position');
+  for (let i = 0; i < p.count; i++) if (p.getZ(i) > thick * 0.5 && insideOct(p.getX(i), p.getY(i), ihw + 0.003, ihh + 0.003)) p.setZ(i, p.getZ(i) - drop);
+  geo.computeVertexNormals();
+  return m(geo, mats);
+}
+
+/** 大灯的八角：高宽比约 1.3，斜边约为竖边的 0.8。 */
+function oct(hw: number, hh: number): Vector2[] {
+  return chamfered(-hw, -hh, hw, hh, hw * 0.5, hh * 0.56);
+}
+
+/** 一只大灯：中心在原点，正面朝 +z，外框半宽 hw、半高 hh，灯筒从面板伸出 depth。 */
+export function headlamp(hw = 0.15, hh = 0.195, depth = 0.09, out = 1): Group {
+  const g = new Group();
+  const o = (d: number): Vector2[] => oct(hw - d, hh - d);
+  const side = [paperMaterial(0x7a5530, { scale: 0.15 }), paperMaterial(0x6c4a2a, { scale: 0.15 })];
+  const mauve = [paperMaterial(0x93807f, { scale: 0.1 }), paperMaterial(0x7d6b6b, { scale: 0.1 })];
+  // 灯筒：暖深褐（比正面的金暗一半，深度才看得出来），侧壁垂直于面板；根部贴面板一圈略大的底边（同色）。
+  g.add(m(pb(o(-0.012), 0.012, 0.0015, [o(0.03).reverse()]), side, 0));
+  g.add(m(pb(o(0), depth - 0.03, 0.001, [o(0.04).reverse()]), side, 0.006));
+  // 金框：一圈斜面框（宽约灯宽 1/8），外沿竖直，正面往里斜下去约 20°，按朝向分出明暗。
+  const fr = slopeRing(hw, hh, hw - 0.038, hh - 0.038, 0.024, 0.008, [gold, goldDark]);
+  fr.position.z = depth - 0.024;
+  g.add(fr);
+  // 灰粉褐内框：一圈较平的台阶环（约灯宽 1/7），只有一道窄斜面。
+  const mr = slopeRing(hw - 0.036, hh - 0.036, hw - 0.078, hh - 0.078, 0.014, 0.004, mauve);
+  mr.position.z = depth - 0.022;
+  g.add(mr);
+  // 一道很细的浅色斜边 + 灯玻璃（宽约灯宽的 0.45）。
+  const gw = hw - 0.0825;
+  const gh = hh - 0.0825;
+  g.add(m(pb(oct(gw + 0.008, gh + 0.008), 0.01, 0.0015, [oct(gw, gh).reverse()]), [paperMaterial(0xe9d6b0, { scale: 0.1 }), paperMaterial(0xcdb68e, { scale: 0.1 })], depth - 0.026));
+  const glass = new Mesh(pb(oct(gw, gh), 0.008, 0.002), [lampGlass(), goldDark]);
+  const uv = glass.geometry.getAttribute('uv');
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / (2 * gw) + 0.5, uv.getY(i) / (2 * gh) + 0.5);
+  glass.position.z = depth - 0.03;
+  glass.castShadow = glass.receiveShadow = true;
+  g.add(glass);
+  // 雨檐：一整张折过两道的金卡纸（截面 /‾‾\，顶面和两个斜面是同一块料，没有拼接、不会互相穿插）。
+  // 内表面紧贴灯筒的顶边和两条上斜边，后端顶在根部那圈底边上，往前一直伸到灯面前 6 厘米。
+  // 两翼只罩住上斜边的上半段（斜边下半露出来）；离灯筒留一道缝（让开根部底边），后端直接立在面板上，
+  // 后沿往外折出一圈粘贴舌贴在面板上——一眼看得出它是粘在车头上的。前沿探出灯面 8 厘米。
+  const t = 0.006;
+  const gap = 0.02; // 离根部底边至少 8 毫米（程序算过，不穿插）
+  const half = (q: Vector2[], i: number, j: number): Vector2 => q[i]!.clone().add(q[j]!).multiplyScalar(0.5);
+  const ring = (d: number): Vector2[] => {
+    const q = oct(hw + d, hh + d);
+    return [half(q, 3, 4), q[4]!, q[5]!, half(q, 5, 6)];
+  };
+  const inner = ring(gap);
+  const outer = ring(gap + t);
+  g.add(m(pb([...inner, ...outer.reverse()], depth + 0.08, 0.0008), [gold, goldDark], 0));
+  const tabIn = ring(gap + t);
+  const tabOut = ring(gap + t + 0.016);
+  g.add(m(pb([...tabIn, ...tabOut.reverse()], 0.003, 0.0005), [gold, goldDark], 0));
+  // 金框外侧的两个顶点上各一颗黄铜圆钉（钉穿金框，把灯钉在车上）。
+  const ov = oct(hw - 0.012, hh - 0.012);
+  for (const k of [2, 3]) {
+    const kn = new Mesh(new SphereGeometry(0.011, 10, 6), brass);
+    kn.position.set(out * ov[k]!.x, ov[k]!.y, depth + 0.004);
+    kn.castShadow = true;
+    g.add(kn);
+  }
+  return g;
+}
+
+/** 一根黄铜胡须（八棱卷纸管）：从 a（内端，套环）到 b（外端，多面纸珠）。 */
+function whisker(g: Group, a: Vector3, b: Vector3): void {
+  const len = a.distanceTo(b);
+  const r = 0.012;
+  const dir = b.clone().sub(a).normalize();
+  const rod = new Mesh(new CylinderGeometry(r, r, len, 8), brass);
+  rod.position.copy(a).add(b).multiplyScalar(0.5);
+  rod.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir);
+  const ring = new Mesh(new CylinderGeometry(r * 1.6, r * 1.6, r * 2.2, 8), brass);
+  ring.quaternion.copy(rod.quaternion);
+  ring.position.copy(a).addScaledVector(dir, r * 1.1);
+  const ball = new Mesh(new SphereGeometry(r * 1.8, 8, 5), brass);
+  ball.position.copy(b);
+  rod.castShadow = ring.castShadow = ball.castShadow = true;
+  g.add(rod, ring, ball);
+}
+
+/** 把一个轮廓挤成盒子再往前收成棱台：z = 0 处是原尺寸，z = depth 处按 k 缩（绕 cx, cy）。 */
+function frustum(pts: Vector2[], cx: number, cy: number, depth: number, bevel: number, k: number): BufferGeometry {
+  const geo = pb(pts, depth, bevel);
+  const p = geo.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const f = 1 + (k - 1) * (p.getZ(i) / depth);
+    p.setXY(i, cx + (p.getX(i) - cx) * f, cy + (p.getY(i) - cy) * f);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** 车鼻子正面：面板正面在 z = F。 */
 export function buildNose(seed = 5): Group {
   const g = new Group();
   const r = rng(seed);
-  const W = 1.18;
+  const W = 1.28;
   const y0 = 0.52;
   const y1 = 1.41;
   const F = 0.05;
-  // 正面一个颜色，侧面（纸板的厚度、倒角）同色略深——侧面不能比正面亮。
   const shade = (c: number, k: number): number => (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
-  const cream = (c = 0xead2ae): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(shade(c, 0.94), { scale: 0.25 })];
+  // 厚纸板块：侧面同色略深（体块的侧面不能比正面亮）。
+  const block = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(shade(c, 0.78), { scale: 0.25 })];
+  // 薄卡纸：切边露浅色纸芯。
+  const sheet = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(0xf7efe0, { scale: 0.25 })];
   const gx = 0.2;
   const gy0 = 0.9;
   const gy1 = 1.356;
-  // 底板：一整块厚纸板，格栅处开口（拼成四块）。
+  // 底板：一整块厚纸板（颜色深一点，拼缝里露出来），格栅处开口。
   for (const [a, b, c, d] of [
     [-W / 2, y0, W / 2, gy0],
     [-W / 2, gy1, W / 2, y1],
     [-W / 2, gy0, -gx, gy1],
     [gx, gy0, W / 2, gy1],
   ] as const)
-    g.add(m(bev(rect(a, b, c, d), F - 0.012, 0.004), cream(0xe2c9a4), 0));
-  // 面上一块块瓷砖样的卡纸（接缝留缝），深浅不一；格栅开口处不贴。
-  const tones = [0xe9cba2, 0xe0bd92, 0xefd6b2, 0xd8d0b8, 0xc9cab2, 0xdcbb8e];
-  const rows = [y0 + 0.03, 0.74, 0.96, 1.18, y1 - 0.03];
+    g.add(m(pb(rect(a, b, c, d), F - 0.016, 0.0015), block(0xc4ae90), 0));
+  // 面上几大块暖奶油色厚卡纸拼到边，每块一样厚（正面都在 z = F）；格栅开口处不贴。
+  const tones = [0xf1e2c8, 0xeed8bb, 0xf4e8d4, 0xe9d8c0, 0xe2dccd, 0xf0dcc2];
+  const rows = [y0, 0.7, 1.05, y1];
   for (let ri = 0; ri < rows.length - 1; ri++) {
-    let x = -W / 2 + 0.03;
-    while (x < W / 2 - 0.04) {
-      const w = Math.min(0.16 + r() * 0.22, W / 2 - 0.03 - x);
+    let x = -W / 2;
+    while (x < W / 2 - 0.02) {
+      const w = Math.min(0.3 + r() * 0.3, W / 2 - x);
       const a = x + 0.005;
       const c = x + w - 0.005;
       const b = rows[ri]! + 0.005;
       const d = rows[ri + 1]! - 0.005;
       x += w;
-      if (c > -gx - 0.03 && a < gx + 0.03 && d > gy0 - 0.03 && b < gy1 + 0.03) continue;
-      g.add(m(bev(rect(a, b, c, d), 0.012, 0.004), cream(tones[Math.floor(r() * tones.length)]!), F - 0.012));
+      const th = 0.016; // 厚度统一：灯、信箱、胡须座都坐在卡纸正面上，不悬空
+      // 底排（灯、信箱、胡须座都不在这一排）有的块凸出 3 毫米，露出白色切边。
+      const lift = ri === 0 && r() < 0.4 ? 0.003 : 0;
+      const tone = tones[Math.floor(r() * tones.length)]!;
+      // 和格栅、信箱那一竖条（|x| < 0.245）重叠的块，切掉中间那段（不整块跳过，免得灯和胡须座底下空着）。
+      const band = 0.245;
+      const parts: Array<[number, number]> = d > gy0 - 0.04 && b < gy1 + 0.06 ? [[a, Math.min(c, -band)], [Math.max(a, band), c]] : [[a, c]];
+      for (const [pa, pc] of parts) if (pc - pa > 0.02) g.add(m(pb(rect(pa, b, pc, d), th + lift, 0.001), sheet(tone), F - 0.016));
     }
   }
-  // 包边：四周一圈圆润的米色卷边（倒角大，比面板略凸），四角各一片金包角加铆钉；左右两条竖的金包边条。
-  const wrap = 0.04;
-  const edge = (a: number, b: number, c: number, d: number): void => {
-    g.add(m(bev(rect(a, b, c, d), F + 0.02, 0.018), cream(0xf3e2c4), -0.005));
-  };
-  edge(-W / 2 - 0.01, y0 - 0.01, W / 2 + 0.01, y0 + wrap);
-  edge(-W / 2 - 0.01, y1 - wrap, W / 2 + 0.01, y1 + 0.01);
-  edge(-W / 2 - 0.01, y0 + wrap - 0.01, -W / 2 + wrap, y1 - wrap + 0.01);
-  edge(W / 2 - wrap, y0 + wrap - 0.01, W / 2 + 0.01, y1 - wrap + 0.01);
+  // 金角片：只在上两角各一片 L 形（不做整圈外框，那像画框），各两颗螺栓。
   for (const sx of [-1, 1]) {
-    g.add(m(bev(rect(sx * W / 2 - 0.011, y0 + 0.05, sx * W / 2 + 0.011, y1 - 0.05), F + 0.028, 0.005), [gold, goldDark], -0.01));
-    for (const yy of [y0 + 0.03, y1 - 0.03]) {
-      const cap = m(bev(rect(-0.042, -0.042, 0.042, 0.042), 0.012, 0.004), [gold, goldDark]);
-      cap.position.set(sx * (W / 2 - 0.03), yy, F + 0.012);
-      g.add(cap);
-      const rv = new Mesh(new SphereGeometry(0.013, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), gold);
-      rv.rotation.x = Math.PI / 2;
-      rv.position.set(cap.position.x, yy, F + 0.024);
-      g.add(rv);
-    }
+    const L = 0.1;
+    const wd = 0.024;
+    const xa = sx * (W / 2);
+    const pts = [new Vector2(xa, y1), new Vector2(xa - sx * L, y1), new Vector2(xa - sx * L, y1 - wd), new Vector2(xa - sx * wd, y1 - wd), new Vector2(xa - sx * wd, y1 - L), new Vector2(xa, y1 - L)];
+    if (ShapeUtils.isClockWise(pts)) pts.reverse();
+    g.add(m(pb(pts, 0.004, 0.0008), [gold, goldDark], F));
+    // 侧面那一边：包过面板的边，贴在侧面上（真正的护角）。
+    // 绕 y 转 ±90°：本地厚度方向朝外，本地 x 对应世界 z（0 到 F + 0.004，和正面那片接上）。
+    const side = m(pb(sx > 0 ? rect(-F - 0.004, y1 - L, 0, y1) : rect(0, y1 - L, F + 0.004, y1), 0.004, 0.0008), [gold, goldDark]);
+    side.rotation.y = (sx * Math.PI) / 2;
+    side.position.x = xa;
+    g.add(side);
+    bolt(g, xa - sx * (L - 0.016), y1 - wd / 2, F + 0.004, 0.008);
+    bolt(g, xa - sx * wd / 2, y1 - (L - 0.016), F + 0.004, 0.008);
   }
-  // 格栅：后面一块深色板，八根圆金棍，外面一圈很窄（2.7 厘米）的切角米色边框，几乎齐平；上两角外各一颗金铆钉。
-  g.add(m(bev(rect(-gx, gy0, gx, gy1), 0.01, 0.002), [paperMaterial(0x1e150f, { scale: 0.2 }), paperMaterial(0x1e150f, { scale: 0.2 })], -0.01));
-  for (let i = 0; i < 8; i++) {
-    const x = -gx + ((i + 0.5) / 8) * 2 * gx;
-    const rod = new Mesh(new CylinderGeometry(0.015, 0.015, gy1 - gy0, 12), gold);
-    rod.position.set(x, (gy0 + gy1) / 2, F - 0.025);
-    rod.castShadow = rod.receiveShadow = true;
-    g.add(rod);
+  // 格栅：后面一块深褐的板；7 根薄金片（侧面暗，免得被看成两根；条:缝约 0.7:1，宽度、角度带一点手裁的随机）；
+  // 格栅很浅：金片几乎和外框齐平，后板只退 3 厘米；外框略凸、上两角切斜角（拼成几块，不带洞的多边形三角化才稳）。
+  const gb = 1.072; // 信箱衬板的上沿：格栅只做这以上看得见的部分（下面被信箱挡住，也不和衬板穿插）
+  g.add(m(pb(rect(-gx, gb + 0.002, gx, gy1), 0.01, 0.002), [paperMaterial(0x3a2618, { scale: 0.2 }), paperMaterial(0x3a2618, { scale: 0.2 })], F - 0.03));
+  const pitch = (2 * gx) / 7;
+  const barSide = new MeshStandardMaterial({ color: 0x6a4a22, roughness: 0.7 });
+  const barMat = [paperMaterial(0xd9bb8c, { scale: 0.15 })];
+  for (let i = 0; i < 7; i++) {
+    const bw = pitch * 0.375 * (0.97 + r() * 0.06);
+    const bh = (gy1 - gb - 0.006) / 2; // 上下各让出 2–4 毫米，不和外框内沿、衬板上沿贴在同一个面上
+    const bar = m(pb(rect(-bw / 2, -bh, bw / 2, bh), 0.007, 0.001), [barMat[0]!, barSide]);
+    bar.position.set(-gx + (i + 0.5) * pitch, (gb + 0.004 + gy1 - 0.002) / 2, F - 0.012);
+    bar.rotation.z = (r() - 0.5) * 0.017;
+    g.add(bar);
   }
-  g.add(m(bev(chamfered(-gx - 0.027, gy0 - 0.027, gx + 0.027, gy1 + 0.027, 0.03), F + 0.01, 0.006, [rect(-gx, gy0, gx, gy1).reverse()]), cream(0xf1dfc2), 0));
-  for (const sx of [-1, 1]) {
-    const rv = new Mesh(new SphereGeometry(0.018, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), gold);
-    rv.rotation.x = Math.PI / 2;
-    rv.position.set(sx * 0.24, 1.385, F + 0.004);
-    g.add(rv);
-  }
-  // 方鼻头：棱台，背面 0.34 × 0.29，正面 0.30 × 0.25，伸出 0.235；背后一圈底板，正面一圈浅色卷边，偏左一个金搭扣。
-  const bd = 0.235;
-  const bz = F + 0.012;
-  g.add(m(bev(rect(-0.195, 0.755, 0.195, 1.095), 0.014, 0.005), cream(0xf1dfc2), F));
-  g.add(m(frustum(-0.17, 0.78, 0.17, 1.07, bd, 0.014, 0.88, 0.86), cream(0xd9b088), bz));
+  // 顶横档：压住条头（交代格栅条是怎么固定的）。
+  g.add(m(pb(rect(-gx + 0.002, gy1 - 0.024, gx - 0.002, gy1 - 0.006), 0.006, 0.001), [barMat[0]!, barSide], F - 0.004));
+  // 外框：一整块 U 形厚纸板（上两角切斜角），没有拼缝；两条腿立在信箱衬板上沿。
+  const fw = 0.034;
+  const fc = fw * 1.5;
+  const ys = gy1 + fw - fc;
+  const frame = [
+    new Vector2(-gx - fw, gb), new Vector2(-gx, gb), new Vector2(-gx, gy1), new Vector2(gx, gy1), new Vector2(gx, gb),
+    new Vector2(gx + fw, gb), new Vector2(gx + fw, ys), new Vector2(gx + fw - fc, gy1 + fw), new Vector2(-gx - fw + fc, gy1 + fw), new Vector2(-gx - fw, ys),
+  ];
+  g.add(m(pb(frame, 0.024, 0.0015), block(0xf0e8da), F - 0.016));
+  // 方鼻头（信箱）：横长（0.44 × 0.25，比格栅略宽，像外挂上去的盒子），伸出 0.15（约高的 0.6），略呈棱台，折痕级的小倒角；背后一圈和面板同色的窄压边。
+  const bw = 0.22;
+  const by0 = 0.8;
+  const by1 = 1.05;
+  const bcy = (by0 + by1) / 2;
+  const bd = 0.15;
+  const bz = F + 0.01;
+  g.add(m(pb(rect(-bw - 0.012, by0 - 0.012, bw + 0.012, by1 + 0.022), 0.026, 0.0015), block(0xf2e6d2), F - 0.016));
+  g.add(m(frustum(chamfered(-bw, by0, bw, by1, 0.009), 0, bcy, bd, 0.0015, 0.93), block(0xe0c4a2), bz));
   const fz = bz + bd;
-  g.add(m(bev(rect(-0.148, 0.802, 0.148, 1.048), 0.006, 0.003, [rect(-0.13, 0.82, 0.13, 1.03).reverse()]), cream(0xf4e4c8), fz - 0.003));
-  g.add(m(bev(rect(-0.07, 0.865, 0.03, 0.96), 0.045, 0.01), [gold, goldDark], fz));
-  g.add(m(bev(rect(-0.095, 0.88, -0.065, 0.945), 0.028, 0.006), [gold, goldDark], fz));
-  // 大灯、胡须。
+  // 前脸一圈浅色翻边纸条。
+  const fx = bw * 0.93;
+  const fy0 = bcy - (bcy - by0) * 0.93;
+  const fy1 = bcy + (by1 - bcy) * 0.93;
+  g.add(m(pb(chamfered(-fx, fy0, fx, fy1, 0.008), 0.005, 0.001, [rect(-fx + 0.014, fy0 + 0.014, fx - 0.014, fy1 - 0.014).reverse()]), sheet(0xf4e9d6), fz - 0.002));
+  // 信箱：前脸上部一道横的投信口（深色缝 + 上沿一片金色翻盖），下部一块小金名牌（两颗小钉）。
+  const slotW = bw * 0.62;
+  const slotY = bcy + 0.03;
+  g.add(m(pb(rect(-slotW, slotY - 0.011, slotW, slotY + 0.011), 0.006, 0.001), [paperMaterial(0x2a1a10, { scale: 0.1 }), paperMaterial(0x2a1a10, { scale: 0.1 })], fz - 0.004));
+  // 金翻盖：一片薄金卡，上沿挂在一根贯通的细卷轴上，下沿往外翘一点（在投信口上投下影子）。
+  const flap = m(pb(rect(-slotW - 0.01, -0.034, slotW + 0.01, 0), 0.004, 0.0008), [gold, goldDark]);
+  flap.position.set(0, slotY + 0.018, fz + 0.004);
+  flap.rotation.x = -0.14;
+  g.add(flap);
+  const hg = new Mesh(new CylinderGeometry(0.0045, 0.0045, slotW * 2 + 0.02, 10), goldDark);
+  hg.rotation.z = Math.PI / 2;
+  hg.position.set(0, slotY + 0.019, fz + 0.0055);
+  g.add(hg);
+  g.add(m(pb(rect(-0.07, bcy - 0.085, 0.07, bcy - 0.035), 0.004, 0.001), [gold, goldDark], fz + 0.0006));
+  for (const sx of [-1, 1]) bolt(g, sx * 0.058, bcy - 0.06, fz + 0.004, 0.005);
+  // 大灯、胡须。胡须从鼻头外侧的小黄铜座伸出（和鼻头留一个杆径的空隙），三根扇形张开（相邻约 6°），外端圆球帽。
   for (const s of [-1, 1]) {
-    const lamp = headlamp(0.14, 0.2, 0.11);
-    lamp.position.set(s * 0.467, 1.124, F);
+    const lamp = headlamp(0.15, 0.195, 0.09, s);
+    lamp.position.set(s * 0.44, 1.124, F);
     g.add(lamp);
-    for (let k = 0; k < 3; k++) whisker(g, new Vector3(s * 0.3, 0.86 - k * 0.08, F + 0.06), new Vector3(s * 0.64, 0.89 - k * 0.12, F + 0.1));
+    // 胡须是悬臂：只在根部的圆座上固定，往外伸出车身轮廓（面板边 ±0.64）外约 0.1。
+    const sx = s * (bw + 0.06);
+    for (let i = 0; i < 3; i++) {
+      // 三根近乎平行、往外略上扬；最上面一根经过灯底时要低于灯（程序算过间隙）。
+      const yi = 0.85 - i * 0.06;
+      const ang = ((6 - i * 2) * Math.PI) / 180;
+      const len = 0.46;
+      const seat = new Mesh(new CylinderGeometry(0.02, 0.022, 0.016, 18), goldDark);
+      seat.rotation.x = Math.PI / 2;
+      seat.position.set(sx, yi, F + 0.008);
+      seat.castShadow = true;
+      g.add(seat);
+      whisker(g, new Vector3(sx, yi, F + 0.02), new Vector3(sx + s * len * Math.cos(ang), yi + len * Math.sin(ang), F + 0.075));
+    }
   }
   return g;
 }
