@@ -115,7 +115,7 @@ export const GRADE = {
       // 四周压暗，纸的颗粒。
       vec2 d = vUv - 0.5;
       c *= mix(1.0 - uVignette, 1.0, smoothstep(0.95, 0.3, length(d * vec2(1.0, 0.9))));
-      c += (rnd(floor(vUv * uRes) + fract(uTime * 7.13) * 113.0) - 0.5) * 0.022;
+      c += (rnd(floor(vUv * uRes)) - 0.5) * 0.022;
       gl_FragColor = vec4(c, 1.0);
     }`,
 };
