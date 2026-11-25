@@ -4,27 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <title>生生事务所 · 阿宝</title>
+    <title>生生事务所 · 勾勾</title>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #efe6d2; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #efe6d2; -webkit-user-select: none; user-select: none; }
       #studio, #map { position: fixed; inset: 0; }
       #map { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
       #map.on { opacity: 1; pointer-events: auto; }
-      #tag { position: fixed; pointer-events: none; padding: 7px 13px 8px; background: #f3e9d2; color: #3a2618; font: 14px/1.45 'LXGW WenKai Screen', 'Kaiti SC', serif; letter-spacing: 1px;
-        box-shadow: 0 2px 0 #d6c29c, 0 8px 18px rgba(20, 12, 6, 0.25); transform: translate(14px, 16px) rotate(-1.2deg); opacity: 0; transition: opacity 0.15s; max-width: 260px;
+      .paper { background: #f3e9d2; color: #3a2618; font-family: 'LXGW WenKai Screen', 'Kaiti SC', serif; box-shadow: 0 2px 0 #d6c29c, 0 8px 18px rgba(20, 12, 6, 0.25);
         clip-path: polygon(0 4%, 4% 0, 96% 2%, 100% 7%, 99% 95%, 95% 100%, 3% 98%, 0 93%); }
+      #tag { position: fixed; pointer-events: none; padding: 7px 13px 8px; font-size: 14px; line-height: 1.45; letter-spacing: 1px; transform: translate(14px, 16px) rotate(-1.2deg); opacity: 0; transition: opacity 0.15s; max-width: 260px; }
       #tag b { font-size: 16px; letter-spacing: 2px; display: block; }
-      #hint { position: fixed; left: 18px; bottom: 16px; padding: 7px 14px; background: #f3e9d2; color: #3a2618; font: 14px 'LXGW WenKai Screen', serif; letter-spacing: 1px;
-        box-shadow: 0 2px 0 #d6c29c, 0 6px 14px rgba(20, 12, 6, 0.2); transition: opacity 0.4s; }
+      #dot { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(58, 38, 24, 0.55); box-shadow: 0 0 0 2px rgba(243, 233, 210, 0.6); pointer-events: none; }
+      #bar { position: fixed; left: 16px; bottom: 14px; display: flex; gap: 8px; align-items: center; transition: opacity 0.4s; }
+      #bar button { border: 0; padding: 7px 13px; font-size: 14px; letter-spacing: 1px; cursor: pointer; }
+      #bar span { font-size: 13px; padding: 6px 12px; opacity: 0.9; }
+      #letter { position: fixed; left: 50%; top: 50%; width: min(460px, 86vw); transform: translate(-50%, -50%) rotate(-0.8deg); padding: 26px 30px 22px; font-size: 17px; line-height: 1.9; letter-spacing: 1px; display: none; }
+      #letter p { margin: 0 0 6px; }
+      #letter .sign { text-align: right; margin-top: 12px; }
+      #letter button, #deskClose { border: 0; margin-top: 10px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; background: #e8d9b8; }
+      #desk { position: fixed; inset: 4vh 4vw; display: none; background: #efe6d2; box-shadow: 0 12px 40px rgba(20, 12, 6, 0.4); }
+      #desk iframe { width: 100%; height: 100%; border: 0; }
+      #deskClose { position: absolute; right: 12px; top: 8px; z-index: 2; }
       #veil { position: fixed; inset: 0; background: #efe6d2; display: grid; place-items: center; color: #3a2618; font: 16px 'LXGW WenKai Screen', serif; letter-spacing: 3px; transition: opacity 0.9s; }
     </style>
   </head>
   <body>
     <div id="studio"></div>
     <div id="map"></div>
-    <div id="tag"></div>
-    <div id="hint">鼠标停在车里的东西上看看 · 点托盘里的岛走进去 · 在岛上点岸边的车回来</div>
-    <div id="veil">阿宝醒了……</div>
+    <div id="dot"></div>
+    <div id="tag" class="paper"></div>
+    <div id="bar">
+      <button id="view" class="paper">俯瞰车厢</button>
+      <span class="paper" id="help">拖动转头 · WASD 或点地板走过去 · 点东西试试</span>
+    </div>
+    <div id="letter" class="paper"></div>
+    <div id="desk"><button id="deskClose" class="paper">合上设计台</button><iframe title="设计台"></iframe></div>
+    <div id="veil">勾勾醒了……</div>
     <script type="module" src="/src/proto/studio/main.ts"></script>
   </body>
 </html>

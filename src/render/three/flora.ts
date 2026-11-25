@@ -210,7 +210,8 @@ export interface FloraKind {
 }
 
 const PAPER = 0.016;
-const LIFT = 0.006;
+/** 一株植物的几张纸前后紧贴着叠（隔一张纸厚），不互相穿过。 */
+const LIFT = PAPER * 1.05;
 
 /** 造一整套植物（每种几张纸）。seed 只影响形状的细节。 */
 export function buildFlora(seed: number): Map<string, FloraKind> {
