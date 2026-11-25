@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>部件实验台</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #f1eadb; }
+      #wrap { position: fixed; inset: 0; display: flex; }
+      #stage, #ref { flex: 1; position: relative; }
+      #ref { background-size: cover; background-position: center; }
+      #ref.off { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><div id="ref"></div><div id="stage"></div></div>
+    <script type="module" src="/src/proto/lab/main.ts"></script>
+  </body>
+</html>

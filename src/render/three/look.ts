@@ -106,7 +106,7 @@ export const GRADE = {
       float l = dot(c, vec3(0.299, 0.587, 0.114));
       // 饱和度压低一些，往旧纸的暖色里拉。
       vec3 sepia = vec3(l) * vec3(1.07, 0.98, 0.84);
-      c = mix(c, sepia, 0.22 * uWarm);
+      c = mix(c, sepia, 0.1 * uWarm);
       // 暗部发暖（不是纯黑），亮部微微发黄。
       c = mix(vec3(0.07, 0.045, 0.025), vec3(1.0, 0.98, 0.94), c);
       // 一点 S 形对比：亮的更亮、暗的更沉（Lovart 整体效果图的光是硬的斜阳）。
@@ -116,6 +116,71 @@ export const GRADE = {
       vec2 d = vUv - 0.5;
       c *= mix(1.0 - uVignette, 1.0, smoothstep(0.95, 0.3, length(d * vec2(1.0, 0.9))));
       c += (rnd(floor(vUv * uRes) + fract(uTime * 7.13) * 113.0) - 0.5) * 0.022;
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+};
+
+/**
+ * 插画化（2026-11-26，用户："印刷 / 铅笔画的色彩感"）：在调好色的画面上
+ * - 水彩：一点点晕开（和周围平均混一些），颜料在色块交界处沉积变深，纸面颗粒让颜色有深浅；
+ * - 铅笔：暗的地方叠斜的排线，更暗的地方交叉排线，线有断续、有抖动；
+ * - 印刷：中间调略压、高光不全白，整体偏暖的米色纸。
+ * 排线和颗粒按屏幕算（镜头不动时最好看；动的时候像一张一张画出来的）。
+ */
+export const ILLUSTRATE = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uRes: { value: new Vector2(1, 1) },
+    uTime: { value: 0 },
+    uHatch: { value: 1 },
+    uWash: { value: 1 },
+    uScale: { value: 1 },
+  },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform vec2 uRes; uniform float uTime; uniform float uHatch; uniform float uWash; uniform float uScale; varying vec2 vUv;
+    float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+    float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += vn(p) * a; p *= 2.07; a *= 0.5; } return s; }
+    float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+    // 一组排线：方向 dir，间距 sp（像素），粗 w；线有断续（沿线方向的噪声）和抖动。
+    float hatch(vec2 px, vec2 dir, float sp, float w, float seed){
+      vec2 n = vec2(-dir.y, dir.x);
+      float t = dot(px, n) / sp;
+      float along = dot(px, dir);
+      t += (vn(vec2(along * 0.02, floor(t) + seed)) - 0.5) * 0.35;
+      float d = abs(fract(t) - 0.5) * sp;
+      float line = 1.0 - smoothstep(w * 0.5, w * 0.5 + 0.9, d);
+      float broken = smoothstep(0.25, 0.55, vn(vec2(along / (sp * 6.0), floor(t) * 7.1 + seed)));
+      return line * broken;
+    }
+    void main(){
+      vec2 px = vUv * uRes;
+      vec2 o = 1.5 * uScale / uRes;
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // 水彩：轻轻晕开、交界处颜料沉积。
+      vec3 a = (texture2D(tDiffuse, vUv + vec2(o.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(o.x, 0.0)).rgb + texture2D(tDiffuse, vUv + vec2(0.0, o.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, o.y)).rgb) * 0.25;
+      vec3 b = (texture2D(tDiffuse, vUv + o * 2.5).rgb + texture2D(tDiffuse, vUv - o * 2.5).rgb + texture2D(tDiffuse, vUv + vec2(o.x, -o.y) * 2.5).rgb + texture2D(tDiffuse, vUv + vec2(-o.x, o.y) * 2.5).rgb) * 0.25;
+      c = mix(c, a, 0.35 * uWash);
+      float edge = clamp(length(c - b) * 3.0, 0.0, 1.0);
+      c *= 1.0 - edge * 0.18 * uWash;
+      // 纸面颗粒：大块的颜料浓淡 + 细的纸纹。
+      float gran = fbm(px / (9.0 * uScale)) ;
+      float fiber = vn(px / (1.6 * uScale));
+      c *= mix(1.0, 0.86 + 0.24 * gran, 0.6 * uWash);
+      c *= 0.96 + 0.06 * fiber;
+      // 铅笔排线：越暗越多。
+      float L = lum(c);
+      float dark = smoothstep(0.62, 0.18, L);
+      float sp = 5.0 * uScale;
+      float h1 = hatch(px, normalize(vec2(1.0, -0.62)), sp, 0.9 * uScale, 1.0) * smoothstep(0.0, 0.35, dark);
+      float h2 = hatch(px, normalize(vec2(1.0, 0.85)), sp * 1.15, 0.8 * uScale, 7.0) * smoothstep(0.45, 0.85, dark);
+      float hh = max(h1, h2 * 0.9) * uHatch;
+      vec3 graphite = vec3(0.24, 0.18, 0.13);
+      c = mix(c, c * graphite * 2.2, hh * 0.24);
+      // 印刷的色调：高光不全白、阴影偏暖褐。
+      c = mix(vec3(0.1, 0.085, 0.07), vec3(0.985, 0.96, 0.92), c);
       gl_FragColor = vec4(c, 1.0);
     }`,
 };
