@@ -38,40 +38,39 @@ export function buildWheel(R = 0.42, seed = 3): Group {
     mm.castShadow = mm.receiveShadow = true;
     g.add(mm);
   };
-  const gap = 0.003;
+  const gap = 0.002;
+  // 所有圈都用同一组 16 个角度（k·π/8），和八角轮辋的顶点（奇数 k）、边中点（偶数 k）对齐：
+  // 内圈的内沿正好就是轮辋的八条边，一圈一圈之间是同一条折线，没有多出来的缝。
+  const N = 16;
+  const rimR = R * 0.46;
+  const oct = (k: number): number => (k % 2 ? rimR : rimR * Math.cos(Math.PI / 8));
+  const ang = (k: number): number => (k * Math.PI) / 8;
   const P = (rr: number, a: number, z: number): Vector3 => new Vector3(Math.cos(a) * rr, Math.sin(a) * rr, z);
-  // 胎侧：两圈砖（内圈 12 块、外圈 14 块，缝错开），平的，正面在 z = 0。
-  const rIn = R * 0.46;
-  const rMid = R * 0.63;
+  // 沿着两角之间的弦往里缩一点（砖缝），返回 [起点, 终点] 的角度微调。
+  const shrink = (k: number, rr: number): [number, number] => [ang(k) + gap / rr, ang(k + 1) - gap / rr];
+  const rMid = R * 0.64;
   const rSide = R * 0.8;
-  for (const [ra, rb, nn, off, d] of [
-    [rIn, rMid, 12, 0.0, 0.04],
-    [rMid, rSide, 14, 0.12, 0.042],
-  ] as const) {
-    for (let i = 0; i < nn; i++) {
-      const a0 = (i / nn) * Math.PI * 2 + off + gap / rb;
-      const a1 = ((i + 1) / nn) * Math.PI * 2 + off - gap / rb;
-      tile([P(ra + gap / 2, a0, 0), P(ra + gap / 2, a1, 0), P(rb - gap / 2, a1, 0), P(rb - gap / 2, a0, 0)], new Vector3(0, 0, 1), d, 0);
-    }
+  for (let k = 0; k < N; k++) {
+    // 内圈：内沿贴着八角轮辋（不留缝），外沿在 rMid。
+    const [a0, a1] = shrink(k, rMid);
+    tile([P(oct(k), ang(k), 0), P(oct(k + 1), ang(k + 1), 0), P(rMid - gap, a1, 0), P(rMid - gap, a0, 0)], new Vector3(0, 0, 1), 0.04, 0);
+    // 外圈：rMid 到 rSide。
+    const [b0, b1] = shrink(k, rSide);
+    tile([P(rMid + gap, b0, 0), P(rMid + gap, b1, 0), P(rSide, b1, 0), P(rSide, b0, 0)], new Vector3(0, 0, 1), 0.042, 0);
   }
-  // 胎肩：一圈 16 块砖，贴在从 (rSide, 0) 到 (R, -SH) 的斜面上。
-  const n2 = 16;
-  for (let i = 0; i < n2; i++) {
-    const a0 = (i / n2) * Math.PI * 2 + 0.11 + gap / R;
-    const a1 = ((i + 1) / n2) * Math.PI * 2 + 0.11 - gap / R;
+  // 胎肩：同样 16 块，贴在从 rSide（z = 0）到 R（z = −SH）的斜面上。
+  for (let k = 0; k < N; k++) {
+    const [a0, a1] = shrink(k, R);
     const am = (a0 + a1) / 2;
     const n = new Vector3(Math.cos(am) * SH, Math.sin(am) * SH, R - rSide).normalize();
     tile([P(rSide, a0, 0), P(rSide, a1, 0), P(R, a1, -SH), P(R, a0, -SH)], n, 0.035, 0);
   }
-  // 胎面：两排错缝的砖（每排 22 块），贴在半径 R 的圆柱面上。
-  const n3 = 22;
+  // 胎面：同样 16 块，两排（前后两排对齐，中间一道缝）。
   for (let row = 0; row < 2; row++) {
     const z0 = -SH - gap - row * ((W - SH) / 2);
     const z1 = z0 - (W - SH) / 2 + gap;
-    for (let i = 0; i < n3; i++) {
-      const off = 0.11 + row * (Math.PI / n3);
-      const a0 = (i / n3) * Math.PI * 2 + off + gap / R;
-      const a1 = ((i + 1) / n3) * Math.PI * 2 + off - gap / R;
+    for (let k = 0; k < N; k++) {
+      const [a0, a1] = shrink(k, R);
       const am = (a0 + a1) / 2;
       tile([P(R, a0, z0), P(R, a1, z0), P(R, a1, z1), P(R, a0, z1)], new Vector3(Math.cos(am), Math.sin(am), 0), 0.03, 0);
     }
@@ -93,19 +92,19 @@ export function buildWheel(R = 0.42, seed = 3): Group {
 
   // 轮辋：厚的米白八角板 + 一圈浅色八角框（倒角都接光）。
   const cream = [paperMaterial(0xbfa98a, { scale: 0.15 }), paperMaterial(0xd2c0a2, { scale: 0.15 })];
-  const rimR = R * 0.46;
   const plate = new Mesh(bev(ngon(8, rimR, Math.PI / 8), 0.05, 0.018), cream);
-  plate.position.z = -0.03;
+  // 轮辋只比胎侧高一点点（效果图里几乎是平的）。
+  plate.position.z = -0.04;
   const frame = new Mesh(bev(ngon(8, rimR * 0.97, Math.PI / 8), 0.026, 0.009, [ngon(8, rimR * 0.74, Math.PI / 8).reverse()]), [paperMaterial(0xcfbb9e, { scale: 0.15 }), paperMaterial(0xe2d2b8, { scale: 0.15 })]);
-  frame.position.z = 0.012;
+  frame.position.z = -0.012;
   // 深褐的八角环。
   const brownRing = new Mesh(bev(ngon(8, rimR * 0.72, Math.PI / 8), 0.02, 0.006, [ngon(8, rimR * 0.5, Math.PI / 8).reverse()]), [paperMaterial(0x5e4c3c, { scale: 0.1 }), paperMaterial(0x6e5c4a, { scale: 0.1 })]);
-  brownRing.position.z = 0.014;
+  brownRing.position.z = -0.006;
   // 金色轮毂：八角的金卡纸块，上面一颗八芒星，正中一颗圆钉。
   const gold = new MeshStandardMaterial({ color: 0xe6b552, metalness: 0.6, roughness: 0.32, emissive: 0x3a2508 });
   const goldDark = new MeshStandardMaterial({ color: 0xa97a2c, metalness: 0.7, roughness: 0.45 });
   const hub = new Mesh(bev(ngon(8, rimR * 0.5, Math.PI / 8), 0.03, 0.008), [gold, goldDark]);
-  hub.position.z = 0.012;
+  hub.position.z = -0.016;
   const star: Vector2[] = [];
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
@@ -113,10 +112,10 @@ export function buildWheel(R = 0.42, seed = 3): Group {
     star.push(new Vector2(Math.cos(a) * rr, Math.sin(a) * rr));
   }
   const starM = new Mesh(bev(star, 0.016, 0.005), [gold, goldDark]);
-  starM.position.z = 0.04;
+  starM.position.z = 0.008;
   const dome = new Mesh(new SphereGeometry(rimR * 0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), gold);
   dome.rotation.x = Math.PI / 2;
-  dome.position.z = 0.054;
+  dome.position.z = 0.02;
   for (const m of [plate, frame, brownRing, hub, starM, dome]) {
     m.castShadow = m.receiveShadow = true;
     g.add(m);
