@@ -20,23 +20,23 @@ interface PartDef {
 const PARTS: Record<string, PartDef> = {
   nose: {
     // 车头正面朝着左前方的太阳（效果图里车头是亮的）。
-    sun: [-5, 6, 7],
+    sun: [-3, 9, 3],
     build: () => {
       const g = new Group();
       const n = buildNose();
       g.add(n);
       // 车鼻子顶面（一块倾斜的厚板）和后面的车身，让轮廓完整。
-      const hood = new Mesh(new BoxGeometry(1.8, 0.08, 0.9), card(0xe3d4b6, 0.6));
-      hood.position.set(0, 1.62, -0.4);
+      const hood = new Mesh(new BoxGeometry(1.2, 0.08, 0.9), card(0xe3d4b6, 0.6));
+      hood.position.set(0, 1.45, -0.42);
       hood.castShadow = hood.receiveShadow = true;
-      const body = new Mesh(new BoxGeometry(1.8, 1.5, 0.2), card(0xe3d4b6, 0.6));
+      const body = new Mesh(new BoxGeometry(1.2, 1.5, 0.2), card(0xe3d4b6, 0.6));
       body.position.set(0, 1.0, -0.6);
       g.add(hood, body);
       return g;
     },
     ref: './lab/ref-nose.jpg',
-    // 叠图对准：车头右上方，偏转约 40°、俯视约 26°（2026-11-26）。
-    cam: { pos: [1.964, 2.59, 2.491], target: [0, 1.1, 0.15], fov: 18 },
+    // 从效果图上量的 14 个点和模型一起拟合出来的镜头（偏转约 31°、俯视约 24°，离得远、几乎没有透视）。
+    cam: { pos: [2.944, 3.595, 5.019], target: [1.54, 2.396, 2.654], fov: 8.7 },
   },
   wheel: {
     build: () => {
