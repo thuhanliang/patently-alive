@@ -178,7 +178,8 @@ export const ILLUSTRATE = {
       float h2 = hatch(px, normalize(vec2(1.0, 0.85)), sp * 1.15, 0.8 * uScale, 7.0) * smoothstep(0.45, 0.85, dark);
       float hh = max(h1, h2 * 0.9) * uHatch;
       vec3 graphite = vec3(0.24, 0.18, 0.13);
-      c = mix(c, c * graphite * 2.2, hh * 0.24);
+      // 2026-11-26 审核意见：排线太重会让纸面显脏、像草图，减到一半。
+      c = mix(c, c * graphite * 2.2, hh * 0.13);
       // 印刷的色调：高光不全白、阴影偏暖褐。
       c = mix(vec3(0.1, 0.085, 0.07), vec3(0.985, 0.96, 0.92), c);
       gl_FragColor = vec4(c, 1.0);
