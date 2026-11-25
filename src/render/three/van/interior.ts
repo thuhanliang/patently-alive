@@ -441,7 +441,7 @@ export function buildInterior(parent: Group, seed: number): Interior {
   bulbM.position.set(0.01, -0.06, 0.02);
   head.add(bulbM);
   lampG.add(head);
-  const lamp = new SpotLight(0xffcf94, 2.2, 3, 0.9, 0.7, 1.6);
+  const lamp = new SpotLight(0xffc98a, 4.5, 3.5, 0.95, 0.7, 1.4);
   lamp.position.copy(j3).add(V3(0.01, -0.06, 0.02));
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(1024, 1024);
@@ -932,7 +932,7 @@ export function buildInterior(parent: Group, seed: number): Interior {
   items.push({ id: 'chair', name: '椅子', hint: '坐下来，在工作台前干活', obj: chair });
 
   // 顶灯：一根麻绳吊着卷筒的灯座、一颗灯泡；旁边一根拉绳，拉一下开、关，灯会晃。
-  const bulbL = new PointLight(0xffd7a0, 0.9, 4, 1.6);
+  const bulbL = new PointLight(0xffc98a, 2.2, 5, 1.4);
   const bulbG = new Group();
   bulbG.position.set(-0.75, 2.63, 0.1);
   bulbG.add(twine(hang(V3(0, 0, 0), V3(0, -0.33, 0), 0, 4), 0.004));

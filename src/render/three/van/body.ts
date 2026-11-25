@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Matrix4, type Quaternion, Group, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry, Vector2, Vector3, CatmullRomCurve3, TubeGeometry, type Material } from 'three';
 import { paperMaterial, printedPaper } from '../paper';
-import { C, Rivets, V3, bead, brassDark, brassMat, canvasTex, card, cardBox, dogOutline, flat, gold, hang, hex, hinge, merge, mesh, ngon, put, rng, rod, rolled, slab, stackRound, strip, twine } from '../craft';
+import { C, PATCH_COOL, Rivets, V3, bead, orient, patchwork, brassDark, brassMat, canvasTex, card, cardBox, dogOutline, flat, gold, hang, hex, hinge, merge, mesh, ngon, put, rng, rod, rolled, slab, stackRound, strip, twine } from '../craft';
 
 /**
  * 「勾勾」的车身（2026-11-25）：照 art/incoming/lovart/010 的设定图，一辆圆头圆脑的厢式车做成的卡纸模型。
@@ -16,6 +16,8 @@ export const ROOF = 2.68;
 export const FRONT_TOP = 1.94; // 车头墙的上沿
 export const FRONT_ROOF = 2.32;
 const SLANT = 0.14;
+/** -z 一侧的开口（营地时打开，放下来是桌子）。 */
+const OPEN = { x0: -1.55, x1: 0.55, y0: 1.14, y1: 2.18 };
 export const WHEEL_R = 0.42;
 export const WHEELS: Array<[number, number]> = [
   [-1.25, 1],
@@ -39,6 +41,7 @@ export interface VanParts {
   ears: Group[];
   doors: Group[];
   flap: Group;
+  campProps: Group;
   awning: Group;
   awningRoll: Group;
   tail: Mesh;
@@ -80,7 +83,7 @@ function stripeTex(): ReturnType<typeof canvasTex> {
     64,
     (g) => {
       for (let i = 0; i < 8; i++) {
-        g.fillStyle = i % 2 ? '#a9bcbc' : '#efe7d4';
+        g.fillStyle = ['#efe5cc', '#a9b393', '#efe5cc', '#c9a774'][i % 4]!;
         g.fillRect(i * 32, 0, 32, 64);
       }
       g.globalAlpha = 0.08;
@@ -118,7 +121,8 @@ export function buildVan(seed = 11): VanParts {
     const cabWin = [V3(1.32, 1.5, z), V3(1.86, 1.5, z), V3(1.8, 1.88, z), V3(1.32, 1.88, z)];
     holes.push(cabWin);
     if (side > 0) holes.push(at(ngon(8, 0.27, Math.PI / 8).map((p) => p.add(new Vector2(0.62, 1.86))), z));
-    else holes.push(at(ngon(12, 0.17).map((p) => p.add(new Vector2(-0.95, 1.85))), z));
+    // -z 一侧：营地时放下来当桌子的那一大块板，后面是一个开口（从车外看进工作间）。
+    else holes.push([V3(OPEN.x0, OPEN.y0, z), V3(OPEN.x1, OPEN.y0, z), V3(OPEN.x1, OPEN.y1, z), V3(OPEN.x0, OPEN.y1, z)]);
     // 墙往车里长厚度：+z 侧的法线朝 +z，所以点的顺序让法线朝外。
     const wallG = slab(side > 0 ? outline : [...outline].reverse(), T, side > 0 ? holes : holes.map((h) => [...h].reverse()));
     planarUv(wallG, (p) => [(p.x - XR) / (XF - XR), (p.y - 0.4) / 2.0]);
@@ -131,34 +135,35 @@ export function buildVan(seed = 11): VanParts {
     planarUv(bandG, (p) => [(p.x - XR) / (XF - XR), (p.y - 0.4) / 0.7]);
     const band = mesh(bandG, [printedPaper(bandPrint(), 9), card(C.blue, 0.5)[1]!]);
     g.add(band);
-    const patches: Array<[number, number, number, number, number]> = [
-      [-1.97, 1.12, -1.66, 1.66, C.creamLight],
-      [-1.58, 1.7, -0.86, 2.26, C.peach],
-      [-1.58, 1.12, -1.2, 1.5, C.creamDark],
-      [-0.78, 1.12, -0.08, 1.26, C.creamDark],
-      [0.09, 1.12, 0.3, 1.52, C.peach],
-      [0.09, 1.56, 0.3, 2.26, C.creamLight],
-      [0.95, 1.12, 1.17, 1.44, C.peach],
-      [1.24, 1.12, 1.95, 1.46, C.creamLight],
-      [-1.97, 1.7, -1.66, 2.26, C.creamDark],
-    ];
-    for (const [x0, y0, x1, y1, col] of patches) {
-      // 手工贴的补丁：不完全正，四个角各差一两毫米。
-      const j = (): number => (rnd() - 0.5) * 0.012;
-      const p = [V3(x0 + j(), y0 + j(), z + off), V3(x1 + j(), y0 + j(), z + off), V3(x1 + j(), y1 + j(), z + off), V3(x0 + j(), y1 + j(), z + off)];
-      g.add(mesh(slab(side > 0 ? p : [...p].reverse(), 0.006, [], false, 0.006), card(col, 0.4)));
-      if ((x1 - x0) * (y1 - y0) > 0.12) g.add(bead(p.map((q) => q.clone().setZ(z + off * 2)), V3(0, 0, side), 0.035, 0.01, 0.003, col === C.peach ? 0xd9b98a : 0xd8c6a0));
-      for (const [x, y] of [[x0 + 0.04, y0 + 0.04], [x1 - 0.04, y0 + 0.04], [x1 - 0.04, y1 - 0.04], [x0 + 0.04, y1 - 0.04]] as const) R.add(V3(x, y, z + off), V3(0, 0, side), 0.008);
+    // 拼贴（2026-11-26）：墙面上一块块小纸片，上半暖色、下半灰绿灰蓝；窗洞和轮拱的地方不铺。
+    {
+      const o = V3(XR + 0.03, 0, z);
+      const skipUp = (x: number, y: number): boolean => {
+        const wx = XR + 0.03 + x;
+        if (y > wallTop(wx) - 0.035) return true;
+        if (wx > 1.28 && wx < 1.9 && y > 1.46 && y < 1.92) return true;
+        if (side > 0 && Math.hypot(wx - 0.62, y - 1.86) < 0.31) return true;
+        if (side < 0 && wx > OPEN.x0 - 0.06 && wx < OPEN.x1 + 0.06 && y > OPEN.y0 - 0.06 && y < OPEN.y1 + 0.06) return true;
+        return wx > frontX(y) - 0.03;
+      };
+      g.add(patchwork(o.clone().setY(1.105), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, side), frontX(1.1) - XR - 0.05, WALL_TOP - 1.105, { seed: 40 + side, skip: (x, y) => skipUp(x, y + 1.105), lift: 0.008, rivets: R }));
+      const skipLo = (x: number, y: number): boolean => {
+        const wx = XR + 0.03 + x;
+        const wy = y + 0.65;
+        for (const wc of [-1.25, 1.45]) if (Math.hypot(wx - wc, wy - WHEEL_R) < ARCH + 0.05) return true;
+        return wx > frontX(wy) - 0.03;
+      };
+      g.add(patchwork(o.clone().setY(0.65), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, side), frontX(0.65) - XR - 0.05, 0.42, { seed: 50 + side, palette: PATCH_COOL, skip: skipLo, lift: 0.008, rowH: [0.13, 0.22], goldEdges: 0.08 }));
     }
     // 黄铜包边：腰线、墙的上沿、竖缝、轮拱、窗框。
     const n = V3(0, 0, side);
     const zz = z + off;
-    const TH = 0.01;
+    const TH = 0.016;
     const zt = z + side * (0.006 + TH);
     // 车尾那一竖条最先贴；腰线、上沿从它的边上开始（对接，不叠在一起）。
     g.add(strip([V3(XR + 0.01, 0.64, zz), V3(XR + 0.01, WALL_TOP + 0.025, zz)], n, 0.05, TH));
-    g.add(strip([V3(XR + 0.035, 1.08, zz), V3(frontX(1.08), 1.08, zz)], n, 0.04, TH));
-    g.add(strip([V3(XR + 0.035, WALL_TOP, zz), V3(XC, WALL_TOP, zz), V3(frontX(FRONT_TOP), FRONT_TOP, zz)], n, 0.05, TH));
+    g.add(strip([V3(XR + 0.035, 1.08, zz), V3(frontX(1.08), 1.08, zz)], n, 0.06, TH));
+    g.add(strip([V3(XR + 0.035, WALL_TOP, zz), V3(XC, WALL_TOP, zz), V3(frontX(FRONT_TOP), FRONT_TOP, zz)], n, 0.07, TH));
     for (const x of [-1.62, -0.82, 0.05, 1.2]) {
       const top = wallTop(x);
       g.add(strip([V3(x, 1.1, zz), V3(x, top - 0.025, zz)], n, 0.03, TH * 0.8));
@@ -178,12 +183,8 @@ export function buildVan(seed = 11): VanParts {
     g.add(strip(cabWin.map((p) => p.clone().setZ(zz)), n, 0.045, TH, true));
     g.add(mesh(slab(side > 0 ? cabWin.map((p) => p.clone().setZ(z - 0.01)) : cabWin.map((p) => p.clone().setZ(z + 0.01)).reverse(), 0.004), [glassMat, glassMat], false));
     if (side < 0) {
-      const port = at(ngon(12, 0.17).map((p) => p.add(new Vector2(-0.95, 1.85))), zz);
-      g.add(strip(port, n, 0.05, TH, true));
-      g.add(mesh(slab(at(ngon(12, 0.17).map((p) => p.add(new Vector2(-0.95, 1.85))), z + 0.01).reverse(), 0.004), [glassMat, glassMat], false));
-      // 侧拉门的门缝和把手。
-      g.add(strip([V3(-0.55, 1.1, zz), V3(-0.55, 2.2, zz), V3(0.55, 2.2, zz), V3(0.55, 1.1, zz)], n, 0.018, 0.006));
-      g.add(rod(V3(0.4, 1.35, zz - 0.05), V3(0.4, 1.6, zz - 0.05), 0.014, brassMat));
+      // 开口一圈金边。
+      g.add(strip([V3(OPEN.x0, OPEN.y0, zz), V3(OPEN.x1, OPEN.y0, zz), V3(OPEN.x1, OPEN.y1, zz), V3(OPEN.x0, OPEN.y1, zz)], n, 0.06, TH, true));
     }
   }
 
@@ -216,6 +217,24 @@ export function buildVan(seed = 11): VanParts {
     });
     root.add(strip([quads[0]![3]!, quads[0]![2]!], V3(0, 1, 0.3).normalize(), 0.045));
     nearSide.add(strip([quads[2]![0]!, quads[2]![1]!], V3(0, 1, -0.3).normalize(), 0.045));
+  }
+  // 车顶也是拼贴的（平的那一块和两条倒角）。
+  root.add(patchwork(V3(XR + 0.04, ROOF, -0.72), V3(1, 0, 0), V3(0, 0, 1), V3(0, 1, 0), XC - XR - 0.06, 1.44, { seed: 71, lift: 0.002, rivets: rv, tileW: [0.2, 0.5], rowH: [0.2, 0.4] }));
+  {
+    const cu = V3(0, ROOF - WALL_TOP, -0.26).normalize();
+    const cl = Math.hypot(0.26, ROOF - WALL_TOP);
+    const cn = V3(0, 0.26, ROOF - WALL_TOP).normalize();
+    root.add(patchwork(V3(XR + 0.04, WALL_TOP + 0.01, 0.995), V3(1, 0, 0), cu, cn, XC - XR - 0.06, cl - 0.03, { seed: 72, lift: 0.002, rowH: [0.12, 0.2] }));
+  }
+  {
+    // 车顶往前低下去的那一段、远侧的倒角。
+    const fx = frontX(FRONT_ROOF);
+    const ru = V3(fx - XC, FRONT_ROOF - ROOF, 0).normalize();
+    const rn = V3(ROOF - FRONT_ROOF, fx - XC, 0).normalize();
+    root.add(patchwork(V3(XC + 0.01, ROOF, -0.72), ru, V3(0, 0, 1), rn, Math.hypot(fx - XC, ROOF - FRONT_ROOF) - 0.04, 1.44, { seed: 73, lift: 0.002, tileW: [0.2, 0.4] }));
+    const cu = V3(0, ROOF - WALL_TOP, 0.26).normalize();
+    const cn = V3(0, 0.26, -(ROOF - WALL_TOP)).normalize();
+    nearSide.add(patchwork(V3(XR + 0.04, WALL_TOP + 0.01, -0.995), V3(1, 0, 0), cu, cn, XC - XR - 0.06, Math.hypot(0.26, ROOF - WALL_TOP) - 0.03, { seed: 74, lift: 0.002, rowH: [0.12, 0.2] }));
   }
   // 车底、下倒角（轮拱处断开）。
   root.add(mesh(slab([V3(XR, FLOOR, -0.88), V3(XR, FLOOR, 0.88), V3(frontX(FLOOR), FLOOR, 0.88), V3(frontX(FLOOR), FLOOR, -0.88)], T), card(C.chassis, 0.5)));
@@ -275,66 +294,87 @@ export function buildVan(seed = 11): VanParts {
   root.add(step);
   root.add(rod(V3(XR - 0.05, 0.4, 0.5), V3(XR - 0.05, 0.52, 0.5), 0.012, ironMat()), rod(V3(XR - 0.05, 0.4, -0.5), V3(XR - 0.05, 0.52, -0.5), 0.012, ironMat()));
 
-  // ———— 车头：脸 ————
+  // ———— 车头（2026-11-26 照 Lovart 整体效果图重做）：上半是两扇挡风玻璃（卷帘是眼皮），下面伸出一个短车鼻子，
+  // 车鼻子正面是格栅（嘴）、两只八角大灯（亮着暖黄的光）、几根铜的护杠（胡须）、一个方鼻头、保险杠和铃铛。
   const fp = (z: number, y: number, out = 0): Vector3 => V3(frontX(y) + out, y, z);
   const faceN = V3(1.8, SLANT, 0).normalize();
   const faceSec = [fp(0.88, FLOOR), fp(1, 0.64), fp(1, FRONT_TOP), fp(0.74, FRONT_ROOF), fp(-0.74, FRONT_ROOF), fp(-1, FRONT_TOP), fp(-1, 0.64), fp(-0.88, FLOOR)];
-  const eyeC: Array<[number, number]> = [
-    [0.42, 1.78],
-    [-0.42, 1.78],
+  const WY0 = 1.47;
+  const WY1 = 2.06;
+  const pane = (z0: number, z1: number, out = 0): Vector3[] => {
+    const c = 0.05;
+    return [fp(z0 + c, WY0, out), fp(z1 - c, WY0, out), fp(z1, WY0 + c, out), fp(z1, WY1 - c, out), fp(z1 - c, WY1, out), fp(z0 + c, WY1, out), fp(z0, WY1 - c, out), fp(z0, WY0 + c, out)];
+  };
+  const panes: Array<[number, number]> = [
+    [0.07, 0.86],
+    [-0.86, -0.07],
   ];
-  const eyeHoles = eyeC.map(([z, y]) => ngon(8, 0.25, Math.PI / 8).map((p) => fp(z + p.x, y + p.y)));
-  const grille = [fp(-0.36, 0.8), fp(0.36, 0.8), fp(0.36, 1.24), fp(-0.36, 1.24)];
-  root.add(mesh(slab(faceSec, T, [...eyeHoles, grille]), cream));
-  // 脸上的灰蓝下半、补丁。
-  root.add(mesh(slab([fp(0.88, FLOOR, 0.006), fp(1, 0.64, 0.006), fp(1, 1.08, 0.006), fp(-1, 1.08, 0.006), fp(-1, 0.64, 0.006), fp(-0.88, FLOOR, 0.006)], 0.006, [grille.map((p) => p.clone().add(V3(0.006, 0, 0)))], false, 0.006), card(C.blue, 0.5)));
-  root.add(strip(faceSec.map((p) => p.clone().addScaledVector(faceN, 0.006)), faceN, 0.05, 0.01, true));
-  // 脸上的几块补丁纸、颧骨两块浅一点的纸、眼睛下面一道黄铜条。
-  for (const [z0, y0, z1, y1, col] of [
-    [-0.95, 1.12, -0.72, 1.62, C.peach],
-    [0.72, 1.12, 0.95, 1.62, C.creamLight],
-    [-0.2, 1.3, 0.2, 1.58, C.creamLight],
-    [-0.62, 2.08, 0.62, 2.26, C.creamDark],
-  ] as const) {
-    const q = [fp(z1, y0, 0.006), fp(z0, y0, 0.006), fp(z0, y1, 0.006), fp(z1, y1, 0.006)];
-    root.add(mesh(slab(q, 0.006, [], false, 0.006), card(col, 0.4)));
-    for (const p of q) rv.add(p.clone().add(V3(0, p.y > (y0 + y1) / 2 ? -0.035 : 0.035, p.z > (z0 + z1) / 2 ? -0.035 : 0.035)), faceN, 0.009);
-  }
-  root.add(strip([fp(-0.7, 1.47, 0.006), fp(-0.12, 1.47, 0.006)], faceN, 0.03, 0.008), strip([fp(0.12, 1.47, 0.006), fp(0.7, 1.47, 0.006)], faceN, 0.03, 0.008));
-  root.add(strip([fp(-0.975, 1.08, 0.012), fp(0.975, 1.08, 0.012)], faceN, 0.04, 0.01));
-  rv.along(fp(-0.95, FRONT_TOP, 0.02), fp(0.95, FRONT_TOP, 0.02), faceN, 0.2, 0.011);
-  // 眼睛：八角的车灯也是车里的前窗，外面一圈黄铜框，上面一片能合上的黄铜眼皮。
+  root.add(mesh(slab(faceSec, T, panes.map(([a0, a1]) => pane(a1, a0).reverse())), cream));
+  root.add(strip(faceSec.map((p) => p.clone().addScaledVector(faceN, 0.006)), faceN, 0.05, 0.012, true));
   const lids: Mesh[] = [];
-  for (const [z, y] of eyeC) {
-    const ring = mesh(flat(ngon(8, 0.3, Math.PI / 8), 0.04, [ngon(8, 0.245, Math.PI / 8)]), [brassMat, brassDark]);
-    placeOnFace(ring, fp(z, y, 0.032), faceN);
-    root.add(ring);
-    const glass = mesh(flat(ngon(8, 0.25, Math.PI / 8), 0.01), [eyeGlass, eyeGlass], false);
-    placeOnFace(glass, fp(z, y, -0.01), faceN);
-    root.add(glass);
-    // 眼皮：一副卷帘。顶上一卷，几条纸板条用细绳串着往下放，两边各一条导轨，最下面一根铜杆压着。
-    const sh = shutter(0.5, 0.5, 10, 0.034);
-    placeOnFace(sh.group, fp(z, y, 0.045), faceN);
+  for (const [z0, z1] of panes) {
+    root.add(strip(pane(z0, z1, 0.008), faceN, 0.05, 0.014, true));
+    root.add(mesh(slab(pane(z0, z1, -0.012), 0.004), [eyeGlass, eyeGlass], false));
+    for (const p of pane(z0, z1, 0.03).filter((_, i) => i % 2 === 0)) rv.add(p, faceN, 0.012);
+    // 眼皮：每扇挡风玻璃一副卷帘。
+    const sh = shutter(z1 - z0 - 0.04, WY1 - WY0 - 0.03, 12, 0.03);
+    placeOnFace(sh.group, fp((z0 + z1) / 2, (WY0 + WY1) / 2, 0.045), faceN);
     root.add(sh.group);
     lids.push(sh.handle);
-    for (const k of [0, 2, 4, 6]) {
-      const a = Math.PI / 8 + (k / 8) * Math.PI * 2;
-      rv.add(fp(z + Math.cos(a) * 0.275, y + Math.sin(a) * 0.275, 0.05), faceN, 0.012);
-    }
   }
-  // 鼻子：两眼之间、下面一点的小铜块。
-  const nose = cardBox(0.14, 0.09, 0.07, C.cream);
-  nose.material = [brassMat, brassDark];
-  placeOnFace(nose, fp(0, 1.47, 0.04), faceN);
-  root.add(nose);
-  // 嘴：格栅，竖的铜条；嘴里叼着一封信。
-  root.add(strip(grille.map((p) => p.clone().addScaledVector(faceN, 0.01)), faceN, 0.06, 0.02, true));
+  // 中间的立柱（金卡纸包着）。
+  root.add(strip([fp(0, WY0 - 0.02, 0.01), fp(0, WY1 + 0.02, 0.01)], faceN, 0.09, 0.016));
+
+  // 车鼻子：一个往前伸的盒子（顶面往前略低），盒子的面都是卡纸，接缝包金边。
+  const XH = XF + 0.62;
+  const HB = 1.4; // 鼻子顶面后沿的高度
+  const HF = 1.26; // 前沿
+  const HZ = 0.95;
+  const hood = new Group();
+  const hp = (x: number, y: number, z: number): Vector3 => V3(x, y, z);
+  const top = [hp(frontX(HB), HB, -HZ), hp(frontX(HB), HB, HZ), hp(XH, HF, HZ), hp(XH, HF, -HZ)];
+  const front = [hp(XH, 0.64, HZ), hp(XH, 0.64, -HZ), hp(XH, HF, -HZ), hp(XH, HF, HZ)];
+  const grilleQ = [hp(XH, 0.86, 0.3), hp(XH, 0.86, -0.3), hp(XH, 1.18, -0.3), hp(XH, 1.18, 0.3)];
+  const lightC: Array<[number, number]> = [
+    [0.64, 1.0],
+    [-0.64, 1.0],
+  ];
+  const octAt = (z: number, y: number, r: number, x = XH): Vector3[] => ngon(8, r, Math.PI / 8).map((q) => hp(x, y + q.y, z - q.x));
+  hood.add(mesh(slab(orient(top, V3(0.1, 1, 0)), T), cream));
+  hood.add(mesh(slab(orient(front, V3(1, 0, 0)), T, [orient(grilleQ, V3(-1, 0, 0)), ...lightC.map(([z, y]) => orient(octAt(z, y, 0.15), V3(-1, 0, 0)))]), cream));
+  for (const s2 of [1, -1]) {
+    const side = [hp(frontX(0.64), 0.64, s2 * HZ), hp(XH, 0.64, s2 * HZ), hp(XH, HF, s2 * HZ), hp(frontX(HB), HB, s2 * HZ)];
+    hood.add(mesh(slab(orient(side, V3(0, 0, s2)), T), cream));
+    hood.add(strip([hp(frontX(HB), HB, s2 * HZ), hp(XH, HF, s2 * HZ), hp(XH, 0.64, s2 * HZ)].map((q) => q.clone().add(V3(0, 0, s2 * 0.004))), V3(0, 0, s2), 0.05, 0.012));
+  }
+  hood.add(strip([hp(XH + 0.004, 0.64, HZ), hp(XH + 0.004, HF, HZ), hp(XH + 0.004, HF, -HZ), hp(XH + 0.004, 0.64, -HZ)], V3(1, 0, 0), 0.05, 0.012, true));
+  hood.add(strip([hp(frontX(HB), HB + 0.004, HZ - 0.02), hp(XH - 0.02, HF + 0.004, HZ - 0.02)], V3(0.1, 1, 0).normalize(), 0.045, 0.01));
+  hood.add(strip([hp(frontX(HB), HB + 0.004, -HZ + 0.02), hp(XH - 0.02, HF + 0.004, -HZ + 0.02)], V3(0.1, 1, 0).normalize(), 0.045, 0.01));
+  // 车鼻子和车脸也是拼贴的。
+  {
+    const tn = V3(HB - HF, XH - frontX(HB), 0).normalize();
+    const tl = Math.hypot(XH - frontX(HB), HB - HF);
+    const tu = V3(XH - frontX(HB), HF - HB, 0).normalize();
+    hood.add(patchwork(hp(frontX(HB), HB, -HZ + 0.03), tu, V3(0, 0, 1), tn, tl - 0.03, 2 * HZ - 0.06, { seed: 61, lift: 0.002, rivets: rv }));
+    for (const s2 of [1, -1])
+      hood.add(patchwork(hp(frontX(0.66), 0.66, s2 * HZ), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, s2), XH - frontX(0.66) - 0.03, HF - 0.69, { seed: 62 + s2, lift: 0.002, skip: (x, y) => y + 0.66 > HB - ((x + frontX(0.66) - frontX(HB)) / (XH - frontX(HB))) * (HB - HF) - 0.03 }));
+    hood.add(patchwork(hp(XH, 0.66, -HZ + 0.03), V3(0, 0, 1), V3(0, 1, 0), V3(1, 0, 0), 2 * HZ - 0.06, HF - 0.69, { seed: 65, lift: 0.002, skip: (x, y) => Math.abs(x - HZ + 0.03) < 0.33 && y + 0.66 > 0.84 && y + 0.66 < 1.2 || lightC.some(([lz, ly]) => Math.hypot(x - HZ + 0.03 - lz, y + 0.66 - ly) < 0.23) }));
+    const fu = V3(0, 0, 1);
+    const fv = V3(-SLANT, 1.8, 0).normalize();
+    root.add(patchwork(fp(-0.98, 0.66, 0.006), fu, fv, faceN, 1.96, (FRONT_TOP - 0.66) / fv.y, { seed: 67, lift: 0.002, skip: (x, y) => {
+      const yy = 0.66 + y * fv.y;
+      const zz = -0.98 + x;
+      return yy < HB + 0.02 || (yy > WY0 - 0.06 && yy < WY1 + 0.06 && Math.abs(zz) < 0.9);
+    } }));
+  }
+  root.add(hood);
+  // 格栅（嘴）：金框、竖的铜条、后面一片深色的纸；嘴里叼着信。
+  root.add(strip(grilleQ.map((q) => q.clone().add(V3(0.006, 0, 0))), V3(1, 0, 0), 0.06, 0.02, true));
   for (let i = 1; i < 9; i++) {
-    const z = -0.36 + (i * 0.72) / 9;
-    root.add(rod(fp(z, 0.82, 0.01), fp(z, 1.22, 0.01), 0.013, brassMat, 8));
+    const z = -0.3 + (i * 0.6) / 9;
+    root.add(rod(hp(XH + 0.01, 0.88, z), hp(XH + 0.01, 1.16, z), 0.013, brassMat, 8));
   }
-  const grilleBack = mesh(slab([fp(-0.36, 0.8, -0.12), fp(0.36, 0.8, -0.12), fp(0.36, 1.24, -0.12), fp(-0.36, 1.24, -0.12)], 0.01), card(0x2f2a26, 0.4), false);
-  root.add(grilleBack);
+  root.add(mesh(slab(orient(grilleQ.map((q) => q.clone().add(V3(-0.1, 0, 0))), V3(1, 0, 0)), 0.01), card(0x2f2a26, 0.4), false));
   const letterTex = canvasTex(256, 160, (g) => {
     g.fillStyle = '#f6efdc';
     g.fillRect(0, 0, 256, 160);
@@ -350,45 +390,49 @@ export function buildVan(seed = 11): VanParts {
     g.arc(128, 92, 16, 0, Math.PI * 2);
     g.fill();
   });
-  const letter = mesh(flat([new Vector2(-0.17, -0.11), new Vector2(0.17, -0.11), new Vector2(0.17, 0.11), new Vector2(-0.17, 0.11)], 0.008, [], true), [new MeshStandardMaterial({ map: letterTex, roughness: 0.95 }), paperMaterial(0xf6efdc, { edge: true })]);
-  letter.position.copy(fp(0.12, 0.98, 0.06));
-  letter.rotation.set(0, Math.PI / 2 - 0.35, -0.18);
+  const letter = mesh(flat([new Vector2(-0.15, -0.1), new Vector2(0.15, -0.1), new Vector2(0.15, 0.1), new Vector2(-0.15, 0.1)], 0.008, [], true), [new MeshStandardMaterial({ map: letterTex, roughness: 0.95 }), paperMaterial(0xf6efdc, { edge: true })]);
+  letter.position.set(XH + 0.05, 1.02, 0.08);
+  letter.rotation.set(0, Math.PI / 2 - 0.3, -0.15);
   root.add(letter);
-  // 腮边的小灯（六角，也有眼皮）、胡须。
+  // 大灯（也是眼睛的光）：两圈八角的金框、一片暖黄的灯玻璃，上面一副小卷帘。
   const smallLids: Mesh[] = [];
-  for (const s of [1, -1]) {
-    const lampRing = mesh(flat(ngon(6, 0.12, 0), 0.04, [ngon(6, 0.085, 0)]), [brassMat, brassDark]);
-    placeOnFace(lampRing, fp(s * 0.66, 1.2, 0.032), faceN);
-    root.add(lampRing);
-    const lampGlass = mesh(flat(ngon(6, 0.088, 0), 0.02), [eyeGlass, eyeGlass], false);
-    placeOnFace(lampGlass, fp(s * 0.66, 1.2, 0.012), faceN);
-    root.add(lampGlass);
-    const ssh = shutter(0.2, 0.18, 5, 0.018);
-    placeOnFace(ssh.group, fp(s * 0.66, 1.2, 0.045), faceN);
+  for (const [z, y] of lightC) {
+    root.add(strip(octAt(z, y, 0.16, XH + 0.006), V3(1, 0, 0), 0.05, 0.02, true));
+    root.add(strip(octAt(z, y, 0.2, XH + 0.006), V3(1, 0, 0), 0.03, 0.012, true));
+    root.add(mesh(slab(orient(octAt(z, y, 0.15, XH - 0.01), V3(1, 0, 0)), 0.006), [headGlass, headGlass], false));
+    const ssh = shutter(0.3, 0.28, 6, 0.02);
+    ssh.group.position.set(XH + 0.03, y, z);
+    ssh.group.rotation.y = Math.PI / 2;
     root.add(ssh.group);
     smallLids.push(ssh.handle);
-    for (let k = 0; k < 3; k++) {
-      const a = fp(s * 0.48, 0.98 + k * 0.05, 0.03);
-      const b = a.clone().add(V3(0.08 - k * 0.02, 0.06 - k * 0.07, s * (0.34 + k * 0.04)));
-      root.add(rod(a, b, 0.006, brassMat, 6));
-      const tip = new Mesh(new SphereGeometry(0.012, 8, 6), brassMat);
-      tip.position.copy(b);
-      root.add(tip);
+    for (const q of octAt(z, y, 0.2, XH + 0.03).filter((_, i) => i % 2 === 1)) rv.add(q, V3(1, 0, 0), 0.011);
+    // 胡须（护杠）：两根铜杆从大灯外侧往两边伸出去，末端一颗铜珠。
+    const s2 = Math.sign(z);
+    for (const dy of [-0.06, 0.06]) {
+      const a2 = hp(XH + 0.05, y + dy, z + s2 * 0.2);
+      const b2 = hp(XH + 0.02, y + dy * 1.3, z + s2 * 0.5);
+      root.add(rod(a2, b2, 0.009, brassMat, 8));
+      root.add(put(new Mesh(new SphereGeometry(0.018, 10, 8), brassMat), { position: b2 }));
     }
   }
+  // 方鼻头：格栅下面、保险杠上面一个小盒子。
+  const nose = cardBox(0.12, 0.17, 0.3, C.creamDark, 0.3);
+  nose.position.set(XH + 0.06, 0.77, 0);
+  root.add(nose);
+  root.add(strip([hp(XH + 0.121, 0.69, 0.15), hp(XH + 0.121, 0.85, 0.15), hp(XH + 0.121, 0.85, -0.15), hp(XH + 0.121, 0.69, -0.15)], V3(1, 0, 0), 0.025, 0.006, true));
   // 保险杠和铃铛。
-  const bumper = cardBox(0.12, 0.13, 2.12, C.cream);
-  bumper.position.set(XF + 0.05, 0.62, 0);
+  const bumper = cardBox(0.14, 0.14, 2.1, C.cream);
+  bumper.position.set(XH + 0.07, 0.6, 0);
   root.add(bumper);
-  root.add(strip([V3(XF + 0.112, 0.67, -1.04), V3(XF + 0.112, 0.67, 1.04)], V3(1, 0, 0), 0.05));
-  for (const s of [1, -1]) {
-    const cap = cardBox(0.13, 0.15, 0.1, C.cream);
-    cap.material = [brassMat, brassDark];
-    cap.position.set(XF + 0.05, 0.62, s * 1.03);
+  root.add(strip([hp(XH + 0.142, 0.64, -1.02), hp(XH + 0.142, 0.64, 1.02)], V3(1, 0, 0), 0.05, 0.01));
+  for (const s2 of [1, -1]) {
+    const cap = cardBox(0.15, 0.16, 0.1, C.cream);
+    cap.material = gold;
+    cap.position.set(XH + 0.07, 0.6, s2 * 1.02);
     root.add(cap);
   }
   const bell = new Group();
-  bell.position.set(XF + 0.12, 0.55, 0);
+  bell.position.set(XH + 0.14, 0.53, 0);
   // 铃铛：一圈圈金卡纸叠出来的钟形（空心）。
   const bellMesh = stackRound(
     [
@@ -413,7 +457,7 @@ export function buildVan(seed = 11): VanParts {
   const ears: Group[] = [];
   for (const s of [1, -1]) {
     const ear = new Group();
-    ear.position.copy(fp(s * 1.0, 1.82, -0.04));
+    ear.position.copy(fp(s * 1.0, 1.78, -0.04));
     const arm = rod(V3(0, 0, 0), V3(0, 0.02, s * 0.2), 0.012, brassMat);
     const plate = new Group();
     plate.position.set(0, 0.03, s * 0.24);
@@ -508,23 +552,119 @@ export function buildVan(seed = 11): VanParts {
   for (const p of at(ngon(8, 0.29, Math.PI / 8).map((q) => q.add(wc)), z + 0.02)) rv.add(p, V3(0, 0, 1), 0.012);
 
   // 雕花板：一块木板，上面浮雕一只小狗，铰链在下沿；营地里放下来是一张桌子。
-  const flap = new Group();
-  flap.position.set(-0.42, 1.3, z + 0.012);
+  const dogBoard = new Group();
+  dogBoard.position.set(-0.42, 1.3, z + 0.012);
   const fw = 0.6;
   const fh = 0.62;
   const board = mesh(flat([new Vector2(-fw / 2, 0), new Vector2(fw / 2, 0), new Vector2(fw / 2, fh), new Vector2(-fw / 2, fh)], 0.03), card(C.woodLight, 0.25, 'wood'));
   board.position.z = 0.015;
-  flap.add(board);
+  dogBoard.add(board);
   const relief = mesh(flat(dogOutline().map((p) => new Vector2(p.x * 0.42, p.y * 0.42 + 0.14)), 0.012), card(C.wood, 0.2, 'wood'));
   relief.position.z = 0.036;
-  flap.add(relief);
-  flap.add(strip([V3(-fw / 2, 0, 0.032), V3(fw / 2, 0, 0.032), V3(fw / 2, fh, 0.032), V3(-fw / 2, fh, 0.032)], V3(0, 0, 1), 0.03, 0.008, true));
+  dogBoard.add(relief);
+  dogBoard.add(strip([V3(-fw / 2, 0, 0.032), V3(fw / 2, 0, 0.032), V3(fw / 2, fh, 0.032), V3(-fw / 2, fh, 0.032)], V3(0, 0, 1), 0.03, 0.008, true));
   const latch = cardBox(0.05, 0.06, 0.03, C.cream);
   latch.material = [brassMat, brassDark];
   latch.position.set(0, fh - 0.02, 0.05);
-  flap.add(latch);
-  for (const x of [-0.2, 0.2]) flap.add(put(hinge(0.1, 0.03, 0.004), { position: V3(x, 0, 0.004), rotation: { z: Math.PI / 2 } }));
-  root.add(flap);
+  dogBoard.add(latch);
+  for (const x of [-0.2, 0.2]) dogBoard.add(put(hinge(0.1, 0.03, 0.004), { position: V3(x, 0, 0.004), rotation: { z: Math.PI / 2 } }));
+  root.add(dogBoard);
+
+  // 营地的桌子：-z 一侧那块板，铰链在下沿，放下来就是一张桌子（里面一面是木纹纸），两条折叠腿撑着。
+  const flap = new Group();
+  flap.position.set((OPEN.x0 + OPEN.x1) / 2, OPEN.y0, -1.006 - 0.004);
+  {
+    const PW = OPEN.x1 - OPEN.x0 - 0.01;
+    const PH = OPEN.y1 - OPEN.y0 - 0.01;
+    const outer = [V3(-PW / 2, 0, -0.03), V3(PW / 2, 0, -0.03), V3(PW / 2, PH, -0.03), V3(-PW / 2, PH, -0.03)];
+    flap.add(mesh(slab(orient(outer, V3(0, 0, -1)), 0.03), card(C.cream, 0.4)));
+    flap.add(patchwork(V3(-PW / 2 + 0.02, 0.02, -0.03), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, -1), PW - 0.04, PH - 0.04, { seed: 81, lift: 0.002 }));
+    flap.add(strip(outer.map((q) => q.clone().add(V3(0, 0, -0.002))), V3(0, 0, -1), 0.05, 0.014, true));
+    const inner = [V3(-PW / 2 + 0.03, 0.03, 0.001), V3(PW / 2 - 0.03, 0.03, 0.001), V3(PW / 2 - 0.03, PH - 0.03, 0.001), V3(-PW / 2 + 0.03, PH - 0.03, 0.001)];
+    flap.add(mesh(slab(orient(inner, V3(0, 0, 1)), 0.003), card(C.woodLight, 0.25, 'wood')));
+    for (const x of [-PW / 2 + 0.25, PW / 2 - 0.25]) flap.add(put(hinge(0.14, 0.05, 0.005), { position: V3(x, 0, -0.035), rotation: { z: Math.PI / 2 } }));
+    const latch2 = cardBox(0.06, 0.05, 0.03, C.cream);
+    latch2.material = gold;
+    latch2.position.set(0, PH - 0.03, -0.05);
+    flap.add(latch2);
+    // 折叠腿（放平以后才露出来）：从桌子外沿撑到地上。
+    const legs = new Group();
+    for (const x of [-PW / 2 + 0.12, PW / 2 - 0.12]) {
+      const leg = cardBox(0.04, 0.04, OPEN.y0 + 0.02, C.wood, 0.3, 'wood');
+      leg.position.set(x, PH - 0.06, -(OPEN.y0 + 0.02) / 2 - 0.03);
+      legs.add(leg);
+    }
+    legs.visible = false;
+    flap.add(legs);
+    flap.userData['legs'] = legs;
+    // 桌上的东西（放平以后在上面）：一张摊开的岛的地图、一个笔筒、一盏小台灯。
+    const onTable = new Group();
+    const mapTex = canvasTex(256, 192, (g2) => {
+      g2.fillStyle = '#efe4c8';
+      g2.fillRect(0, 0, 256, 192);
+      g2.fillStyle = '#9dc2c4';
+      g2.fillRect(8, 8, 240, 176);
+      for (const [r, c] of [
+        [70, '#d9cf9e'],
+        [60, '#b5c98a'],
+        [42, '#97b56f'],
+        [24, '#7c9c5c'],
+      ] as const) {
+        g2.fillStyle = c;
+        g2.beginPath();
+        g2.ellipse(128, 96, r * 1.4, r, 0.2, 0, Math.PI * 2);
+        g2.fill();
+      }
+    });
+    const mapM = mesh(slab([V3(-0.22, 0.25, 0.004), V3(0.22, 0.25, 0.004), V3(0.22, 0.58, 0.004), V3(-0.22, 0.58, 0.004)], 0.002, [], true), [new MeshStandardMaterial({ map: mapTex, roughness: 1 }), paperMaterial(0xefe4c8, { edge: true })], false);
+    onTable.add(mapM);
+    const cup = rolled(0.04, 0.04, 0.11, 0.003, 0xb7c2b0, 16);
+    cup.rotation.x = Math.PI / 2;
+    cup.position.set(0.5, 0.4, 0.004);
+    onTable.add(cup);
+    for (let i = 0; i < 4; i++) {
+      const pen = rolled(0.005, 0.005, 0.16, 0.002, [0xb8452f, 0x2f5a8a, 0x3e6b3a, 0xd9b46a][i]!, 6);
+      pen.rotation.x = Math.PI / 2 + (i - 1.5) * 0.12;
+      pen.position.set(0.5 + (i - 1.5) * 0.012, 0.4, 0.01);
+      onTable.add(pen);
+    }
+    onTable.visible = false;
+    flap.add(onTable);
+    flap.userData['onTable'] = onTable;
+  }
+  nearSide.add(flap);
+
+  // 营地的道具：两张折叠小凳、车尾放下来的一条坡道。
+  const campProps = new Group();
+  for (const [x, zz] of [
+    [-1.2, -2.25],
+    [0.1, -2.35],
+  ] as const) {
+    const stool = new Group();
+    stool.add(put(cardBox(0.36, 0.03, 0.28, C.woodLight, 0.2, 'wood'), { position: V3(0, 0.46, 0) }));
+    for (const sx of [-1, 1]) {
+      const l1 = rod(V3(sx * 0.15, 0, -0.12), V3(sx * 0.15, 0.45, 0.12), 0.014, woodRod(), 6);
+      const l2 = rod(V3(sx * 0.15, 0, 0.12), V3(sx * 0.15, 0.45, -0.12), 0.014, woodRod(), 6);
+      stool.add(l1, l2);
+    }
+    stool.add(rod(V3(-0.15, 0.12, 0), V3(0.15, 0.12, 0), 0.01, woodRod(), 6));
+    stool.position.set(x, 0, zz);
+    stool.rotation.y = (x + zz) * 0.3;
+    campProps.add(stool);
+  }
+  {
+    const ramp = new Group();
+    const L = 1.15;
+    const ang = Math.atan2(0.56, L);
+    for (let i = 0; i < 9; i++) ramp.add(put(cardBox(0.11, 0.025, 0.8, i % 2 ? C.woodLight : 0xc8a070, 0.2, 'wood'), { position: V3(-i * 0.128 - 0.06, 0, 0) }));
+    for (const sz of [-0.4, 0.4]) ramp.add(put(cardBox(L, 0.04, 0.03, C.wood, 0.2, 'wood'), { position: V3(-L / 2, -0.02, sz) }));
+    ramp.position.set(XR - 0.05, 0.56, 0);
+    ramp.rotation.z = ang;
+    campProps.add(ramp);
+  }
+  campProps.visible = false;
+  root.add(campProps);
+
 
   // 徽章：腰线下挂着一排搪瓷小盾牌（一项专利一枚），盾牌上压一只小狗。
   const badges = new Group();
@@ -581,32 +721,20 @@ export function buildVan(seed = 11): VanParts {
     knob.position.set(p.x, ry + H + 0.03, p.z);
     crown.add(knob);
   }
-  // 花丝：每两根柱子之间一对相对卷的涡卷。
-  const scroll = (c: Vector3, dir: Vector3, flip: number): Mesh => {
-    const pts: Vector3[] = [];
-    for (let i = 0; i <= 40; i++) {
-      const t = i / 40;
-      const a = flip * t * Math.PI * 2.6;
-      const r = 0.07 * (1 - t * 0.78);
-      pts.push(c.clone().addScaledVector(dir, Math.cos(a) * r * flip).add(V3(0, Math.sin(a) * r, 0)));
-    }
-    const m = new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), 60, 0.006, 5), brassMat);
-    m.castShadow = true;
-    return m;
-  };
+  // 护栏的每一格是一个"X"（两根交叉的铜条），照 Lovart 整体效果图。
   for (let i = 0; i < 5; i++) {
-    const xa = cx0 + ((cx1 - cx0) * i) / 5;
-    const xb = cx0 + ((cx1 - cx0) * (i + 1)) / 5;
+    const xa = cx0 + ((cx1 - cx0) * i) / 5 + 0.02;
+    const xb = cx0 + ((cx1 - cx0) * (i + 1)) / 5 - 0.02;
     for (const zz of [cz, -cz]) {
-      crown.add(scroll(V3(xa + (xb - xa) * 0.3, ry + 0.12, zz), V3(1, 0, 0), 1));
-      crown.add(scroll(V3(xa + (xb - xa) * 0.7, ry + 0.12, zz), V3(1, 0, 0), -1));
+      crown.add(rod(V3(xa, ry + 0.05, zz), V3(xb, ry + H - 0.01, zz), 0.008, brassMat, 6));
+      crown.add(rod(V3(xa, ry + H - 0.01, zz), V3(xb, ry + 0.05, zz), 0.008, brassMat, 6));
     }
   }
   for (let i = 0; i < 3; i++) {
-    const za = -cz + (2 * cz * i) / 3;
-    const zb = -cz + (2 * cz * (i + 1)) / 3;
-    crown.add(scroll(V3(cx1, ry + 0.12, za + (zb - za) * 0.3), V3(0, 0, 1), 1));
-    crown.add(scroll(V3(cx1, ry + 0.12, za + (zb - za) * 0.7), V3(0, 0, 1), -1));
+    const za = -cz + (2 * cz * i) / 3 + 0.02;
+    const zb = -cz + (2 * cz * (i + 1)) / 3 - 0.02;
+    crown.add(rod(V3(cx1, ry + 0.05, za), V3(cx1, ry + H - 0.01, zb), 0.008, brassMat, 6));
+    crown.add(rod(V3(cx1, ry + H - 0.01, za), V3(cx1, ry + 0.05, zb), 0.008, brassMat, 6));
   }
   root.add(crown);
   // 风向标：冠的前沿正中，一根杆、一支箭、一只小狗（最新一项专利的动物）。
@@ -655,7 +783,7 @@ export function buildVan(seed = 11): VanParts {
 
   // 遮阳篷：平时卷在 +z 侧车顶边上的条纹帆布卷；营地里放下来，两根撑杆。
   const stripes = stripeTex();
-  stripes.repeat.set(6, 1);
+  stripes.repeat.set(3, 1);
   const canvasMat = new MeshStandardMaterial({ map: stripes, roughness: 1, side: DoubleSide });
   const awningRoll = new Group();
   const roll = new Mesh(new CylinderGeometry(0.11, 0.11, 2.6, 16), canvasMat);
@@ -674,7 +802,7 @@ export function buildVan(seed = 11): VanParts {
     strap.position.x = x;
     awningRoll.add(strap);
   }
-  awningRoll.position.set(-0.6, ROOF - 0.04, 0.9);
+  awningRoll.position.set(-0.6, ROOF - 0.04, -0.9);
   root.add(awningRoll);
   const awning = new Group();
   {
@@ -739,6 +867,8 @@ export function buildVan(seed = 11): VanParts {
     }
     awning.add(g);
   }
+  // 篷子在 -z 一侧（和开口、桌子同一侧）：把画好的这一组沿 z 镜像过去。
+  for (const c of awning.children) c.scale.z = -1;
   awning.visible = false;
   root.add(awning);
 
@@ -769,6 +899,7 @@ export function buildVan(seed = 11): VanParts {
     ears,
     doors,
     flap,
+    campProps,
     awning,
     awningRoll,
     tail,
@@ -794,6 +925,8 @@ function placeOnFace(o: { position: Vector3; quaternion: Quaternion }, p: Vector
 
 const glassMat = new MeshStandardMaterial({ color: 0xcfe2e4, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false });
 const eyeGlass = new MeshStandardMaterial({ color: 0xe9eee6, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.55, emissive: 0xffd9a0, emissiveIntensity: 0.0 });
+/** 大灯的玻璃：暖黄的光（勾勾的眼睛一直亮着一点）。 */
+export const headGlass = new MeshStandardMaterial({ color: 0xf3d79a, roughness: 0.25, emissive: 0xffc46a, emissiveIntensity: 0.9 });
 const mirrorMat = new MeshStandardMaterial({ color: 0xd8e2e2, metalness: 0.9, roughness: 0.12 });
 const stainedCache = new Map<number, MeshStandardMaterial>();
 function stained(c: number): MeshStandardMaterial {

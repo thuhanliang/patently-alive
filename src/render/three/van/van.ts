@@ -38,7 +38,7 @@ export class Van {
     };
     for (const l of [...p.lids, ...p.smallLids]) nb(l.parent?.parent);
     for (const l of [...p.lids, ...p.smallLids]) nb(l.parent?.parent?.parent);
-    for (const o of [...p.ears, ...p.doors, p.flap, p.awning, p.awningRoll, p.bell, p.letter, ...p.smoke, p.nearSide, p.interior]) nb(o);
+    for (const o of [...p.ears, ...p.doors, p.flap, p.campProps, p.awning, p.awningRoll, p.bell, p.letter, ...p.smoke, p.nearSide, p.interior]) nb(o);
     nb(p.tail.userData['tassel'] as Group);
     nb(p.vane.userData['top'] as Group);
     bake(p.root);
@@ -148,10 +148,14 @@ export class Van {
     const flap = this.flapS.clamp(0, 1);
     p.awning.visible = this.camp > 0.02;
     p.awning.scale.set(1, 0.3 + 0.7 * this.camp, 0.2 + 0.8 * this.camp);
-    p.awning.position.set(0, (1 - this.camp) * 1.6, (1 - this.camp) * 0.8);
+    p.awning.position.set(0, (1 - this.camp) * 1.6, -(1 - this.camp) * 0.8);
     p.awningRoll.visible = this.camp < 0.98;
     p.awningRoll.scale.setScalar(1 - 0.6 * this.camp);
-    p.flap.rotation.x = flap * (Math.PI / 2);
+    // 桌板绕下沿的铰链往外放平；放平了腿和桌上的东西才出来。
+    p.flap.rotation.x = -flap * (Math.PI / 2);
+    (p.flap.userData['legs'] as Group).visible = flap > 0.97;
+    (p.flap.userData['onTable'] as Group).visible = flap > 0.97;
+    p.campProps.visible = this.camp > 0.6;
     p.doors.forEach((d, i) => (d.rotation.y = (i === 0 ? 1 : -1) * 1.5 * doors));
     // 夜里眼睛是暖的。
     p.eyeGlow.emissiveIntensity = 0.15 + this.night * 1.4;
