@@ -23,9 +23,10 @@ import {
   Vector2,
   Vector3,
   type Material,
+  type Texture,
   type Object3D,
 } from 'three';
-import { paperMaterial } from './paper';
+import { paperMaterial, printedPaper } from './paper';
 
 /**
  * 纸模型的工具（2026-11-25，事务所的车「勾勾」）。
@@ -747,4 +748,170 @@ export function bead(outline: Vector3[], n: Vector3, inset = 0.03, w = 0.012, h 
     return p.clone().addScaledVector(d.normalize(), Math.min(inset * 1.15, len * 0.4));
   });
   return strip(pts, n, w, h, true, card(color, 0.3));
+}
+
+// ———— 拼贴（2026-11-26，照 Lovart 整体效果图：车身是一块块小纸片拼起来的） ————
+
+/** 拼贴纸的几种颜色：米白、浅驼、牛皮、灰绿、灰蓝、桃。 */
+export const PATCH_WARM = [0xece0c4, 0xdcc7a2, 0xcfb085, 0xc39c6e, 0xe2c79c, 0xd3c3a2, 0xb9c0aa, 0xaab6b2];
+export const PATCH_COOL = [0xaebba8, 0x9daeab, 0xbcc3ad, 0x93a6a2, 0xd1c7a8, 0xc8b089];
+
+const wornCache: Texture[] = [];
+/** 旧纸的印刷图：几块水渍、纤维、边上磨白、一点铅笔划痕（白底，颜色由材质的 color 乘上去）。 */
+function wornTex(k: number): Texture {
+  if (wornCache[k]) return wornCache[k]!;
+  const t = canvasTex(256, 256, (g) => {
+    const r = rng(k * 31 + 7);
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 9; i++) {
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+      gr.addColorStop(0, `rgba(120,85,45,${0.08 + r() * 0.1})`);
+      gr.addColorStop(1, 'rgba(120,85,45,0)');
+      g.save();
+      g.translate(r() * 256, r() * 256);
+      g.scale(20 + r() * 70, 14 + r() * 40);
+      g.fillStyle = gr;
+      g.beginPath();
+      g.arc(0, 0, 1, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    }
+    for (let i = 0; i < 500; i++) {
+      g.fillStyle = r() < 0.6 ? `rgba(110,80,50,${0.05 + r() * 0.12})` : `rgba(255,255,255,${0.2 + r() * 0.3})`;
+      g.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1);
+    }
+    // 边上一圈：印刷的暗边 + 磨白的毛边。
+    const e = g.createLinearGradient(0, 0, 0, 256);
+    e.addColorStop(0, 'rgba(110,80,45,0.18)');
+    e.addColorStop(0.08, 'rgba(110,80,45,0)');
+    e.addColorStop(0.92, 'rgba(110,80,45,0)');
+    e.addColorStop(1, 'rgba(110,80,45,0.22)');
+    g.fillStyle = e;
+    g.fillRect(0, 0, 256, 256);
+    const e2 = g.createLinearGradient(0, 0, 256, 0);
+    e2.addColorStop(0, 'rgba(110,80,45,0.16)');
+    e2.addColorStop(0.07, 'rgba(110,80,45,0)');
+    e2.addColorStop(0.93, 'rgba(110,80,45,0)');
+    e2.addColorStop(1, 'rgba(110,80,45,0.16)');
+    g.fillStyle = e2;
+    g.fillRect(0, 0, 256, 256);
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let i = 0; i < 6; i++) {
+      const side = Math.floor(r() * 4);
+      const p = r() * 230;
+      const L = 10 + r() * 40;
+      if (side === 0) g.fillRect(p, 0, L, 3 + r() * 4);
+      else if (side === 1) g.fillRect(p, 252 - r() * 4, L, 6);
+      else if (side === 2) g.fillRect(0, p, 3 + r() * 4, L);
+      else g.fillRect(252 - r() * 4, p, 6, L);
+    }
+    g.strokeStyle = 'rgba(80,70,60,0.18)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(r() * 256, r() * 256);
+    g.lineTo(r() * 256, r() * 256);
+    g.stroke();
+  });
+  wornCache[k] = t;
+  return t;
+}
+
+const patchMats = new Map<string, Material[]>();
+function patchMat(color: number, k: number): Material[] {
+  const key = `${color}|${k}`;
+  let m = patchMats.get(key);
+  if (!m) {
+    const face = printedPaper(wornTex(k), 3, k % 2 ? 'kraft' : 'card');
+    face.color.setHex(color);
+    patchMats.set(key, (m = [face, paperMaterial(color, { edge: true })]));
+  }
+  return m;
+}
+
+/**
+ * 在一块平面上拼贴：原点 o，横向 u、纵向 v（单位向量），大小 W×H，正面法线 n（贴在 o 所在的平面上，往 n 抬 lift）。
+ * 一行行铺，每行高度、每块宽度随机，缝隙一两毫米；边是手撕的（一点锯齿）。skip(x, y) 为真的地方不铺（窗洞、轮拱）。
+ * 有的块包一条金边，有的角上钉一颗铆钉。返回一个组（静态的，交给 bake 合并）。
+ */
+export function patchwork(
+  o: Vector3,
+  u: Vector3,
+  v: Vector3,
+  n: Vector3,
+  W: number,
+  H: number,
+  opts: { seed: number; palette?: number[]; skip?: (x: number, y: number) => boolean; rowH?: [number, number]; tileW?: [number, number]; lift?: number; rivets?: Rivets; goldEdges?: number },
+): Group {
+  const g = new Group();
+  const r = rng(opts.seed);
+  const pal = opts.palette ?? PATCH_WARM;
+  const lift = opts.lift ?? 0.004;
+  const [h0, h1] = opts.rowH ?? [0.14, 0.3];
+  const [w0, w1] = opts.tileW ?? [0.16, 0.42];
+  const gap = 0.006;
+  const at = (x: number, y: number, up = 0): Vector3 => o.clone().addScaledVector(u, x).addScaledVector(v, y).addScaledVector(n, lift + up);
+  let y = 0;
+  while (y < H - 0.02) {
+    const rh = Math.min(H - y, h0 + r() * (h1 - h0));
+    let x = (r() - 0.5) * 0.1;
+    if (x < 0) x = 0;
+    while (x < W - 0.02) {
+      const tw = Math.min(W - x, w0 + r() * (w1 - w0));
+      const x0 = x + gap / 2;
+      const x1 = x + tw - gap / 2;
+      const y0 = y + gap / 2;
+      const y1 = y + rh - gap / 2;
+      x += tw;
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      if (opts.skip && (opts.skip(cx, cy) || opts.skip(x0 + 0.02, y0 + 0.02) || opts.skip(x1 - 0.02, y1 - 0.02) || opts.skip(x0 + 0.02, y1 - 0.02) || opts.skip(x1 - 0.02, y0 + 0.02))) continue;
+      // 手撕的边：每条边分几段，往内外抖一两毫米；偶尔一个角缺一块。
+      const pts: Vector3[] = [];
+      const corners: Array<[number, number]> = [
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x0, y1],
+      ];
+      const nick = r() < 0.25 ? Math.floor(r() * 4) : -1;
+      for (let c = 0; c < 4; c++) {
+        const [ax, ay] = corners[c]!;
+        const [bx, by] = corners[(c + 1) % 4]!;
+        const segs = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 0.05));
+        for (let k = 0; k < segs; k++) {
+          const t = k / segs;
+          let px = ax + (bx - ax) * t;
+          let py = ay + (by - ay) * t;
+          if (k > 0) {
+            const j = (r() - 0.5) * 0.006;
+            px += (by - ay ? 1 : 0) * j * Math.sign(bx - ax || 1);
+            py += (bx - ax ? 1 : 0) * j;
+          } else if (c === nick) {
+            const d = 0.02 + r() * 0.025;
+            pts.push(at(px + (c === 0 || c === 3 ? d : -d), py));
+            px += 0;
+            py += c < 2 ? d : -d;
+          }
+          pts.push(at(px, py));
+        }
+      }
+      const color = pal[Math.floor(r() * pal.length)]!;
+      const m = mesh(slab(orient(pts, n), 0.004, [], true, 0.004), patchMat(color, Math.floor(r() * 4)), false);
+      g.add(m);
+      // 有的块包一条金边（一边或两边），有的角上钉一颗铆钉。
+      if (r() < (opts.goldEdges ?? 0.18)) {
+        const side = Math.floor(r() * 4);
+        const [ax, ay] = corners[side]!;
+        const [bx, by] = corners[(side + 1) % 4]!;
+        g.add(strip([at(ax, ay, 0.004), at(bx, by, 0.004)], n, 0.03, 0.008));
+      }
+      if (opts.rivets && r() < 0.35) {
+        const [cx2, cy2] = corners[Math.floor(r() * 4)]!;
+        opts.rivets.add(at(cx2 + (cx2 === x0 ? 0.03 : -0.03), cy2 + (cy2 === y0 ? 0.03 : -0.03), 0.004), n, 0.009);
+      }
+    }
+    y += rh;
+  }
+  return g;
 }

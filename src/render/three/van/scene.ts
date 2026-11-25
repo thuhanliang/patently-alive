@@ -20,7 +20,7 @@ import {
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GRADE, SceneInkPass } from '../look';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildFlora } from '../flora';
@@ -57,7 +57,8 @@ const VIEWS: Record<VanView, Pose> = {
   back: { pos: V3(-7.5, 2.0, 0.6), target: V3(0, 1.4, 0), fov: 30 },
   top: { pos: V3(0.05, 10, 0.05), target: V3(0, 0, 0), fov: 34 },
   inside: { pos: V3(0.0, 3.05, -3.4), target: V3(0.0, 1.32, 0.5), fov: 42 },
-  camp: { pos: V3(3.2, 3.6, 7.6), target: V3(-0.6, 1.0, 1.4), fov: 34 },
+  // 营地：从车头斜前方、开口那一侧看（照 Lovart 整体效果图的构图：车头在左，篷子和桌子在右）。
+  camp: { pos: V3(5.2, 3.9, -6.6), target: V3(-0.3, 1.0, -0.9), fov: 34 },
 };
 
 const GRAIN = {
@@ -83,8 +84,8 @@ export class VanScene {
   readonly controls: OrbitControls | null;
   private readonly composer: EffectComposer;
   private readonly grain: ShaderPass;
-  private readonly sun = new DirectionalLight(0xffe4bc, 2.6);
-  private readonly hemi = new HemisphereLight(0xdfe8f0, 0x8a7a5a, 0.7);
+  private readonly sun = new DirectionalLight(0xffd59c, 4.2);
+  private readonly hemi = new HemisphereLight(0xf2e6cf, 0x8a7458, 0.42);
   private pose: Pose = { ...VIEWS.hero };
   private from: Pose | null = null;
   private goal: Pose = { ...VIEWS.hero };
@@ -104,23 +105,26 @@ export class VanScene {
     opts: { orbit?: boolean; island?: { field: ReliefField; input: IslandInput } } = {},
   ) {
     this.renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    // 画质按 iPad Air M4 定（DECISIONS 2026-11-26）：屏幕多高的分辨率就画多高（最多 3 倍）。
+    this.renderer.setPixelRatio(Math.min(3, window.devicePixelRatio || 1));
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
     host.appendChild(this.renderer.domElement);
-    const bg = new Color(0xefe6d2);
+    const bg = new Color(0xf1eadb);
     this.scene.background = bg;
     this.scene.fog = new Fog(bg, 14, 34);
 
-    this.sun.position.set(6, 9, 5);
+    // 傍晚前的斜阳：从右前方低低地照过来，影子拉得长（Lovart 整体效果图的光）。
+    this.sun.position.set(6.5, 4.6, 5.2);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(4096, 4096);
+    this.sun.shadow.radius = 3;
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -6;
-    sc.right = sc.top = 6;
+    sc.left = sc.bottom = -8;
+    sc.right = sc.top = 8;
     sc.near = 1;
     sc.far = 30;
     this.sun.shadow.bias = -0.0004;
@@ -129,7 +133,7 @@ export class VanScene {
     // 环境光照（一间虚拟的亮屋子）：黄铜、搪瓷要有东西可反射，不然发黑。
     const pm = new PMREMGenerator(this.renderer);
     this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.55;
+    this.scene.environmentIntensity = 0.32;
 
     this.ground(17);
     this.van = new Van();
@@ -148,9 +152,9 @@ export class VanScene {
 
     const rt = new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(this.renderer, rt);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new SceneInkPass(this.scene, this.camera, { width: 1.5, strength: 0.8 }));
     this.composer.addPass(new OutputPass());
-    this.grain = new ShaderPass(GRAIN);
+    this.grain = new ShaderPass(GRADE);
     this.composer.addPass(this.grain);
     this.renderer.domElement.addEventListener('pointermove', (e) => {
       const r = this.renderer.domElement.getBoundingClientRect();
@@ -174,11 +178,11 @@ export class VanScene {
       return pts;
     };
     const layers: Array<[number, number, number]> = [
-      [7.2, 0xd9c79c, 0],
-      [6.4, 0xe6d6ad, 1],
-      [5.6, 0xa9c773, 2],
-      [4.6, 0x9bbd66, 3],
-      [3.4, 0x8fb35d, 4],
+      [7.2, 0xe9dfc8, 0],
+      [6.4, 0xe2d9bd, 1],
+      [5.6, 0xd6d3ad, 2],
+      [4.6, 0xcbcb9f, 3],
+      [3.4, 0xc0c492, 4],
     ];
     for (const [R, c, i] of layers) {
       const m = mesh(flat(blob(R, i * 3, 0.28), 0.04), card(c, 1.2, i < 2 ? 'kraft' : 'card'));
@@ -201,7 +205,9 @@ export class VanScene {
       const tone = Math.floor(rnd() * 3);
       let arr = lists.get(id);
       if (!arr) lists.set(id, (arr = k.parts.map(() => [])));
-      k.parts.forEach((part, j) => arr![j]!.push({ x, y, z, w: h * k.aspect, h, flip: rnd() < 0.5, color: part.colors[tone % part.colors.length]! }));
+      // 褪了色的草：往旧纸的米黄里掺一半（照 Lovart 整体效果图）。
+      const fade = (c: number): number => new Color(c).lerp(new Color(0xd9cfa6), 0.45).getHex();
+      k.parts.forEach((part, j) => arr![j]!.push({ x, y, z, w: h * k.aspect, h, flip: rnd() < 0.5, color: fade(part.colors[tone % part.colors.length]!) }));
     };
     for (let i = 0; i < 420; i++) {
       const a = rnd() * Math.PI * 2;
@@ -215,14 +221,6 @@ export class VanScene {
       const id = ring <= 1 ? (pick < 0.7 ? 'dunegrass' : 'thrift') : pick < 0.55 ? 'grass' : pick < 0.7 ? 'tallgrass' : pick < 0.8 ? 'daisy' : pick < 0.88 ? 'buttercup' : pick < 0.94 ? 'clover' : 'fern';
       put(id, x, z, y);
     }
-    for (const [x, z] of [
-      [-4.2, -2.4],
-      [4.6, -2.0],
-      [-3.6, 2.8],
-    ] as const)
-      put('shrub', x, z, top, 1.6);
-    put('tree', -4.6, 3.6, top, 2.2);
-    put('pine', 5.0, 1.2, top, 2.0);
     for (const [id, arr] of lists) {
       const k = flora.get(id)!;
       k.parts.forEach((part, j) => this.scene.add(plantMesh(part.geom, arr[j]!, k.sway * 4, 0.5, 0.012)));
