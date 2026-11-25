@@ -116,7 +116,7 @@ export class Stage {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(30, 1, 0.05, 200);
-  readonly sun = new DirectionalLight(0xffdcae, 3.2);
+  readonly sun = new DirectionalLight(0xffcd8a, 3.0);
   readonly sky = new HemisphereLight(0xf4ead6, 0x8f7a5e, 0.9);
   readonly composer: EffectComposer;
   readonly ao: N8AOPass;

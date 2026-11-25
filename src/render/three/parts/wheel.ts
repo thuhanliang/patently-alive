@@ -56,7 +56,7 @@ export function buildWheel(R = 0.42, seed = 3): Group {
   // 轮辋：厚的米白八角板 + 一圈浅色八角框（倒角都接光）。
   const cream = [paperMaterial(0xbfa98a, { scale: 0.15 }), paperMaterial(0xd2c0a2, { scale: 0.15 })];
   const rimR = R * 0.5;
-  const plate = new Mesh(bev(ngon(8, rimR, Math.PI / 8), 0.05, 0.012), cream);
+  const plate = new Mesh(bev(ngon(8, rimR, Math.PI / 8), 0.05, 0.018), cream);
   plate.position.z = -0.02;
   const frame = new Mesh(bev(ngon(8, rimR * 0.97, Math.PI / 8), 0.026, 0.009, [ngon(8, rimR * 0.74, Math.PI / 8).reverse()]), [paperMaterial(0xcfbb9e, { scale: 0.15 }), paperMaterial(0xe2d2b8, { scale: 0.15 })]);
   frame.position.z = 0.03;
@@ -64,7 +64,7 @@ export function buildWheel(R = 0.42, seed = 3): Group {
   const brownRing = new Mesh(bev(ngon(8, rimR * 0.72, Math.PI / 8), 0.02, 0.006, [ngon(8, rimR * 0.5, Math.PI / 8).reverse()]), [paperMaterial(0x5e4c3c, { scale: 0.1 }), paperMaterial(0x6e5c4a, { scale: 0.1 })]);
   brownRing.position.z = 0.032;
   // 金色轮毂：八角的金卡纸块，上面一颗八芒星，正中一颗圆钉。
-  const gold = new MeshStandardMaterial({ color: 0xd2a447, metalness: 0.75, roughness: 0.38 });
+  const gold = new MeshStandardMaterial({ color: 0xe6b552, metalness: 0.6, roughness: 0.32, emissive: 0x3a2508 });
   const goldDark = new MeshStandardMaterial({ color: 0xa97a2c, metalness: 0.7, roughness: 0.45 });
   const hub = new Mesh(bev(ngon(8, rimR * 0.5, Math.PI / 8), 0.03, 0.008), [gold, goldDark]);
   hub.position.z = 0.03;

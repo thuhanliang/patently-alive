@@ -1,6 +1,7 @@
 import { BoxGeometry, Group, Mesh, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { card, flat, ngon } from '../../render/three/craft';
+import { buildNose } from '../../render/three/parts/nose';
 import { buildWheel } from '../../render/three/parts/wheel';
 import { Stage } from '../../render/three/stage';
 
@@ -11,11 +12,31 @@ import { Stage } from '../../render/three/stage';
 const q = new URLSearchParams(location.search);
 const part = q.get('part') ?? 'wheel';
 interface PartDef {
+  sun?: [number, number, number];
   build: () => Group;
   ref: string;
   cam: { pos: [number, number, number]; target: [number, number, number]; fov: number };
 }
 const PARTS: Record<string, PartDef> = {
+  nose: {
+    // 车头正面朝着左前方的太阳（效果图里车头是亮的）。
+    sun: [-5, 6, 7],
+    build: () => {
+      const g = new Group();
+      const n = buildNose();
+      g.add(n);
+      // 车鼻子顶面（一块倾斜的厚板）和后面的车身，让轮廓完整。
+      const hood = new Mesh(new BoxGeometry(1.45, 0.08, 0.9), card(0xe3d4b6, 0.6));
+      hood.position.set(0, 1.46, -0.4);
+      hood.castShadow = hood.receiveShadow = true;
+      const body = new Mesh(new BoxGeometry(1.45, 1.5, 0.2), card(0xe3d4b6, 0.6));
+      body.position.set(0, 1.0, -0.6);
+      g.add(hood, body);
+      return g;
+    },
+    ref: './lab/ref-nose.jpg',
+    cam: { pos: [-1.35, 1.42, 1.95], target: [0.04, 0.98, 0.05], fov: 26 },
+  },
   wheel: {
     build: () => {
       const g = new Group();
@@ -44,6 +65,11 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 st.scene.add(ground);
 st.scene.add(def.build());
+if (def.sun) st.sun.position.set(...def.sun);
+if (part === 'nose') {
+  st.sun.intensity = 2.1;
+  st.renderer.toneMappingExposure = 0.88;
+}
 st.camera.fov = def.cam.fov;
 st.camera.position.set(...def.cam.pos);
 st.camera.updateProjectionMatrix();
