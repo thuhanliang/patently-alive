@@ -45,14 +45,15 @@ export function buildWheel(R = 0.42, seed = 3): Group {
   // 所有圈都用同一组 16 个角度（k·π/8），和八角轮辋的顶点（奇数 k）、边中点（偶数 k）对齐：
   // 内圈的内沿正好就是轮辋的八条边，一圈一圈之间是同一条折线，没有多出来的缝。
   const N = 16;
-  const rimR = R * 0.46;
+  // 量自效果图：白色八边形的高度（对边距 2·rimR·cos(π/8)）约占轮胎直径的 0.62。
+  const rimR = R * 0.67;
   const oct = (k: number): number => (k % 2 ? rimR : rimR * Math.cos(Math.PI / 8));
   const ang = (k: number): number => (k * Math.PI) / 8;
   const P = (rr: number, a: number, z: number): Vector3 => new Vector3(Math.cos(a) * rr, Math.sin(a) * rr, z);
   // 沿着两角之间的弦往里缩一点（砖缝），返回 [起点, 终点] 的角度微调。
   const shrink = (k: number, rr: number): [number, number] => [ang(k) + gap / rr, ang(k + 1) - gap / rr];
-  const rMid = R * 0.64;
-  const rSide = R * 0.8;
+  const rMid = R * 0.76;
+  const rSide = R * 0.86;
   for (let k = 0; k < N; k++) {
     // 内圈：内沿贴着八角轮辋（不留缝），外沿在 rMid。
     const [a0, a1] = shrink(k, rMid);
@@ -119,15 +120,15 @@ export function buildWheel(R = 0.42, seed = 3): Group {
   };
   const petals = new Group();
   for (let k = 0; k < 8; k++) {
-    const pm = new Mesh(bev(wedge(rimR * 0.12, rimR * 0.58, k, 0.005), 0.014, 0.005), [gold, goldDark]);
+    const pm = new Mesh(bev(wedge(rimR * 0.09, rimR * 0.42, k, 0.004), 0.014, 0.005), [gold, goldDark]);
     pm.position.z = 0.002;
     petals.add(pm);
-    const seg = new Mesh(bev(wedge(rimR * 0.6, rimR * 0.7, k, 0.003), 0.014, 0.004), [paperMaterial(0x5a4634, { scale: 0.1 }), paperMaterial(0x6a5440, { scale: 0.1 })]);
+    const seg = new Mesh(bev(wedge(rimR * 0.46, rimR * 0.69, k, 0.003), 0.014, 0.004), [paperMaterial(0x5a4634, { scale: 0.1 }), paperMaterial(0x6a5440, { scale: 0.1 })]);
     seg.position.z = -0.006;
     petals.add(seg);
   }
   petals.position.z = 0.0;
-  const boss = new Mesh(bev(ngon(8, rimR * 0.14, Math.PI / 8), 0.02, 0.006), [gold, goldDark]);
+  const boss = new Mesh(bev(ngon(8, rimR * 0.1, Math.PI / 8), 0.02, 0.006), [gold, goldDark]);
   boss.position.z = 0.008;
   const dome = new Mesh(new SphereGeometry(rimR * 0.05, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), goldDark);
   dome.rotation.x = Math.PI / 2;
