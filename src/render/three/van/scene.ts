@@ -28,7 +28,7 @@ import { paperGlobals, paperMaterial } from '../paper';
 import { plantMesh, plantUniforms, type PlantSpot } from '../plants';
 import { CARD, DEEP, SEA_LEVELS, bakeAo, buildRelief, cropField, levelTop, noise2, type ReliefField } from '../relief';
 import { buildVegetation, type IslandInput } from '../vegetation';
-import { V3, flat, mesh, card, rng } from '../craft';
+import { V3, flat, ink, mesh, card, rng } from '../craft';
 import { Van } from './van';
 
 /**
@@ -186,6 +186,7 @@ export class VanScene {
       m.position.y = -0.04 + i * 0.04;
       g.add(m);
     }
+    ink(g, 40, true);
     this.scene.add(g);
     const top = -0.04 + 4 * 0.04 + 0.04;
     // 车在最上面一层；把车抬到这一层上。
@@ -238,6 +239,7 @@ export class VanScene {
     const relief = buildRelief(crop, ao, island.input.seed, 0.45);
     const inner = new Group();
     inner.name = 'tray-island';
+    ink(relief.group, 40, true);
     inner.add(relief.group, buildVegetation(crop, island.input, true));
     // 托盘里的小岛不投影（太小，台灯的影子已经够了），只接收。
     inner.traverse((o) => {

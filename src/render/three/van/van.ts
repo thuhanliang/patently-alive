@@ -1,5 +1,5 @@
-import { type Group, type Mesh } from 'three';
-import { Pendulum, Spring } from '../craft';
+import { Vector3, type Group, type Mesh } from 'three';
+import { Pendulum, Spring, ink } from '../craft';
 import { bake } from './bake';
 import { buildVan, type VanParts } from './body';
 import { buildInterior, type Interior } from './interior';
@@ -37,11 +37,21 @@ export class Van {
       if (o) o.userData['noBake'] = true;
     };
     for (const l of [...p.lids, ...p.smallLids]) nb(l.parent?.parent);
+    for (const l of [...p.lids, ...p.smallLids]) nb(l.parent?.parent?.parent);
     for (const o of [...p.ears, ...p.doors, p.flap, p.awning, p.awningRoll, p.bell, p.letter, ...p.smoke, p.nearSide, p.interior]) nb(o);
     nb(p.tail.userData['tassel'] as Group);
     nb(p.vane.userData['top'] as Group);
     bake(p.root);
     bake(p.nearSide);
+    // 墨线：每一块纸的边、折痕都勾一条深褐色的细线（纸模型印刷的描边）。
+    ink(p.root);
+    // 很小的零件不投影（影子小得看不见，却每盏灯都要多画一遍）。
+    p.root.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      m.geometry.computeBoundingSphere();
+      if ((m.geometry.boundingSphere?.radius ?? 1) * o.getWorldScale(new Vector3()).x < 0.09) m.castShadow = false;
+    });
   }
 
   get root(): Group {
@@ -99,7 +109,7 @@ export class Van {
     const open = Math.max(0, this.lid - blink * this.lid);
     // 眼皮往下拉：盖住眼睛的比例 = 1 − 睁开（半闭时盖住一大半，像在打盹）。
     const cover = Math.min(1, Math.max(0.04, 1 - open * 0.9));
-    for (const l of [...p.lids, ...p.smallLids]) (l.userData['pivot'] as Group).scale.y = cover * 2;
+    for (const l of [...p.lids, ...p.smallLids]) (l.userData['set'] as (c: number) => void)(cover);
     this.earGoal = pinging ? 1 : 0;
     this.ear += (this.earGoal - this.ear) * k(pinging ? 16 : 3);
     p.ears.forEach((e, i) => {

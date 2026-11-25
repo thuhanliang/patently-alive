@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Matrix4, type Quaternion, Group, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry, Vector2, Vector3, CatmullRomCurve3, TubeGeometry, type Material } from 'three';
-import { paperMaterial } from '../paper';
-import { C, Rivets, V3, brassDark, brassMat, canvasTex, card, cardBox, dogOutline, flat, gold, hang, hex, hinge, merge, mesh, ngon, put, rng, rod, rolled, slab, stackRound, strip, twine } from '../craft';
+import { paperMaterial, printedPaper } from '../paper';
+import { C, Rivets, V3, bead, brassDark, brassMat, canvasTex, card, cardBox, dogOutline, flat, gold, hang, hex, hinge, merge, mesh, ngon, put, rng, rod, rolled, slab, stackRound, strip, twine } from '../craft';
 
 /**
  * 「勾勾」的车身（2026-11-25）：照 art/incoming/lovart/010 的设定图，一辆圆头圆脑的厢式车做成的卡纸模型。
@@ -120,12 +120,16 @@ export function buildVan(seed = 11): VanParts {
     if (side > 0) holes.push(at(ngon(8, 0.27, Math.PI / 8).map((p) => p.add(new Vector2(0.62, 1.86))), z));
     else holes.push(at(ngon(12, 0.17).map((p) => p.add(new Vector2(-0.95, 1.85))), z));
     // 墙往车里长厚度：+z 侧的法线朝 +z，所以点的顺序让法线朝外。
-    const wall = mesh(slab(side > 0 ? outline : [...outline].reverse(), T, side > 0 ? holes : holes.map((h) => [...h].reverse())), cream);
+    const wallG = slab(side > 0 ? outline : [...outline].reverse(), T, side > 0 ? holes : holes.map((h) => [...h].reverse()));
+    planarUv(wallG, (p) => [(p.x - XR) / (XF - XR), (p.y - 0.4) / 2.0]);
+    const wall = mesh(wallG, [printedPaper(wallPrint(side), 9), cream[1]!]);
     g.add(wall);
     // 下半截的灰蓝色带子，和几块颜色深浅不一的补丁纸（纸模型拼出来的样子）。
     // 层次：墙面 → 补丁纸和灰蓝带子（一层卡纸，平贴）→ 金卡纸条（压在上面）。
     const off = 0.006 * side;
-    const band = mesh(slab(side > 0 ? at(wallOutline(1.08), z + off) : at(wallOutline(1.08), z + off).reverse(), 0.006, [], false, 0.006), card(C.blue, 0.5));
+    const bandG = slab(side > 0 ? at(wallOutline(1.08), z + off) : at(wallOutline(1.08), z + off).reverse(), 0.006, [], false, 0.006);
+    planarUv(bandG, (p) => [(p.x - XR) / (XF - XR), (p.y - 0.4) / 0.7]);
+    const band = mesh(bandG, [printedPaper(bandPrint(), 9), card(C.blue, 0.5)[1]!]);
     g.add(band);
     const patches: Array<[number, number, number, number, number]> = [
       [-1.97, 1.12, -1.66, 1.66, C.creamLight],
@@ -139,8 +143,11 @@ export function buildVan(seed = 11): VanParts {
       [-1.97, 1.7, -1.66, 2.26, C.creamDark],
     ];
     for (const [x0, y0, x1, y1, col] of patches) {
-      const p = [V3(x0, y0, z + off), V3(x1, y0, z + off), V3(x1, y1, z + off), V3(x0, y1, z + off)];
-      g.add(mesh(slab(side > 0 ? p : p.reverse(), 0.006, [], false, 0.006), card(col, 0.4)));
+      // 手工贴的补丁：不完全正，四个角各差一两毫米。
+      const j = (): number => (rnd() - 0.5) * 0.012;
+      const p = [V3(x0 + j(), y0 + j(), z + off), V3(x1 + j(), y0 + j(), z + off), V3(x1 + j(), y1 + j(), z + off), V3(x0 + j(), y1 + j(), z + off)];
+      g.add(mesh(slab(side > 0 ? p : [...p].reverse(), 0.006, [], false, 0.006), card(col, 0.4)));
+      if ((x1 - x0) * (y1 - y0) > 0.12) g.add(bead(p.map((q) => q.clone().setZ(z + off * 2)), V3(0, 0, side), 0.035, 0.01, 0.003, col === C.peach ? 0xd9b98a : 0xd8c6a0));
       for (const [x, y] of [[x0 + 0.04, y0 + 0.04], [x1 - 0.04, y0 + 0.04], [x1 - 0.04, y1 - 0.04], [x0 + 0.04, y1 - 0.04]] as const) R.add(V3(x, y, z + off), V3(0, 0, side), 0.008);
     }
     // 黄铜包边：腰线、墙的上沿、竖缝、轮拱、窗框。
@@ -235,6 +242,7 @@ export function buildVan(seed = 11): VanParts {
     const n = V3(-1, 0, 0);
     const fr = [V3(-0.004, 0.68, -s * 0.05), V3(-0.004, 2.24, -s * 0.05), V3(-0.004, 2.24, -s * (w - 0.05)), V3(-0.004, 0.68, -s * (w - 0.05))];
     d.add(strip(fr, n, 0.04, 0.01, true));
+    d.add(bead([V3(-0.004, 0.72, -s * 0.09), V3(-0.004, 1.38, -s * 0.09), V3(-0.004, 1.38, -s * (w - 0.09)), V3(-0.004, 0.72, -s * (w - 0.09))], n, 0.02, 0.01, 0.003, C.creamDark));
     d.add(strip([V3(-0.004, 1.42, -s * 0.05), V3(-0.004, 1.42, -s * (w - 0.05))], n, 0.035, 0.01));
     // 门上的小窗。
     const win = [V3(-0.006, 1.6, -s * 0.18), V3(-0.006, 2.1, -s * 0.18), V3(-0.006, 2.1, -s * 0.6), V3(-0.006, 1.6, -s * 0.6)];
@@ -304,21 +312,11 @@ export function buildVan(seed = 11): VanParts {
     const glass = mesh(flat(ngon(8, 0.25, Math.PI / 8), 0.01), [eyeGlass, eyeGlass], false);
     placeOnFace(glass, fp(z, y, -0.01), faceN);
     root.add(glass);
-    // 眼皮：铰链在上沿，往外翻开；半闭是默认。
-    const lidMount = new Group();
-    placeOnFace(lidMount, fp(z, y, 0.035), faceN);
-    const lidPivot = new Group();
-    lidPivot.position.y = 0.25;
-    lidMount.add(lidPivot);
-    // 眼皮：上半个八角（直的下沿），挂在眼睛的上沿；往下拉就是闭眼（按高度缩放）。
-    const lidShape = halfOct(0.255).map((p) => new Vector2(p.x, p.y - 0.255));
-    const lid = mesh(flat(lidShape, 0.022), [brassMat, brassDark]);
-    // 眼皮上一道压出来的线，铰链一根。
-    lidPivot.add(lid);
-    lidMount.add(rod(V3(-0.12, 0.27, 0.02), V3(0.12, 0.27, 0.02), 0.016, brassDark));
-    root.add(lidMount);
-    lids.push(lid);
-    (lid as Mesh & { pivot?: Group }).userData['pivot'] = lidPivot;
+    // 眼皮：一副卷帘。顶上一卷，几条纸板条用细绳串着往下放，两边各一条导轨，最下面一根铜杆压着。
+    const sh = shutter(0.5, 0.5, 10, 0.034);
+    placeOnFace(sh.group, fp(z, y, 0.045), faceN);
+    root.add(sh.group);
+    lids.push(sh.handle);
     for (const k of [0, 2, 4, 6]) {
       const a = Math.PI / 8 + (k / 8) * Math.PI * 2;
       rv.add(fp(z + Math.cos(a) * 0.275, y + Math.sin(a) * 0.275, 0.05), faceN, 0.012);
@@ -365,16 +363,10 @@ export function buildVan(seed = 11): VanParts {
     const lampGlass = mesh(flat(ngon(6, 0.088, 0), 0.02), [eyeGlass, eyeGlass], false);
     placeOnFace(lampGlass, fp(s * 0.66, 1.2, 0.012), faceN);
     root.add(lampGlass);
-    const mount = new Group();
-    placeOnFace(mount, fp(s * 0.66, 1.2, 0.04), faceN);
-    const pv = new Group();
-    pv.position.y = 0.088;
-    mount.add(pv);
-    const sl = mesh(flat(halfHex(0.09).map((p) => new Vector2(p.x, p.y - 0.09)), 0.016), [brassMat, brassDark]);
-    pv.add(sl);
-    sl.userData['pivot'] = pv;
-    root.add(mount);
-    smallLids.push(sl);
+    const ssh = shutter(0.2, 0.18, 5, 0.018);
+    placeOnFace(ssh.group, fp(s * 0.66, 1.2, 0.045), faceN);
+    root.add(ssh.group);
+    smallLids.push(ssh.handle);
     for (let k = 0; k < 3; k++) {
       const a = fp(s * 0.48, 0.98 + k * 0.05, 0.03);
       const b = a.clone().add(V3(0.08 - k * 0.02, 0.06 - k * 0.07, s * (0.34 + k * 0.04)));
@@ -828,4 +820,203 @@ function halfOct(r: number): Vector2[] {
 /** 上半个正六角（平底在 y=0）。 */
 function halfHex(r: number): Vector2[] {
   return [new Vector2(r, 0), new Vector2(r / 2, r * 0.866), new Vector2(-r / 2, r * 0.866), new Vector2(-r, 0)];
+}
+
+/**
+ * 卷帘（眼皮）：宽 w、高 h（窗洞上沿在 y = h/2，下沿在 -h/2），n 条纸板条。
+ * 返回的 handle.userData.set(cover) 放下来盖住 cover（0–1）：放下的板条一条条露出来，顶上的卷随之变细。
+ */
+function shutter(w: number, h: number, n: number, rollR: number): { group: Group; handle: Mesh } {
+  const g = new Group();
+  const slatH = h / n;
+  const slats: Group[] = [];
+  const cols = [C.creamLight, C.peach];
+  for (let i = 0; i < n; i++) {
+    const sg = new Group();
+    const slat = cardBox(w, slatH * 0.92, 0.008, cols[i % 2]!, 0.2);
+    slat.position.y = -slatH / 2;
+    // 每条板上压一道凹线（印的）：一窄条深一点的纸。
+    const groove = cardBox(w * 0.96, slatH * 0.12, 0.002, 0xcbb48c, 0.2);
+    groove.position.set(0, -slatH * 0.5, 0.005);
+    sg.add(slat, groove);
+    sg.position.y = h / 2 - i * slatH;
+    g.add(sg);
+    slats.push(sg);
+  }
+  // 两边的导轨（金卡纸槽）、顶上的卷（条纹的纸卷 + 两个铜帽）、底下的压杆。
+  for (const sx of [-1, 1]) {
+    const rail = cardBox(0.016, h + 0.04, 0.02, 0xc99d4e, 0.2);
+    rail.material = gold;
+    rail.position.set(sx * (w / 2 + 0.006), 0, 0.004);
+    g.add(rail);
+  }
+  const roll = new Group();
+  roll.position.set(0, h / 2 + rollR * 0.8, 0.02);
+  const rollBody = new Mesh(new CylinderGeometry(1, 1, w, 18), paperMaterial(C.creamLight, { scale: 0.1 }));
+  rollBody.rotation.z = Math.PI / 2;
+  rollBody.castShadow = true;
+  roll.add(rollBody);
+  for (const sx of [-1, 1]) {
+    const cap = new Mesh(new CylinderGeometry(rollR * 1.3, rollR * 1.3, 0.012, 18), brassMat);
+    cap.rotation.z = Math.PI / 2;
+    cap.position.x = sx * (w / 2 + 0.006);
+    roll.add(cap);
+  }
+  g.add(roll);
+  const bar = rod(V3(-w / 2, 0, 0.012), V3(w / 2, 0, 0.012), 0.009, brassMat);
+  g.add(bar);
+  const handle = rollBody;
+  handle.userData['set'] = (cover: number): void => {
+    const shown = Math.max(0.15, Math.min(n, cover * n));
+    slats.forEach((sl, i) => {
+      const f = Math.max(0, Math.min(1, shown - i));
+      sl.visible = f > 0;
+      sl.scale.y = f;
+    });
+    bar.position.y = h / 2 - shown * slatH;
+    const r = rollR * (0.55 + 0.45 * (1 - shown / n));
+    rollBody.scale.set(r, 1, r);
+  };
+  (handle.userData['set'] as (c: number) => void)(0.5);
+  return { group: g, handle };
+}
+
+/** 把几何正面（第 0 组）的纹理坐标改成按位置算的（印刷图铺在整面墙上）。 */
+function planarUv(g: BufferGeometry, f: (p: Vector3) => [number, number]): void {
+  const pos = g.getAttribute('position');
+  const uv = g.getAttribute('uv');
+  const n = g.groups[0]?.count ?? pos.count;
+  const p = new Vector3();
+  for (let i = 0; i < n; i++) {
+    p.fromBufferAttribute(pos, i);
+    const [u, v] = f(p);
+    uv.setXY(i, u, v);
+  }
+  uv.needsUpdate = true;
+}
+
+const printCache = new Map<string, ReturnType<typeof canvasTex>>();
+/**
+ * 车身墙面的印刷图（像纸模型图纸上印好的）：底色、纸上一点点斑驳、压在金边下面的阴影、
+ * 板缝（细的双线）、车尾一组百叶、驾驶室门的门缝和小把手、轮拱上方一圈淡淡的阴影。
+ * 横向是车长（XR → XF），纵向 y 从 0.4 到 2.4。
+ */
+function wallPrint(side: number): ReturnType<typeof canvasTex> {
+  const key = `wall${side}`;
+  const hit = printCache.get(key);
+  if (hit) return hit;
+  const W = 2048;
+  const H = 1024;
+  const X = (x: number): number => ((x - XR) / (XF - XR)) * W;
+  const Y = (y: number): number => H - ((y - 0.4) / 2.0) * H;
+  const t = canvasTex(W, H, (g) => {
+    g.fillStyle = '#ece0c2';
+    g.fillRect(0, 0, W, H);
+    // 纸的斑驳：几百个淡淡的大斑。
+    const r = rng(side > 0 ? 3 : 4);
+    for (let i = 0; i < 260; i++) {
+      g.fillStyle = `rgba(${r() < 0.5 ? '120,90,50' : '255,250,235'},${0.025 + r() * 0.03})`;
+      g.beginPath();
+      g.ellipse(r() * W, r() * H, 20 + r() * 90, 10 + r() * 50, r() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    // 压在金边下面的阴影（上沿、腰线下面）。
+    const shade = (y: number, down: boolean, k = 40): void => {
+      const gr = g.createLinearGradient(0, Y(y), 0, Y(y) + (down ? k : -k));
+      gr.addColorStop(0, 'rgba(90,60,30,0.28)');
+      gr.addColorStop(1, 'rgba(90,60,30,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, Math.min(Y(y), Y(y) + (down ? k : -k)), W, k);
+    };
+    shade(WALL_TOP - 0.03, true, 50);
+    shade(1.11, true, 34);
+    shade(1.05, false, 24);
+    // 板缝：细的双线（压痕），每块板之间一条。
+    g.strokeStyle = 'rgba(110,80,45,0.45)';
+    g.lineWidth = 2;
+    for (const x of [-1.22, -0.42, 0.62]) {
+      for (const dx of [-3, 3]) {
+        g.beginPath();
+        g.moveTo(X(x) + dx, Y(1.12));
+        g.lineTo(X(x) + dx, Y(2.25));
+        g.stroke();
+      }
+    }
+    // 车尾的百叶：一排斜的短条，每条上亮下暗。
+    for (let i = 0; i < 9; i++) {
+      const y = 1.6 + i * 0.05;
+      g.fillStyle = 'rgba(90,60,30,0.35)';
+      g.fillRect(X(-1.95), Y(y), X(-1.7) - X(-1.95), 5);
+      g.fillStyle = 'rgba(255,250,235,0.6)';
+      g.fillRect(X(-1.95), Y(y) - 4, X(-1.7) - X(-1.95), 3);
+    }
+    g.strokeStyle = 'rgba(110,80,45,0.5)';
+    g.strokeRect(X(-1.97), Y(2.05), X(-1.68) - X(-1.97), Y(1.56) - Y(2.05));
+    // 驾驶室门：门缝（一圈细线）和一个印的把手阴影。
+    g.strokeStyle = 'rgba(100,70,40,0.55)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(X(1.26), Y(1.12));
+    g.lineTo(X(1.26), Y(2.1));
+    g.quadraticCurveTo(X(1.3), Y(2.18), X(1.4), Y(2.16));
+    g.stroke();
+    g.fillStyle = 'rgba(90,60,30,0.35)';
+    g.fillRect(X(1.32), Y(1.42), 40, 10);
+    // 轮拱上方一圈阴影。
+    for (const wx of [-1.25, 1.45]) {
+      const gr = g.createRadialGradient(X(wx), Y(0.42), 10, X(wx), Y(0.42), X(wx + 0.75) - X(wx));
+      gr.addColorStop(0.6, 'rgba(90,60,30,0.18)');
+      gr.addColorStop(1, 'rgba(90,60,30,0)');
+      g.fillStyle = gr;
+      g.fillRect(X(wx - 0.8), Y(1.2), X(wx + 0.8) - X(wx - 0.8), Y(0.4) - Y(1.2));
+    }
+    // 角落里一点手写的铅笔记号（制作时留下的）。
+    g.strokeStyle = 'rgba(80,70,60,0.35)';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(X(-1.9), Y(2.2));
+    g.lineTo(X(-1.82), Y(2.2));
+    g.moveTo(X(-1.9), Y(2.2));
+    g.lineTo(X(-1.9), Y(2.12));
+    g.stroke();
+  });
+  printCache.set(key, t);
+  return t;
+}
+
+/** 灰蓝色带的印刷图：底色、上沿的阴影、一排印出来的细横纹、下沿脏一点。 */
+function bandPrint(): ReturnType<typeof canvasTex> {
+  const hit = printCache.get('band');
+  if (hit) return hit;
+  const t = canvasTex(2048, 512, (g) => {
+    g.fillStyle = '#b5c9cc';
+    g.fillRect(0, 0, 2048, 512);
+    let gr = g.createLinearGradient(0, 0, 0, 120);
+    gr.addColorStop(0, 'rgba(60,70,70,0.3)');
+    gr.addColorStop(1, 'rgba(60,70,70,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 2048, 120);
+    gr = g.createLinearGradient(0, 512, 0, 330);
+    gr.addColorStop(0, 'rgba(110,90,60,0.35)');
+    gr.addColorStop(1, 'rgba(110,90,60,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 330, 2048, 182);
+    g.strokeStyle = 'rgba(255,255,255,0.25)';
+    g.lineWidth = 2;
+    for (let y = 150; y < 320; y += 34) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(2048, y);
+      g.stroke();
+    }
+    const r = rng(9);
+    for (let i = 0; i < 160; i++) {
+      g.fillStyle = `rgba(120,100,70,${0.04 + r() * 0.06})`;
+      g.beginPath();
+      g.ellipse(r() * 2048, 380 + r() * 130, 6 + r() * 30, 3 + r() * 10, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+  printCache.set('band', t);
+  return t;
 }

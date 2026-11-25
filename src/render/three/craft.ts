@@ -1,5 +1,8 @@
 import {
   BufferAttribute,
+  EdgesGeometry,
+  LineBasicMaterial,
+  LineSegments,
   CatmullRomCurve3,
   TubeGeometry,
   Group,
@@ -226,11 +229,21 @@ export function lift(pts: Vector2[], origin: Vector3, u: Vector3, v: Vector3): V
 }
 
 /** 一块长方体的卡纸（盒子），两种材质：面和断面。 */
-export function cardBox(w: number, h: number, d: number, color: number, scale = 0.5, kind: 'card' | 'kraft' | 'wood' = 'card', ply = PLY): Mesh {
-  // 厚的块是一层层灰纸板粘起来的：断面上每隔一个板厚就有一道分层线。
+/**
+ * 一个盒子。纸模型里的盒子是一张纸折出来的：六个面都是纸面，棱是折痕（墨线画出来），不是一层层的断面。
+ * 薄（d 小于两张卡纸厚）的才算一张纸，四边露断面；ply 给了就当成层层粘起来的厚块（少数地方才这么做）。
+ */
+export function cardBox(w: number, h: number, d: number, color: number, scale = 0.5, kind: 'card' | 'kraft' | 'wood' = 'card', ply?: number): Mesh {
   const pts = [V3(-w / 2, -h / 2, d / 2), V3(w / 2, -h / 2, d / 2), V3(w / 2, h / 2, d / 2), V3(-w / 2, h / 2, d / 2)];
-  return mesh(slab(pts, d, [], false, Math.min(d, ply)), card(color, scale, kind));
+  const m = card(color, scale, kind);
+  if (ply !== undefined) return mesh(slab(pts, d, [], false, Math.min(d, ply)), m);
+  if (Math.min(w, h, d) <= THIN) return mesh(slab(pts, d, [], false, Math.min(w, h, d)), m);
+  // 折出来的盒子：侧面也用纸面的材质。
+  return mesh(slab(pts, d, [], false, d), [m[0]!, m[0]!]);
 }
+
+/** 一张纸算"薄"的上限（米）：比这个薄的露纸的断面，比这个厚的是折出来的盒子。 */
+export const THIN = 0.012;
 
 /** 金卡纸（覆膜的卡纸：正面有一点金属光，断面是白色的纸芯）。 */
 export const gold: Material[] = [paperMaterial(0xc99d4e, { kind: 'card', scale: 0.3, metal: 0.55 }), paperMaterial(0xc99d4e, { edge: true, core: 0.75 })];
@@ -670,4 +683,68 @@ export function hang(a: Vector3, b: Vector3, sag: number, seg = 16): CatmullRomC
     pts.push(new Vector3().lerpVectors(a, b, t).add(V3(0, -4 * sag * t * (1 - t), 0)));
   }
   return new CatmullRomCurve3(pts);
+}
+
+// ———— 墨线和压边（2026-11-26） ————
+
+const inkMat = new LineBasicMaterial({ color: 0x3e2a1c, transparent: true, opacity: 0.78 });
+const inkSoft = new LineBasicMaterial({ color: 0x5a4430, transparent: true, opacity: 0.4 });
+
+/**
+ * 给一组里的每个网格勾一圈墨线（折痕、纸边、轮廓）：纸模型印刷时沿边描的那条深色细线。
+ * angle：面和面夹角大于这个（度）才画线；会动的零件也能勾，线跟着网格走。
+ */
+export function ink(group: Object3D, angle = 28, soft = false): void {
+  // 线按"会一起动的一组"合并：一组只画一次。组的边界是 group 本身和标了 noBake / inkRoot 的子树（门、抽屉、盖子……）。
+  group.updateWorldMatrix(true, true);
+  const buckets = new Map<Object3D, number[]>();
+  const rootOf = (o: Object3D): Object3D => {
+    let p: Object3D | null = o.parent;
+    while (p && p !== group && !p.userData['noBake'] && !p.userData['inkRoot']) p = p.parent;
+    return p ?? group;
+  };
+  const inv = new Matrix4();
+  const M = new Matrix4();
+  const v = new Vector3();
+  group.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh || (o as { isInstancedMesh?: boolean }).isInstancedMesh || o.userData['noInk']) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    if (mats.some((x) => x.transparent)) return;
+    const e = new EdgesGeometry(m.geometry, angle);
+    const pos = e.getAttribute('position');
+    if (pos.count === 0) return;
+    const r = rootOf(m);
+    inv.copy(r.matrixWorld).invert();
+    M.multiplyMatrices(inv, m.matrixWorld);
+    let arr = buckets.get(r);
+    if (!arr) buckets.set(r, (arr = []));
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(M);
+      arr.push(v.x, v.y, v.z);
+    }
+    e.dispose();
+  });
+  for (const [r, arr] of buckets) {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new BufferAttribute(new Float32Array(arr), 3));
+    const l = new LineSegments(g, soft ? inkSoft : inkMat);
+    l.userData['noInk'] = true;
+    l.raycast = () => {};
+    r.add(l);
+  }
+}
+
+/**
+ * 压边：沿一圈轮廓往里缩 inset，贴一条细细的凸棱（一窄条纸，比底下高一张纸）。
+ * 一块平板四周有了这一圈，立刻就有"做出来的"细节感。轮廓点在平板正面上，n 是正面的法线。
+ */
+export function bead(outline: Vector3[], n: Vector3, inset = 0.03, w = 0.012, h = 0.004, color = 0xe2d2b0): Mesh {
+  const c = outline.reduce((a, p) => a.add(p), new Vector3()).multiplyScalar(1 / outline.length);
+  const pts = outline.map((p) => {
+    const d = new Vector3().subVectors(c, p);
+    const len = d.length();
+    return p.clone().addScaledVector(d.normalize(), Math.min(inset * 1.15, len * 0.4));
+  });
+  return strip(pts, n, w, h, true, card(color, 0.3));
 }

@@ -299,6 +299,10 @@ export function paperMaterial(
   const m = new MeshStandardMaterial({
     side: DoubleSide,
     shadowSide: DoubleSide,
+    // 墨线（ink）画在纸的边上：纸面往后让一点点，线才不会一半埋进纸里。
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
     color: c,
     roughness: opts.metal ? 0.42 : 1,
     metalness: opts.metal ?? 0,
@@ -475,4 +479,30 @@ function toVecs(points: ArrayLike<number>): Vector2[] {
 /** 一片没有洞的薄纸（纸偶零件、植物）。 */
 export function thinPiece(points: ArrayLike<number>, depth: number, geom?: BufferGeometry): BufferGeometry {
   return sheetGeometry([{ outer: points }], depth, geom);
+}
+
+/**
+ * 印了图案的纸（2026-11-26）：纸模型的细节大半是"印"上去的——板缝、百叶、木纹、格子布、窗帘、阴影。
+ * print 是一张铺满整个面的图（纹理坐标 0–1，几何要用 fitUv 生成），纸纹（法线、粗糙度）照样按 repeat 平铺在上面。
+ */
+export function printedPaper(print: Texture, repeat: number, kind: PaperKind = 'card', metal = 0): MeshStandardMaterial {
+  const maps = mapsOf(kind);
+  const nrm = maps.normal.clone();
+  nrm.repeat.set(repeat, repeat * 0.7);
+  nrm.needsUpdate = true;
+  const rough = maps.rough.clone();
+  rough.repeat.copy(nrm.repeat);
+  rough.needsUpdate = true;
+  return new MeshStandardMaterial({
+    map: print,
+    normalMap: nrm,
+    normalScale: new Vector2(0.8, 0.8),
+    roughnessMap: rough,
+    roughness: metal ? 0.45 : 1,
+    metalness: metal,
+    side: DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
 }

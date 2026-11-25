@@ -29,6 +29,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { HorizontalTiltShiftShader } from 'three/examples/jsm/shaders/HorizontalTiltShiftShader.js';
 import { VerticalTiltShiftShader } from 'three/examples/jsm/shaders/VerticalTiltShiftShader.js';
 import { TERRAIN } from '../../sim/terrain';
+import { ink } from './craft';
 import { MapCamera } from './mapCamera';
 import { paperGlobals, paperMaterial, thinPiece } from './paper';
 import { buildVegetation, type IslandInput } from './vegetation';
@@ -119,6 +120,8 @@ export class Island3D {
     this.field = field ?? reliefField(inp);
     const ao = bakeAo(this.field, inp.seed);
     const relief = buildRelief(this.field, ao, inp.seed);
+    // 每一层纸的边勾一条淡淡的墨线（等高线就是纸的切口）。
+    ink(relief.group, 40, true);
     this.scene.add(relief.group);
     this.foam = relief.foam;
     for (const l of relief.layers) if (l.level < 0) this.water.push(l);
