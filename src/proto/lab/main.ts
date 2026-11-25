@@ -51,10 +51,15 @@ const PARTS: Record<string, PartDef> = {
       return g;
     },
     ref: './lab/ref-wheel.jpg',
-    cam: { pos: [-1.55, 0.8, 1.75], target: [0.0, 0.4, 0], fov: 26 },
+    cam: { pos: [-1.05, 0.85, 2.05], target: [0.02, 0.42, 0], fov: 26 },
   },
 };
 const def = PARTS[part] ?? PARTS['wheel']!;
+// ?cam=px,py,pz,tx,ty,tz,fov：对镜头用（叠图对齐时一轮轮改）。
+if (q.get('cam')) {
+  const v = q.get('cam')!.split(',').map(Number);
+  def.cam = { pos: [v[0]!, v[1]!, v[2]!], target: [v[3]!, v[4]!, v[5]!], fov: v[6] ?? def.cam.fov };
+}
 const ref = document.getElementById('ref')!;
 if (q.get('ref') === '0') ref.classList.add('off');
 else ref.style.backgroundImage = `url(${def.ref})`;
