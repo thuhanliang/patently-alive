@@ -1543,10 +1543,10 @@ function cargoSideSkin(g: Group, s: number): void {
       g,
       s,
       x + LT,
-      rectZY(za - 0.03, zb + 0.03, ya - 0.03, yb + 0.03),
+      rectZY(za + 0.03, zb - 0.03, ya - 0.03, yb + 0.03),
       [gold, goldDark],
       0.006,
-      [rectZY(za + 0.01, zb - 0.01, ya + 0.01, yb - 0.01)],
+      [rectZY(za - 0.01, zb + 0.01, ya + 0.01, yb - 0.01)],
     );
   };
   if (s > 0) {
