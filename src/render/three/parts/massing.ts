@@ -701,11 +701,18 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     const m = solid(geo, 0xd9c4a1);
     m.position.set(-hx, 0, 5.604);
     pivot.add(m);
+    if (card && STAGE >= 4) {
+      // 门面上的纸跟着门一起转（装在关门时的位置上，再挂到铰链上）
+      const deco = doorDeco(hx < 0 ? -D.hw : 0, hx < 0 ? 0 : D.hw);
+      deco.position.set(-hx, 0, 5.604);
+      pivot.add(deco);
+    }
     pivot.rotation.y = angle;
     g.add(pivot);
   };
   door(c.doorLeft, -D.hw, 0);
   door(c.doorRight, D.hw, open * (-Math.PI / 2) * 0.95);
+  if (card && STAGE >= 4) rearSkin(g);
   if (card) addDetails(g, open, c);
   else {
     const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
@@ -1551,4 +1558,85 @@ function cargoSideSkin(g: Group, s: number): void {
     panel(-2.7, -5.25, 0.98, 1.36, xl);
     sideSheet(g, s, xl, rectZY(z0, z1, 0.36, 0.92), C_PEACH);
   }
+}
+
+/** 朝 −z 的面（车尾）上贴一层纸：轮廓在 (x, y)，面在 z0，往外（−z）厚 t。 */
+function backSheet(
+  g: Group,
+  z0: number,
+  pts: Array<[number, number]>,
+  color: number | Material[],
+  t = LT,
+  holes: Array<Array<[number, number]>> = [],
+): void {
+  const m = frontSheet(g, 0, pts, color, t, holes);
+  m.scale.z = -1;
+  m.position.z = z0;
+}
+
+/**
+ * 后门（双开门，后视图读的）：每扇门一圈金框；上部一扇小窗（深色玻璃 + 金框）；下部一块灰绿板；靠中缝一个金把手。
+ * 坐标是关门时的世界坐标（门外表面 z = −5.604 − 整纸）。
+ */
+function doorDeco(x0: number, x1: number): Group {
+  const g = new Group();
+  const z = -5.604 - L0;
+  const D = REAR_DOOR;
+  backSheet(
+    g,
+    z,
+    rectXY(x0 + 0.02, x1 - 0.02, D.y0 + 0.04, D.y1 - 0.03),
+    [gold, goldDark],
+    0.006,
+    [rectXY(x0 + 0.055, x1 - 0.055, D.y0 + 0.075, D.y1 - 0.065)],
+  );
+  backSheet(g, z, rectXY(x0 + 0.1, x1 - 0.1, 1.62, 2.02), 0x4a4036, 0.004);
+  backSheet(
+    g,
+    z - 0.004,
+    rectXY(x0 + 0.08, x1 - 0.08, 1.6, 2.04),
+    [gold, goldDark],
+    0.006,
+    [rectXY(x0 + 0.1, x1 - 0.1, 1.62, 2.02)],
+  );
+  backSheet(g, z, rectXY(x0 + 0.1, x1 - 0.1, 0.92, 1.42), C_GREEN);
+  const hx = x0 < -0.01 ? x1 - 0.06 : x0 + 0.06;
+  backSheet(
+    g,
+    z - LT,
+    rectXY(hx - 0.015, hx + 0.015, 1.3, 1.46),
+    [gold, goldDark],
+    0.02,
+  );
+  return g;
+}
+
+/** 车尾（门以外的部分）：两只六边形红尾灯（金边），门洞上沿一根金楣。 */
+function rearSkin(g: Group): void {
+  const z = -5.604 - L0;
+  const hex = (cx: number, cy: number, r: number): Array<[number, number]> =>
+    Array.from(
+      { length: 6 },
+      (_, k) =>
+        [
+          cx + r * Math.cos((k * Math.PI) / 3),
+          cy + r * Math.sin((k * Math.PI) / 3),
+        ] as [number, number],
+    );
+  for (const s of [-1, 1]) {
+    backSheet(g, z, hex(s * 0.74, 0.62, 0.11), [gold, goldDark], 0.01);
+    backSheet(g, z - 0.01, hex(s * 0.74, 0.62, 0.08), 0xb5523a, 0.012);
+  }
+  backSheet(
+    g,
+    z,
+    rectXY(
+      -REAR_DOOR.hw - 0.06,
+      REAR_DOOR.hw + 0.06,
+      REAR_DOOR.y1 + 0.01,
+      REAR_DOOR.y1 + 0.06,
+    ),
+    [gold, goldDark],
+    0.006,
+  );
 }
