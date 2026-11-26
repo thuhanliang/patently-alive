@@ -1,5 +1,6 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Matrix4, CanvasTexture, RepeatWrapping, SRGBColorSpace, SphereGeometry, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
 import { cardify } from './cardify';
+import { L0, LT, octZY as oct8, rectZY, sideGold, sideRivet, sideSheet } from './skin';
 import { headlamp } from './nose';
 import { buildWheel } from './wheel';
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
@@ -399,6 +400,10 @@ export function buildMassing(open = 1, card = false): Group {
 /** 细节件（之前做好的部件，按三视图量的位置装到体块上）：车轮、大灯、挡风玻璃的玻璃和卷帘眼皮。 */
 function addDetails(g: Group, open: number, c: Carved): void {
   addDetails2(g, open, c);
+  for (const s of [-1, 1]) {
+    noseSideSkin(g, s);
+    cabSideSkin(g, s);
+  }
   // 车轮：轮胎砖块 + 八角轮毂（wheel.ts），装在车轴上
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
@@ -539,13 +544,8 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   g.add(cap);
   rod(new Vector3(0.3, 2.65 + 0.36, -4.58), new Vector3(0.3, 2.65 + 0.5, -4.58), 0.006, brassM);
   // 旗帜：驾驶室 + 货箱前段侧面一排小三角旗（z −1.12 ~ −2.4，到开口前为止），挂在一根细绳上，绳两端钉在车身上
-  for (const s of [1]) {
-    const xw = s * (halfWidth(1.2) + 0.016);
-    // 灰绿腰带：驾驶室侧面腰线下一条长拼板（贴在侧墙卡纸外面），旗子挂在它上面
-    const band = new Mesh(new BoxGeometry(0.008, 0.3, 1.36), new MeshStandardMaterial({ color: 0xc9cfbd, roughness: 0.9 }));
-    band.position.set(xw - 0.002, 1.23, -1.74);
-    band.castShadow = band.receiveShadow = true;
-    g.add(band);
+  for (const s of [-1, 1]) {
+    const xw = s * (halfWidth(1.2) + L0 + 2 * LT + 0.006); // 挂在腰带外面的金条上
     rod(new Vector3(xw + 0.006, 1.34, -1.12), new Vector3(xw + 0.006, 1.34, -2.38), 0.004, brassM);
     for (let z = -1.2; z > -2.38; z -= 0.24) {
       const fl = new Shape();
@@ -635,4 +635,82 @@ function paintBody(c: Vector3, n: Vector3): number {
   if (Math.abs(n.x) > 0.7 && c.y < 1.4) return 0xe8d6b4; // 腰线以下的侧墙
   if (Math.abs(n.x) > 0.7) return 0xf2e5cc; // 腰线以上的侧墙
   return 0xece0c6; // 其它（斜面、后墙、内壁）
+}
+
+/**
+ * 车鼻子侧面（z 0.05 ~ −0.9，腰线以下 x = 1.02）：设计图侧视里是三列竖向的板，列与列之间压金条加铆钉；
+ * 第一列是灰绿的大板（外围一圈桃色底），第二列是一摞横的小板，第三列是一块整奶油板；下面一条桃色保险杠带。
+ */
+const C_CREAM = 0xf2e5cc;
+const C_CREAM2 = 0xeedcbc;
+const C_PEACH = 0xe8c8a0;
+const C_GREEN = 0xc5ccb8;
+const C_SAND = 0xdcc49a;
+function noseSideSkin(g: Group, s: number): void {
+  const x1 = halfWidth(1.0) + L0; // 第 1 层贴在这里
+  const x2 = x1 + LT;
+  // 保险杠带（底下）
+  sideSheet(g, s, x1, rectZY(0.04, -0.86, 0.34, 0.6), C_PEACH);
+  sideGold(g, s, x2, 0.04, -0.86, 0.58, 0.615, 0.28);
+  // 第一列：桃色底 + 灰绿大板
+  sideSheet(g, s, x1, rectZY(0.0, -0.44, 0.63, 1.36), C_PEACH);
+  sideSheet(g, s, x2, rectZY(-0.06, -0.38, 0.68, 1.31), C_GREEN);
+  // 金条（列之间）+ 前角金条
+  sideGold(g, s, x1, 0.045, 0.0, 0.34, 1.42, 0.3);
+  sideGold(g, s, x1, -0.44, -0.49, 0.62, 1.38, 0.26);
+  // 第二列：一摞横的小板
+  const rows = [0.63, 0.82, 1.0, 1.19, 1.37];
+  for (let i = 0; i < rows.length - 1; i++) sideSheet(g, s, x1, rectZY(-0.5, -0.74, rows[i]! + 0.004, rows[i + 1]! - 0.004), i % 2 ? C_CREAM2 : C_PEACH);
+  sideGold(g, s, x1, -0.745, -0.77, 0.62, 1.38, 0.0);
+  // 第三列：整块奶油板（避开轮眉）+ 内框
+  sideSheet(g, s, x1, [[-0.775, 0.63], [-0.86, 0.63], [-0.86, 1.37], [-0.775, 1.37]], C_CREAM);
+  // 顶上沿：引擎盖下沿一根金条
+  sideGold(g, s, x1, 0.04, -0.9, 1.38, 1.42, 0.0);
+}
+
+/**
+ * 驾驶室侧面（z −0.9 ~ −2.44）：
+ * - 腰线以下（x 1.02）：一条灰绿腰带（y 1.09 ~ 1.38），上沿金条带一排铆钉，小旗挂在金条上；腰带下一条窄金条压在轮眉上方。
+ * - 腰线以上（x 0.93）：灰绿底板上一个奶油色的方框（四条厚纸板条），框里是舷窗：奶油色八角圈 + 金框；顶上一条奶油横板 + 金条（顶梁）；
+ *   前面靠挡风玻璃一条竖金条（A 柱后沿）。
+ */
+function cabSideSkin(g: Group, s: number): void {
+  const xl = halfWidth(1.2) + L0;
+  const xu = halfWidth(1.9) + L0;
+  // 腰线以下
+  sideSheet(g, s, xl, rectZY(-0.88, -2.42, 1.09, 1.38), C_GREEN);
+  sideGold(g, s, xl + LT, -0.88, -2.42, 1.35, 1.395, 0.24);
+  sideGold(g, s, xl, -0.88, -2.42, 1.065, 1.09, 0.0);
+  // 轮眉后面那一小段车身：沙色板
+  sideSheet(g, s, xl, rectZY(-2.2, -2.42, 0.36, 1.06), C_SAND);
+  // 腰线以上：灰绿底板
+  sideSheet(g, s, xu, rectZY(-1.02, -2.42, 1.5, 2.26), C_GREEN);
+  // 奶油方框（四条板）
+  const fz0 = -1.24;
+  const fz1 = -2.3;
+  const fy0 = 1.5;
+  const fy1 = 2.26;
+  const bw = 0.08;
+  sideSheet(g, s, xu + LT, rectZY(fz0, fz0 - bw, fy0, fy1), C_CREAM);
+  sideSheet(g, s, xu + LT, rectZY(fz1 + bw, fz1, fy0, fy1), C_CREAM);
+  sideSheet(g, s, xu + LT, rectZY(fz0 - bw, fz1 + bw, fy0, fy0 + 0.07), C_CREAM);
+  sideSheet(g, s, xu + LT, rectZY(fz0 - bw, fz1 + bw, fy1 - 0.07, fy1), C_CREAM);
+  for (const [z, y] of [
+    [fz0 - bw / 2, fy0 + 0.04],
+    [fz0 - bw / 2, fy1 - 0.04],
+    [fz1 + bw / 2, fy0 + 0.04],
+    [fz1 + bw / 2, fy1 - 0.04],
+  ] as const)
+    sideRivet(g, s, xu + 2 * LT, z, y, 0.012);
+  // 舷窗外圈：奶油色八角圈（挖掉中间）
+  sideSheet(g, s, xu + LT, oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.12), C_CREAM2, LT, [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.05)]);
+  for (let k = 0; k < 8; k++) {
+    const ang = (k * Math.PI) / 4;
+    sideRivet(g, s, xu + 2 * LT, PORTHOLE.z + Math.cos(ang) * (PORTHOLE.r + 0.09), PORTHOLE.y + Math.sin(ang) * (PORTHOLE.r + 0.09), 0.009);
+  }
+  // A 柱后沿：竖金条
+  sideGold(g, s, xu, -1.02, -1.07, 1.5, 2.26, 0.22);
+  // 顶梁：奶油横板 + 金条
+  sideSheet(g, s, xu, rectZY(-1.02, -2.42, 2.26, 2.33), C_CREAM);
+  sideGold(g, s, xu + LT, -1.02, -2.42, 2.29, 2.33, 0.3);
 }
