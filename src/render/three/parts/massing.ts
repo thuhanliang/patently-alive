@@ -344,10 +344,27 @@ export function buildMassing(open = 1, card = false): Group {
     const tw = o.split - o.y0; // 桌板伸出的宽度
     const ex = lx + tw * Math.sin((open * Math.PI) / 2);
     const ey = ly + tw * Math.cos((open * Math.PI) / 2);
-    const panel = new Mesh(new BoxGeometry(0.03, ey - 0.02, 1.2), new MeshStandardMaterial({ color: 0xcfa56e, roughness: 0.9, flatShading: true }));
-    panel.position.set(ex - 0.03, (ey - 0.02) / 2, (o.z0 + o.z1) / 2 + 0.55);
-    panel.castShadow = panel.receiveShadow = true;
-    g.add(panel);
+    // 侧视：上宽下窄的梯形，z −2.44 ~ −3.44，从桌沿垂到离地 0.3；米色板上一只狗的剪影（深一点的纸）
+    const za = o.z0;
+    const zb = o.z0 - 1.0;
+    const trap = new Shape();
+    trap.moveTo(-za, 0);
+    trap.lineTo(-zb, 0);
+    trap.lineTo(-zb - 0.08, -(ey - 0.3));
+    trap.lineTo(-za + 0.08, -(ey - 0.3));
+    trap.lineTo(-za, 0);
+    const pm = new Mesh(new ExtrudeGeometry(trap, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1 }), new MeshStandardMaterial({ color: 0xdcc79c, roughness: 0.9 }));
+    pm.rotation.y = Math.PI / 2; // 局部 x → 世界 -z，局部 z → 世界 x
+    pm.position.set(ex - 0.06, ey, 0);
+    pm.castShadow = pm.receiveShadow = true;
+    g.add(pm);
+    const dog = new Shape();
+    const dp: Array<[number, number]> = [[-0.15, 0], [-0.15, 0.1], [-0.13, 0.15], [-0.08, 0.17], [-0.06, 0.22], [-0.03, 0.2], [0, 0.22], [0.03, 0.17], [0.1, 0.16], [0.15, 0.19], [0.17, 0.14], [0.12, 0.1], [0.1, 0], [0.06, 0], [0.05, 0.07], [-0.02, 0.07], [-0.04, 0], [-0.08, 0], [-0.09, 0.07], [-0.12, 0]];
+    dp.forEach(([a, b], k) => (k === 0 ? dog.moveTo(-a * 1.8, b * 1.8) : dog.lineTo(-a * 1.8, b * 1.8)));
+    const dm = new Mesh(new ExtrudeGeometry(dog, { depth: 0.006, bevelEnabled: false }), new MeshStandardMaterial({ color: 0xb98d58, roughness: 0.9 }));
+    dm.rotation.y = Math.PI / 2;
+    dm.position.set(ex - 0.026, 0.42, (za + zb) / 2);
+    g.add(dm);
   }
   // 后门：右扇开（转到车身 +x 那侧，贴着侧墙），左扇关着
   const D = REAR_DOOR;
@@ -579,16 +596,20 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   const zA = -2.23;
   const zB = -5.16;
   tex.repeat.set(1, (zA - zB) / 0.6);
-  const cloth = new Mesh(new BoxGeometry(0.012, L, zA - zB), new MeshStandardMaterial({ map: tex, roughness: 0.95 }));
-  // 板翻起来时，板的外表面在 pivot 坐标里朝 +x：布贴在板外面
-  cloth.position.set(0.012, -L / 2 + 0.07, (zA + zB) / 2);
+  // 布在板的卡纸外面（板外表面 + 卡纸厚 ≈ 2 厘米）
+  const cloth = new Mesh(new BoxGeometry(0.01, L, zA - zB), new MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+  cloth.position.set(0.03, -L / 2 + 0.07, (zA + zB) / 2);
   cloth.castShadow = true;
   pivot.add(cloth);
-  for (let z = zA - 0.06; z > zB; z -= 0.12) {
-    const sc = new Mesh(new CylinderGeometry(0.06, 0.06, 0.012, 12, 1, false, 0, Math.PI), new MeshStandardMaterial({ color: 0xf1e6cf, roughness: 0.95 }));
-    sc.rotation.z = Math.PI / 2;
-    sc.rotation.y = Math.PI / 2;
-    sc.position.set(0.012, -L + 0.07, z);
+  // 扇贝边：外沿一排平的半圆布片，接着布往下垂
+  const half = new Shape();
+  half.absarc(0, 0, 0.06, Math.PI, 2 * Math.PI, false);
+  const scM = new MeshStandardMaterial({ map: tex, roughness: 0.95, side: 2 });
+  for (let z = zA - 0.06; z > zB + 0.03; z -= 0.12) {
+    const sc = new Mesh(new ExtrudeGeometry(half, { depth: 0.008, bevelEnabled: false }), scM);
+    sc.rotation.y = Math.PI / 2; // 半圆在 (z, y) 平面里，朝 -y 垂下
+    sc.position.set(0.026, -L + 0.07, z);
+    sc.castShadow = true;
     pivot.add(sc);
   }
   g.add(pivot);

@@ -93,33 +93,20 @@ export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
       else edgeTris.set(k, [t]);
     }
   });
+  // 按"同一个平面"归组（不要求三角形相连：布尔运算后的 T 形接头会把一个平面断成几块，各自配色就会出现斜三角色块）
   const faceOf = new Array<number>(tri.length).fill(-1);
   const faces: Face[] = [];
   for (let t = 0; t < tri.length; t++) {
-    if (faceOf[t] !== -1 || areas[t]! < 1e-9) continue;
+    if (areas[t]! < 1e-9) continue;
     const n = normals[t]!;
     const d = n.dot(verts[tri[t]![0]]!);
-    const f: Face = { n, d, tris: [] };
-    const stack = [t];
-    faceOf[t] = faces.length;
-    while (stack.length) {
-      const u = stack.pop()!;
-      f.tris.push(u);
-      const [a, b, c] = tri[u]!;
-      for (const [p, q] of [
-        [a, b],
-        [b, c],
-        [c, a],
-      ] as const)
-        for (const w of edgeTris.get(edgeKey(p, q)) ?? []) {
-          if (faceOf[w] !== -1 || areas[w]! < 1e-9) continue;
-          if (normals[w]!.dot(n) > 0.9995 && Math.abs(normals[w]!.dot(verts[tri[w]![0]]!) - d) < 2e-3) {
-            faceOf[w] = faces.length;
-            stack.push(w);
-          }
-        }
+    let fi = faces.findIndex((f) => f.n.dot(n) > 0.999 && Math.abs(f.d - d) < 4e-3);
+    if (fi < 0) {
+      fi = faces.length;
+      faces.push({ n: n.clone(), d, tris: [] });
     }
-    faces.push(f);
+    faces[fi]!.tris.push(t);
+    faceOf[t] = fi;
   }
 
   const out = new Group();
