@@ -101,13 +101,13 @@ const PARTS: Record<string, PartDef> = {
   },
   van: {
     sun: [-2.5, 9, 3.5],
-    build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99')) : buildVan()),
+    build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99'), q.get('export') === '1') : buildVan()),
     ref: './lab/ref-nose.jpg',
     cam: { pos: CAM.pos, target: CAM.target, fov: CAM.fov },
     crop: (q.get('crop')?.split(',').map(Number) as [number, number, number, number] | undefined) ?? [80, 60, 1760, 1320],
   },
-  side: { sun: [6, 9, 4], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99')) : buildVan()), ref: './lab/ref-side.png', cam: orthoCam('side', [100, 0, 1200, 620]) },
-  front: { sun: [3, 9, 8], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99')) : buildVan()), ref: './lab/ref-front.png', cam: orthoCam('front', [1380, 60, 480, 560]) },
+  side: { sun: [6, 9, 4], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99'), q.get('export') === '1') : buildVan()), ref: './lab/ref-side.png', cam: orthoCam('side', [100, 0, 1200, 620]) },
+  front: { sun: [3, 9, 8], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1', Number(q.get('stage') ?? '99'), q.get('export') === '1') : buildVan()), ref: './lab/ref-front.png', cam: orthoCam('front', [1380, 60, 480, 560]) },
   windshield: {
     sun: [-2.5, 9, 3.5],
     build: () => {
@@ -148,7 +148,11 @@ if (q.get('cam')) {
 const ref = document.getElementById('ref')!;
 if (q.get('ref') === '0') ref.classList.add('off');
 else ref.style.backgroundImage = `url(${def.ref})`;
+// 近裁剪面放远一点（0.05 → 0.2）：深度精度提高约 4 倍，层叠的纸面不再闪烁
 const st = new Stage(document.getElementById('stage')!, { extent: 2 });
+st.camera.near = 0.2;
+st.camera.far = 120;
+st.camera.updateProjectionMatrix();
 // 地面：一张浅灰褐的纸。
 const ground = new Mesh(flat(ngon(48, 6), 0.01), card(0xcfc6b6, 1.2, 'kraft'));
 ground.rotation.x = -Math.PI / 2;
@@ -215,6 +219,22 @@ if (q.get('manual') === '1') {
     },
     set(k: string, v: number): void {
       (st.ao.configuration as unknown as Record<string, number>)[k] = v;
+    },
+    /** 导出成 glTF 二进制（.glb，Blender 直接能开），返回 base64。 */
+    async exportGLB(): Promise<string> {
+      const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+      // 没名字的零件按"所属部件-序号"起名（SketchUp 里每个组件都有名字可找）
+      built.traverse((o) => {
+        if (o === built || o.name) return;
+        const p = o.parent;
+        const base = p && p.name ? p.name.replace(/（.*）/, '') : '零件';
+        o.name = `${base}-${p ? p.children.indexOf(o) + 1 : 0}`;
+      });
+      const buf = (await new GLTFExporter().parseAsync(built, { binary: true, onlyVisible: true })) as ArrayBuffer;
+      let bin = '';
+      const u8 = new Uint8Array(buf);
+      for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+      return btoa(bin);
     },
   };
 } else {

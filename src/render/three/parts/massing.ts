@@ -535,8 +535,104 @@ function brush(geo: BufferGeometry): Brush {
  * 4 侧面多层纸；5 车顶（栏杆、风向标、烟囱）；6 小件（遮阳篷、旗子、胡须、后视镜、铃）。
  */
 let STAGE = 99;
-export function buildMassing(open = 1, card = false, upto = 99): Group {
+/** 导出模式（给 SketchUp / Blender 编辑）：车身不转成一块块卡纸，而是按部位颜色拆成几块干净的实体面。 */
+let EXPORT = false;
+
+/**
+ * 部件分组（用户：导出后每个部分要是独立的组件）：在往 g 里加东西之前打一个 mark，
+ * 最后 groupMarks 把两个 mark 之间加进来的东西收进一个有名字的组（同名的组合并）。
+ */
+const MARKS = new WeakMap<Group, Array<{ i: number; name: string }>>();
+function mark(g: Group, name: string): void {
+  const l = MARKS.get(g) ?? [];
+  l.push({ i: g.children.length, name });
+  MARKS.set(g, l);
+}
+function groupMarks(g: Group): void {
+  const l = MARKS.get(g);
+  if (!l) return;
+  const kids = [...g.children];
+  const byName = new Map<string, Group>();
+  l.forEach((m, k) => {
+    const end = k + 1 < l.length ? l[k + 1]!.i : kids.length;
+    const take = kids.slice(m.i, end);
+    if (!take.length) return;
+    let grp = byName.get(m.name);
+    if (!grp) {
+      grp = new Group();
+      grp.name = m.name;
+      byName.set(m.name, grp);
+    }
+    for (const o of take) grp.add(o);
+  });
+  for (const grp of byName.values()) g.add(grp);
+  MARKS.delete(g);
+}
+const COLOR_NAMES: Record<number, string> = {
+  0x3a2a1c: "格栅里",
+  0xdcc49a: "沙色",
+  0xf6ecd9: "顶面",
+  0xf0e2c6: "前脸",
+  0xe8d6b4: "腰线以下",
+  0xf2e5cc: "腰线以上",
+  0xece0c6: "其它面",
+};
+/** 导出用：把一块实体按 paintBody 的部位颜色拆成几块（每块一个颜色、一个名字）。 */
+function paintedSolid(geo: BufferGeometry, name: string): Group {
+  const grp = new Group();
+  grp.name = name;
+  const g2 = geo.index ? geo.toNonIndexed() : geo;
+  const p = g2.getAttribute("position");
+  const buckets = new Map<number, number[]>();
+  const a = new Vector3(),
+    b = new Vector3(),
+    cc = new Vector3();
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i);
+    b.fromBufferAttribute(p, i + 1);
+    cc.fromBufferAttribute(p, i + 2);
+    const n = new Vector3()
+      .subVectors(b, a)
+      .cross(new Vector3().subVectors(cc, a));
+    if (n.lengthSq() < 1e-14) continue;
+    n.normalize();
+    const col = paintBody(
+      a
+        .clone()
+        .add(b)
+        .add(cc)
+        .multiplyScalar(1 / 3),
+      n,
+    );
+    const l = buckets.get(col) ?? [];
+    l.push(a.x, a.y, a.z, b.x, b.y, b.z, cc.x, cc.y, cc.z);
+    buckets.set(col, l);
+  }
+  for (const [col, arr] of buckets) {
+    const bg = new BufferGeometry();
+    bg.setAttribute("position", new BufferAttribute(new Float32Array(arr), 3));
+    bg.computeVertexNormals();
+    const m = new Mesh(
+      bg,
+      new MeshStandardMaterial({
+        color: col,
+        roughness: 0.9,
+        flatShading: true,
+      }),
+    );
+    m.name = `${name}-${COLOR_NAMES[col] ?? col.toString(16)}`;
+    grp.add(m);
+  }
+  return grp;
+}
+export function buildMassing(
+  open = 1,
+  card = false,
+  upto = 99,
+  forExport = false,
+): Group {
   STAGE = upto;
+  EXPORT = forExport;
   const g = new Group();
   const mat = new MeshStandardMaterial({
     color: 0xe6d6b8,
@@ -560,6 +656,15 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
       m.castShadow = m.receiveShadow = true;
       return m;
     }
+    if (EXPORT) {
+      if (color === 0xe6d6b8) return paintedSolid(geo, "车身");
+      const m = new Mesh(
+        geo,
+        new MeshStandardMaterial({ color, roughness: 0.9, flatShading: true }),
+      );
+      m.castShadow = m.receiveShadow = true;
+      return m;
+    }
     const grp = new Group();
     const core = new Mesh(
       geo,
@@ -571,6 +676,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     );
     return grp;
   };
+  mark(g, "车身");
   g.add(solid(c.body));
   const hinge = (
     geo: BufferGeometry,
@@ -578,6 +684,10 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     angle: number,
   ): void => {
     const pivot = new Group();
+    pivot.name =
+      hy > 1.5
+        ? "服务窗-上扇（遮阳篷板，铰链在上沿）"
+        : "服务窗-下扇（桌面，铰链在下沿）";
     pivot.position.set(hx, hy, 0);
     const m = solid(geo, 0xd9c49e);
     m.position.set(-hx, -hy, 0);
@@ -585,6 +695,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     pivot.rotation.z = angle;
     g.add(pivot);
   };
+  mark(g, "服务窗两扇板");
   // 上扇 = 遮阳篷：翻起来后略往下斜（约 15°）；下扇 = 桌面：放平
   const upA = open * ((63 * Math.PI) / 180); // 外沿往下斜，侧视落差约 0.3 米
   hinge(c.flapUpper, c.hingeUpper, upA);
@@ -592,6 +703,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
   const wood = new MeshStandardMaterial({ color: 0xa0703e, roughness: 0.8 });
   const o = OPENING;
   if (open > 0.05) {
+    mark(g, "遮阳篷撑杆");
     // 遮阳篷的两根斜撑：上端顶在篷板外沿下面，下端顶在桌板高度的车身上（各有座）
     const [hx, hy] = c.hingeUpper;
     const len = o.y1 - o.split;
@@ -618,6 +730,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
       rod.castShadow = true;
       g.add(rod);
     }
+    mark(g, "桌面三角托板");
     // 桌面后段（狐狸斗托不到的地方）：两块三角托板，一边粘墙、一边粘桌面底
     for (const z of [-3.9, -4.7]) {
       const wx = halfWidth(0.8) + L0;
@@ -637,6 +750,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
         ),
       );
     }
+    mark(g, "狐狸斗（桌下挡板）");
     // 狗挡板：挂在桌板外沿（铰链），往下撑到地面，当桌腿
     const [lx, ly] = c.hingeLower;
     const tw = o.split - o.y0; // 桌板伸出的宽度
@@ -701,10 +815,13 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     dm.position.set(ex - 0.026, 0.42, (za + zb) / 2);
     g.add(dm);
   }
+  mark(g, "后门");
   // 后门：右扇开（转到车身 +x 那侧，贴着侧墙），左扇关着
   const D = REAR_DOOR;
   const door = (geo: BufferGeometry, hx: number, angle: number): void => {
     const pivot = new Group();
+    pivot.name =
+      hx < 0 ? "后门-左扇（铰链在左外沿）" : "后门-右扇（铰链在右外沿）";
     pivot.position.set(hx, 0, -5.604);
     const m = solid(geo, 0xd9c4a1);
     m.position.set(-hx, 0, 5.604);
@@ -720,10 +837,13 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
   };
   door(c.doorLeft, -D.hw, 0);
   door(c.doorRight, D.hw, open * (-Math.PI / 2) * 0.95);
+  mark(g, "车尾贴纸（尾灯、踏板）");
   if (card && STAGE >= 4) rearSkin(g);
+  mark(g, "车顶贴纸（条纹帆布、天窗、检修盖）");
   if (card && STAGE >= 5) roofSkin(g);
   if (card) addDetails(g, open, c);
   else {
+    mark(g, "车轮");
     const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
     for (const w of WHEELS)
       for (const s of [-1, 1]) {
@@ -734,6 +854,8 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
         g.add(t);
       }
   }
+  groupMarks(g);
+  g.name = "勾勾";
   return g;
 }
 
@@ -775,12 +897,19 @@ const FOX: Array<[number, number]> = [
 function addDetails(g: Group, open: number, c: Carved): void {
   addDetails2(g, open, c);
   for (const s of [-1, 1]) {
+    const side = s > 0 ? "右（服务侧）" : "左";
+    mark(g, `外皮-车鼻侧面-${side}`);
     if (STAGE >= 4) noseSideSkin(g, s);
+    mark(g, `外皮-驾驶室侧面-${side}`);
     if (STAGE >= 4) cabSideSkin(g, s);
+    mark(g, `外皮-货箱侧面-${side}`);
     if (STAGE >= 4) cargoSideSkin(g, s);
+    mark(g, `轮眉-${side}`);
     if (STAGE >= 3) fenderSkin(g, s);
   }
+  mark(g, "外皮-车头正面（灰绿板、金条、保险杠件、信箱扣）");
   if (STAGE >= 2) frontSkin(g);
+  mark(g, "车轮");
   // 车轮：轮胎砖块 + 八角轮毂（wheel.ts），装在车轴上
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
@@ -789,6 +918,7 @@ function addDetails(g: Group, open: number, c: Carved): void {
       wh.position.set(s * (WHEEL_X + WHEEL_W / 2 - 0.02), w.r, w.z);
       g.add(wh);
     }
+  mark(g, "大灯");
   // 大灯：正八角（nose.ts 的 headlamp），装在灯座上
   if (STAGE >= 2)
     for (const s of [-1, 1]) {
@@ -798,6 +928,7 @@ function addDetails(g: Group, open: number, c: Carved): void {
       g.add(l);
     }
   if (STAGE < 1) return;
+  mark(g, "挡风玻璃（玻璃、窗帘、卷帘眼皮、金框）");
   // 挡风玻璃：窗洞里一层淡茶色玻璃（离外面 3 厘米），后面一扇卷帘（眼皮，放下一大半）
   const dz = WS_B[0] - WS_A[0];
   const dy = WS_B[1] - WS_A[1];
@@ -969,6 +1100,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     g.add(x);
   };
   if (STAGE >= 6) {
+    mark(g, "胡须");
     // 胡须（换掉金属杆，用户：金属杆的感觉不好）：剪纸的猫胡须——每侧一颗金色圆"腮扣"钉在信箱两边，
     // 扣下面压着三根细长的奶油色卡纸条，根部宽、尖部细，略弯，水平往外伸出车身；离正面 2 厘米，在灯的下面（灯底约 0.75）。
     const whiskerMat = [
@@ -1029,6 +1161,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       btn.castShadow = true;
       g.add(btn);
     }
+    mark(g, "车铃");
     // 铃：保险杠正中下面一个吊环，挂一只铜铃
     // 车铃（审核 r2）：保险杠正中伸出一个 L 形金托架（水平 0.1、下垂 0.05），铃挂在托架头上；铃身是圆顶加外翻唇口
     const zb = F + BUMPER.depth + L0;
@@ -1051,6 +1184,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     bell.position.set(0, BUMPER.y0 - 0.1, zb + 0.11); // 铃下沿离地约 0.2
     bell.castShadow = true;
     g.add(bell);
+    mark(g, "后视镜");
     // 后视镜：A 柱外侧，弯臂根部钉在车身上，镜板竖着（z ≈ −1.0，高 1.51 ~ 1.86）
     for (const s of [-1, 1]) {
       // 后视镜装在 A 柱根部（挡风玻璃下角外侧），在司机看得见的位置：镜子在侧窗前面、车身外面
@@ -1081,6 +1215,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     }
   }
   if (STAGE >= 5) {
+    mark(g, "车顶栏杆");
     // 车顶栏杆：z −1.18 ~ −4.27，x ±0.62，高 0.22；立柱有方座，X 形木条
     const yR = 2.535;
     const xs = [-0.62, 0.62];
@@ -1143,6 +1278,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
         brassM,
       );
     }
+    mark(g, "风向标（以后换成玩家的纸偶）");
     // 风向标：栏杆前段正中一根杆（插在前横杆上的座里），顶上一只狗的剪影
     rod(
       new Vector3(0, yR + 0.24, -1.82),
@@ -1163,6 +1299,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     dg.position.set(-0.01, yR + 0.34 - 0.08 * 1.6, -1.82); // 杆顶插进狐狸肚子下沿（局部 y 0.08）
     dg.castShadow = true;
     g.add(dg);
+    mark(g, "烟囱");
     // 烟囱：车尾抬高那段车顶上（z −4.43 ~ −4.73），底座 + 方筒 + 帽 + 一根细天线
     const ch = new Mesh(
       new BoxGeometry(0.26, 0.3, 0.26),
@@ -1186,6 +1323,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     );
   }
   if (STAGE >= 6) {
+    mark(g, "旗帜");
     // 旗帜：驾驶室 + 货箱前段侧面一排小三角旗（z −1.12 ~ −2.4，到开口前为止），挂在一根细绳上，绳两端钉在车身上
     for (const s of [-1, 1]) {
       const xw = s * (halfWidth(1.2) + L0 + 2 * LT + 0.006); // 挂在腰带外面的金条上
@@ -1214,6 +1352,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     }
   }
   if (STAGE >= 1) {
+    mark(g, "舷窗（金框、卷帘）");
     // 舷窗：正八角金框 + 里面一扇卷帘（米色帘片）
     for (const s of [-1, 1]) {
       const xw = s * (halfWidth(PORTHOLE.y) - PORTHOLE.depth);
@@ -1265,6 +1404,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     }
   }
   if (STAGE < 6) return;
+  mark(g, "坡道");
   // 坡道：后门（右扇开着）门槛上挂下来的一块木板，往后斜着落到地上；两条边框 + 几道防滑横条，上端两个金挂钩扣在门槛上
   {
     const wood2 = [
@@ -1317,6 +1457,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       g.add(hook);
     }
   }
+  mark(g, "折叠凳");
   // 折叠凳：放在桌子前面的地上（侧视 z −2.9 ~ −3.4），两组交叉的木腿 + 一块凳面
   {
     const cx = 1.85;
@@ -1338,6 +1479,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     seat.castShadow = seat.receiveShadow = true;
     g.add(seat);
   }
+  mark(g, "遮阳篷（条纹布、扇贝边）");
   // 遮阳篷：一块条纹布绷在上扇板上（比板宽：z −2.23 ~ −5.16），外沿一排扇贝边；跟着上扇板一起翻
   const upA = open * ((63 * Math.PI) / 180); // 外沿往下斜，侧视落差约 0.3 米
   const [hx, hy] = c.hingeUpper;

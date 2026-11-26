@@ -13,7 +13,7 @@ import { gold, goldDark } from './nose';
  * 位置都从侧视读：z = 0.05 − (像素 x − 157)·0.005385，y = (610 − 像素 y)·0.005385。
  */
 
-export const L0 = 0.015; // 整纸外表面离体块
+export const L0 = 0.02; // 整纸外表面离体块（整纸厚 0.014 + 0.0005：留 5 毫米空隙，避免两层纸的面争深度、闪烁）
 export const LT = 0.008; // 每层纸厚
 
 const mats = new Map<number, Material[]>();
