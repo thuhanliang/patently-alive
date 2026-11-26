@@ -2,6 +2,7 @@ import { BoxGeometry, ExtrudeGeometry, Group, Mesh, Shape, Vector3 } from 'three
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { card, flat, ngon } from '../../render/three/craft';
 import { buildNose } from '../../render/three/parts/nose';
+import { buildVan } from '../../render/three/parts/van';
 import { buildWheel } from '../../render/three/parts/wheel';
 import { buildWindshield } from '../../render/three/parts/windshield';
 import { Stage } from '../../render/three/stage';
@@ -21,24 +22,27 @@ interface PartDef {
   crop?: [number, number, number, number];
 }
 /**
- * 共享镜头（车鼻子、挡风玻璃用同一个）：车鼻子的 14 个点 + 轮毂（正八边形）的屏幕比联合拟合出来
- * （scripts/lab/fit-joint.py）。偏转 40.1°、俯视 16.4°、视场角 9.2°，车鼻子拟合误差 2.9 像素。
- * 车鼻子参考图是整图里 (170, 650) 起 350 × 250 的一块，镜头主点就在它的中心 (345, 775)。
+ * 共享镜头（2026-11-26 重做）：平行（轴测）投影——偏转 49°、俯视 12°，由车身上的长直边定
+ * （自动检测的直线族 48.3°/11.1°、用户手画三轴 49.4°/12.6°、灯是正八边形 50° 三个来源一致；
+ * scripts/lab/fit-ortho.py、lines-vp.py）。用一台离得很远（80 米）、视场角很小的透视相机模拟，
+ * 取景范围 = 整张效果图（2000 × 1500 像素）里的一块（?crop=x,y,w,h，单位像素），和效果图是同一个镜头。
+ * 比例：整图 236.7 像素 / 米；世界坐标：x 车宽、y 向上、z 向车头，车头正面在 z = 0.05。
  */
-const CAM = { pos: [3.877, 2.901, 4.67] as [number, number, number], target: [2.024, 2.054, 2.467] as [number, number, number], fov: 9.166, cx: 345, cy: 775, h: 250 };
+const CAM = { pos: [60.647, 17.756, 49.145] as [number, number, number], target: [1.59, 1.123, -2.192] as [number, number, number], fov: 4.536 };
+const FILM = { w: 2000, h: 1500 };
 /** 引擎盖 + 下面的车身：侧面轮廓是一个楔形（前脸顶 → 斜着抬到窗台 → 往下到底），整块挤出，没有缝。 */
 function hoodWedge(): Mesh {
   const zFront = 0.0;
   const zBack = -1.2;
-  const yBottom = 0.583;
+  const yBottom = 0.52;
   // 轮廓放在 (a = -z, b = y) 平面里；挤出后绕 y 转 90°，让挤出方向对上 x。
   const sh = new Shape();
   sh.moveTo(-zFront, yBottom);
-  sh.lineTo(-zFront, 1.435); // 车鼻子顶
-  sh.lineTo(1.12, 1.745); // 窗台下沿（斜着抬高，约 15°）
-  sh.lineTo(-zBack, 1.745);
+  sh.lineTo(-zFront, 1.44); // 车鼻子顶
+  sh.lineTo(1.1, 1.79); // 窗台下沿（斜着抬高，约 17°）
+  sh.lineTo(-zBack, 1.79);
   sh.lineTo(-zBack, yBottom);
-  const w = 1.52;
+  const w = 1.56;
   const geo = new ExtrudeGeometry(sh, { depth: w, bevelEnabled: false });
   geo.rotateY(Math.PI / 2); // (a, b, c) -> (c, b, -a)：world z = -a，world x = c
   geo.translate(-w / 2, 0, 0);
@@ -57,11 +61,11 @@ function cabContext(): Group {
     b.castShadow = b.receiveShadow = true;
     g.add(b);
   };
-  for (const s of [-1, 1]) add(0.06, 1.9, 1.8, s * 0.79, 1.5, -2.1); // 驾驶室两侧（从 A 柱后面开始）
-  add(1.64, 0.06, 1.9, 0, 2.53, -2.2); // 车顶
+  for (const s of [-1, 1]) add(0.06, 2.0, 1.7, s * 0.8, 1.55, -1.95); // 驾驶室两侧
+  add(1.66, 0.06, 1.9, 0, 2.58, -2.0); // 车顶
   // 驾驶室里面：深色的后壁和仪表台（透过玻璃看进去是暗的，帘片才显得出来）。
-  add(1.5, 0.95, 0.04, 0, 2.1, -2.9, 0x5c4a3a);
-  add(1.5, 0.12, 0.4, 0, 1.7, -1.5, 0x6a5440);
+  add(1.5, 0.95, 0.04, 0, 2.1, -2.8, 0x5c4a3a);
+  add(1.5, 0.12, 0.4, 0, 1.78, -1.5, 0x6a5440);
   return g;
 }
 const PARTS: Record<string, PartDef> = {
@@ -71,6 +75,14 @@ const PARTS: Record<string, PartDef> = {
     build: () => cabContext(),
     ref: './lab/ref-nose.jpg',
     cam: { pos: CAM.pos, target: CAM.target, fov: CAM.fov },
+    crop: (q.get('crop')?.split(',').map(Number) as [number, number, number, number] | undefined) ?? [170, 650, 350, 250],
+  },
+  van: {
+    sun: [-2.5, 9, 3.5],
+    build: () => buildVan(),
+    ref: './lab/ref-nose.jpg',
+    cam: { pos: CAM.pos, target: CAM.target, fov: CAM.fov },
+    crop: (q.get('crop')?.split(',').map(Number) as [number, number, number, number] | undefined) ?? [80, 60, 1760, 1320],
   },
   windshield: {
     sun: [-2.5, 9, 3.5],
@@ -120,24 +132,20 @@ ground.receiveShadow = true;
 st.scene.add(ground);
 st.scene.add(def.build());
 if (def.sun) st.sun.position.set(...def.sun);
-if (part === 'nose' || part === 'windshield') {
+if (part === 'nose' || part === 'windshield' || part === 'van') {
   // 太阳强一点、天光弱一点：零件下面要有清楚的投影（审核意见：没有投影，零件像贴在墙上）。
   st.sun.intensity = 3.0;
-  st.sky.intensity = 0.5;
-  st.renderer.toneMappingExposure = 0.9;
+  st.sky.intensity = 0.4;
+  st.renderer.toneMappingExposure = part === 'van' ? 0.72 : 0.9;
 }
 st.camera.fov = def.cam.fov;
 st.camera.position.set(...def.cam.pos);
 const target = new Vector3(...def.cam.target);
 st.camera.lookAt(target);
 if (def.crop && !q.get('cam')) {
-  // 整图取景：虚拟的"整张底片"以镜头主点为中心，取 crop 那一块（宽高比要和画布一致）。
-  const Hf = 3000;
-  const Wf = 4200;
-  st.camera.fov = (2 * Math.atan((Math.tan((CAM.fov * Math.PI) / 360) * Hf) / CAM.h) * 180) / Math.PI;
-  st.camera.aspect = Wf / Hf;
   const [cx, cy, cw, ch] = def.crop;
-  st.camera.setViewOffset(Wf, Hf, cx - (CAM.cx - Wf / 2), cy - (CAM.cy - Hf / 2), cw, ch);
+  st.camera.aspect = FILM.w / FILM.h;
+  st.camera.setViewOffset(FILM.w, FILM.h, cx, cy, cw, ch);
 }
 st.camera.updateProjectionMatrix();
 const ctl = new OrbitControls(st.camera, st.renderer.domElement);

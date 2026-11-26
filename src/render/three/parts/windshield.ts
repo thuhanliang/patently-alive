@@ -62,7 +62,7 @@ function plate(c: Vector3[], nrm: Vector3, t: number, mats: Material | Material[
 }
 
 /** 驾驶室侧墙内表面的半宽（A 柱的"肩"、顶梁的折角都接到这里）。 */
-export const CAB_HW = 0.72;
+export const CAB_HW = 0.8;
 /** A 柱的"肩"往后折到的深度（本地 n）。 */
 export const SHOULDER_N = -0.12;
 

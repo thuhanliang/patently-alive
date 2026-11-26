@@ -6,13 +6,13 @@ import { paperMaterial } from '../paper';
  * 车鼻子正面（2026-11-26 部件实验台第 2 件，照 6-overall.jpg 的车头）。
  * 大的尺寸：在效果图上量点、和镜头一起拟合；细节：按独立审核员（子 agent，只看左右对比和放大图）的意见改，
  * 设计图（AI 画的）里含糊或不合理的地方按好看、合理来做。
- * - 面板宽 1.28、高 0.89：一块块有厚度的卡纸拼到边（灰白、米白、浅灰），切边露浅色纸芯，底排有的块凸出一点；不做整圈金框，只在上两角各一片 L 形金角片；
- * - 大灯：中心 ±0.44、高 1.124；八角高宽比约 1.3，斜边约为竖边的 0.8；灯筒浅（伸出 0.09），侧壁金棕色，根部略大、侧壁垂直于面板；
+ * - 面板宽 1.56、高 0.92；两只灯中心在 ±0.68、高 1.096，外框 0.39 × 0.39 的**正八边形**；
+ * - 大灯：中心 ±0.68、高 1.096；正八边形；灯筒浅（伸出 0.09），侧壁金棕色，根部略大、侧壁垂直于面板；
  *   金框一圈（宽约灯宽 1/8，内沿一道斜面）→ 深紫褐内框一圈 → 细金压边 → 暖黄灯玻璃（宽约灯宽一半，放射细线）；两侧金铰链耳片钉在面板上；
  * - 雨檐：一整张折过两道的金卡纸（截面 /‾‾\），罩住灯的顶边和上斜边的上半段，离灯筒一道缝，后端立在面板上、后沿折出粘贴舌，前沿探出灯面 8 厘米；
  *   金框外侧两个顶点上各一颗黄铜圆钉；
  * - 格栅：7 根浅牛皮纸条（条:缝约 0.6:1），缝是深褐，顶上一根横档压住条头；外框是一整块 U 形厚纸板、上两角切斜角；
- * - 方鼻头是个信箱：横长（0.44 × 0.25），伸出 0.15，折痕级小倒角，背后一圈和面板同色的窄压边；前脸一道投信口（金翻盖挂在细卷轴上）、一块小金名牌；
+ * - 方鼻头是个信箱：横长（0.41 × 0.27），伸出 0.22，折痕级小倒角，背后一圈和面板同色的窄压边；前脸一道投信口（金翻盖挂在细卷轴上）、一块小金名牌；
  * - 胡须：黄铜八棱卷纸管（悬臂），每侧三根近乎平行、往外略上扬，根部各一个圆座钉在面板上，外端多面纸珠，伸出车身轮廓外约 0.1。
  * 所有倒角都是单段的（一条干净的折痕）——多段倒角在墨线里会描成一圈圈"等高线"。
  * 正面朝 +z，原点在面板正中的地面高度上（y 是离地高度）。
@@ -123,13 +123,13 @@ function slopeRing(ohw: number, ohh: number, ihw: number, ihh: number, thick: nu
   return m(geo, mats);
 }
 
-/** 大灯的八角：高宽比约 1.3，斜边约为竖边的 0.8。 */
+/** 大灯的八角：正八边形（平行投影 49° 下，设计图里的灯屏幕宽高比 0.655 正好是正八边形）。 */
 function oct(hw: number, hh: number): Vector2[] {
-  return chamfered(-hw, -hh, hw, hh, hw * 0.5, hh * 0.56);
+  return chamfered(-hw, -hh, hw, hh, hw * 0.586, hh * 0.586); // 正八边形：切角 = 半宽 × 0.586
 }
 
 /** 一只大灯：中心在原点，正面朝 +z，外框半宽 hw、半高 hh，灯筒从面板伸出 depth。 */
-export function headlamp(hw = 0.15, hh = 0.195, depth = 0.09, out = 1): Group {
+export function headlamp(hw = 0.195, hh = 0.195, depth = 0.09, out = 1): Group {
   const g = new Group();
   const o = (d: number): Vector2[] => oct(hw - d, hh - d);
   const side = [paperMaterial(0x7a5530, { scale: 0.15 }), paperMaterial(0x6c4a2a, { scale: 0.15 })];
@@ -212,27 +212,22 @@ function frustum(pts: Vector2[], cx: number, cy: number, depth: number, bevel: n
   return geo;
 }
 
-export const NOSE_KX = 1.19;
-export const NOSE_KY = 0.957;
-export const NOSE_KZ = 0.8;
-export const NOSE_DY = 0.085;
-
 /** 车鼻子正面：面板正面在 z = F。 */
 export function buildNose(seed = 5): Group {
   const g = new Group();
   const r = rng(seed);
-  const W = 1.28;
+  const W = 1.56;
   const y0 = 0.52;
-  const y1 = 1.41;
+  const y1 = 1.44;
   const F = 0.05;
   const shade = (c: number, k: number): number => (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
   // 厚纸板块：侧面同色略深（体块的侧面不能比正面亮）。
   const block = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(shade(c, 0.78), { scale: 0.25 })];
   // 薄卡纸：切边露浅色纸芯。
   const sheet = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(0xf7efe0, { scale: 0.25 })];
-  const gx = 0.2;
+  const gx = 0.295;
   const gy0 = 0.9;
-  const gy1 = 1.356;
+  const gy1 = 1.366;
   // 底板：一整块厚纸板（颜色深一点，拼缝里露出来），格栅处开口。
   for (const [a, b, c, d] of [
     [-W / 2, y0, W / 2, gy0],
@@ -282,7 +277,7 @@ export function buildNose(seed = 5): Group {
   }
   // 格栅：后面一块深褐的板；7 根薄金片（侧面暗，免得被看成两根；条:缝约 0.7:1，宽度、角度带一点手裁的随机）；
   // 格栅很浅：金片几乎和外框齐平，后板只退 3 厘米；外框略凸、上两角切斜角（拼成几块，不带洞的多边形三角化才稳）。
-  const gb = 1.072; // 信箱衬板的上沿：格栅只做这以上看得见的部分（下面被信箱挡住，也不和衬板穿插）
+  const gb = 1.0; // 信箱衬板的上沿：格栅只做这以上看得见的部分（下面被信箱挡住，也不和衬板穿插）
   g.add(m(pb(rect(-gx, gb + 0.002, gx, gy1), 0.01, 0.002), [paperMaterial(0x3a2618, { scale: 0.2 }), paperMaterial(0x3a2618, { scale: 0.2 })], F - 0.03));
   const pitch = (2 * gx) / 7;
   const barSide = new MeshStandardMaterial({ color: 0x6a4a22, roughness: 0.7 });
@@ -307,14 +302,14 @@ export function buildNose(seed = 5): Group {
   ];
   g.add(m(pb(frame, 0.024, 0.0015), block(0xf0e8da), F - 0.016));
   // 方鼻头（信箱）：横长（0.44 × 0.25，比格栅略宽，像外挂上去的盒子），伸出 0.15（约高的 0.6），略呈棱台，折痕级的小倒角；背后一圈和面板同色的窄压边。
-  const bw = 0.22;
-  const by0 = 0.8;
-  const by1 = 1.05;
+  const bw = 0.205;
+  const by0 = 0.71;
+  const by1 = 0.975;
   const bcy = (by0 + by1) / 2;
-  const bd = 0.15;
+  const bd = 0.22;
   const bz = F + 0.01;
   g.add(m(pb(rect(-bw - 0.012, by0 - 0.012, bw + 0.012, by1 + 0.022), 0.026, 0.0015), block(0xf2e6d2), F - 0.016));
-  g.add(m(frustum(chamfered(-bw, by0, bw, by1, 0.009), 0, bcy, bd, 0.0015, 0.93), block(0xe0c4a2), bz));
+  g.add(m(frustum(chamfered(-bw, by0, bw, by1, 0.009), 0, bcy, bd, 0.0015, 0.96), block(0xe0c4a2), bz));
   const fz = bz + bd;
   // 前脸一圈浅色翻边纸条。
   const fx = bw * 0.93;
@@ -338,16 +333,16 @@ export function buildNose(seed = 5): Group {
   for (const sx of [-1, 1]) bolt(g, sx * 0.058, bcy - 0.06, fz + 0.004, 0.005);
   // 大灯、胡须。胡须从鼻头外侧的小黄铜座伸出（和鼻头留一个杆径的空隙），三根扇形张开（相邻约 6°），外端圆球帽。
   for (const s of [-1, 1]) {
-    const lamp = headlamp(0.15, 0.195, 0.09, s);
-    lamp.position.set(s * 0.44, 1.124, F);
+    const lamp = headlamp(0.195, 0.195, 0.09, s);
+    lamp.position.set(s * 0.68, 1.096, F);
     g.add(lamp);
     // 胡须是悬臂：只在根部的圆座上固定，往外伸出车身轮廓（面板边 ±0.64）外约 0.1。
-    const sx = s * (bw + 0.06);
+    const sx = s * (bw + 0.07);
     for (let i = 0; i < 3; i++) {
       // 三根近乎平行、往外略上扬；最上面一根经过灯底时要低于灯（程序算过间隙）。
-      const yi = 0.85 - i * 0.06;
-      const ang = ((6 - i * 2) * Math.PI) / 180;
-      const len = 0.46;
+      const yi = 0.84 - i * 0.075;
+      const ang = ((4 - i * 2) * Math.PI) / 180;
+      const len = 0.6;
       const seat = new Mesh(new CylinderGeometry(0.02, 0.022, 0.016, 18), goldDark);
       seat.rotation.x = Math.PI / 2;
       seat.position.set(sx, yi, F + 0.008);
@@ -356,10 +351,5 @@ export function buildNose(seed = 5): Group {
       whisker(g, new Vector3(sx, yi, F + 0.02), new Vector3(sx + s * len * Math.cos(ang), yi + len * Math.sin(ang), F + 0.075));
     }
   }
-  // 镜头校正（2026-11-26）：这件的尺寸是在"偏转 31°、俯视 23°"的镜头下量的，后来用轮毂（正八边形）重新定镜头，
-  // 偏转是 40°、俯视 16°。同一个画面里：横向（x）要放大约 1.19 倍，深度（z）缩到约 0.8 倍，纵向缩到约 0.96 并上移 0.085。
-  // 灯因此更接近正八边形，灯筒、信箱更浅。
-  g.scale.set(NOSE_KX, NOSE_KY, NOSE_KZ);
-  g.position.y = NOSE_DY;
   return g;
 }
