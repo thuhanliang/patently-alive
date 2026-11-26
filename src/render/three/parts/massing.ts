@@ -32,8 +32,10 @@ export const PROFILE: Array<[number, number]> = [
 /** 正面截面：(高度, 半宽)，中间线性插值。 */
 export const SECTION: Array<[number, number]> = [
   [0.0, 1.02],
-  [1.57, 1.02],
-  [1.65, 0.93],
+  // 腰线（车身侧面往里收的肩）：侧视里旗帜上方那道水平饰条，约 1.43 米。正视图里的台阶在 1.57 附近，
+  // 但那样会穿过舷窗（舷窗底边约 1.51），判断正视图那里是引擎盖两侧伸出的部分，腰线按侧视放在 1.40 ~ 1.48。
+  [1.4, 1.02],
+  [1.48, 0.93],
   [2.3, 0.93],
   [2.44, 0.85],
   [2.53, 0.72],
@@ -163,7 +165,7 @@ export const WINDSHIELD = { hw: 0.72, mull: 0.03, y0: 1.73, y1: 2.17, depth: 0.1
 /** 挡风玻璃所在的斜面（侧面轮廓上的两点）。 */
 const WS_A: [number, number] = [-0.758, 1.685];
 const WS_B: [number, number] = [-0.989, 2.369];
-export const PORTHOLE = { z: -1.74, y: 1.86, r: 0.33, depth: 0.04 };
+export const PORTHOLE = { z: -1.74, y: 1.88, r: 0.32, depth: 0.04 }; // 底边约 1.58，整个落在腰线以上的墙上
 // 前脸（正视图读的；正面在 z = 0.05）
 const F = 0.05;
 export const LAMP = { x: 0.59, y: 1.02, r: 0.26, depth: 0.14 };

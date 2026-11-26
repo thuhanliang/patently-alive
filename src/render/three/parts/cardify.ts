@@ -26,6 +26,8 @@ export interface CardOpts {
   trimAngle?: number;
   /** 不切块（整面一张）：小零件用 */
   whole?: boolean;
+  /** 竖直面上卡纸的水平分带（世界高度）：放在真实的结构线上，全车上下对齐 */
+  bands?: number[];
   /** 单一颜色（不随机） */
   color?: number;
   /** 侧面（纸芯）颜色 */
@@ -42,11 +44,12 @@ const key = (v: Vector3): string => `${Math.round(v.x * 2000)},${Math.round(v.y 
 
 /** 实体 → 卡纸。 */
 export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
-  // 配色按设计图：奶油色为主，少量灰绿，偶尔一块土黄
-  const tones = opts.tones ?? [0xf2e4ca, 0xf2e4ca, 0xeddcbd, 0xeddcbd, 0xe6d3b1, 0xf6ecd9, 0xcdd2c0, 0xc2cab8, 0xdcc196];
-  const tile = opts.tile ?? 0.42;
+  // 配色按设计图：大块的板，奶油色为主（三种很接近的奶油），偶尔一块灰绿，很少一块沙色
+  const tones = opts.tones ?? [0xf0e2c6, 0xf0e2c6, 0xf0e2c6, 0xebd9b8, 0xebd9b8, 0xf5eada, 0xf5eada, 0xc9cfbd, 0xc9cfbd, 0xdcc49a];
+  const tile = opts.tile ?? 0.7;
+  const bands = opts.bands ?? [0.3, 0.62, 0.97, 1.4, 1.48, 1.86, 2.25, 2.6, 3];
   const thick = opts.thick ?? 0.014;
-  const gap = opts.gap ?? 0.006;
+  const gap = opts.gap ?? 0.004;
   const trim = opts.trim ?? 0; // 默认不包边：金边只加在设计图里真有的地方（用户：不要做成套路）
   const trimAngle = ((opts.trimAngle ?? 25) * Math.PI) / 180;
   const r = rng(opts.seed ?? 7);
@@ -151,14 +154,20 @@ export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
     const cells: Array<[number, number, number, number, number]> = [];
     if (opts.whole) cells.push([minX - 1, minY - 1, maxX + 1, maxY + 1, opts.color ?? tones[Math.floor(r() * tones.length)]!]);
     else {
-      const rows = Math.max(1, Math.round((maxY - minY) / (tile * 0.8)));
-      const rh = (maxY - minY) / rows;
-      for (let ri = 0; ri < rows; ri++) {
+      // 竖直面：按全车统一的水平带切（面内的 y 就是世界高度）；其它面：按尺寸均分
+      let edges: number[];
+      if (Math.abs(n.y) < 0.2) {
+        edges = [minY, ...bands.filter((b) => b > minY + 0.06 && b < maxY - 0.06), maxY];
+      } else {
+        const rows = Math.max(1, Math.round((maxY - minY) / (tile * 0.75)));
+        edges = Array.from({ length: rows + 1 }, (_, i) => minY + ((maxY - minY) * i) / rows);
+      }
+      for (let ri = 0; ri < edges.length - 1; ri++) {
         let x = minX;
         while (x < maxX - 1e-4) {
-          let w = Math.min(tile * (0.6 + r() * 0.8), maxX - x);
-          if (maxX - (x + w) < tile * 0.3) w = maxX - x;
-          cells.push([x, minY + ri * rh, x + w, minY + (ri + 1) * rh, opts.color ?? tones[Math.floor(r() * tones.length)]!]);
+          let w = Math.min(tile * (0.7 + r() * 0.6), maxX - x);
+          if (maxX - (x + w) < tile * 0.35) w = maxX - x;
+          cells.push([x, edges[ri]!, x + w, edges[ri + 1]!, opts.color ?? tones[Math.floor(r() * tones.length)]!]);
           x += w;
         }
       }
@@ -166,7 +175,7 @@ export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
     const M = new Matrix4().makeBasis(u, v, n).setPosition(o);
     for (const [x0, y0, x1, y1, tone] of cells) {
       const rect = [new Vector2(x0 + gap / 2, y0 + gap / 2), new Vector2(x1 - gap / 2, y0 + gap / 2), new Vector2(x1 - gap / 2, y1 - gap / 2), new Vector2(x0 + gap / 2, y1 - gap / 2)];
-      const lift = !opts.whole && r() < 0.15 ? thick * 0.5 : 0; // 有的块多叠一层，露出切边
+      const lift = !opts.whole && r() < 0.06 ? thick * 0.5 : 0; // 有的块多叠一层，露出切边
       for (const tr of tri2) {
         let pts = tr.slice();
         if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
