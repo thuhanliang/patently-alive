@@ -101,13 +101,13 @@ const PARTS: Record<string, PartDef> = {
   },
   van: {
     sun: [-2.5, 9, 3.5],
-    build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1')) : buildVan()),
+    build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1') : buildVan()),
     ref: './lab/ref-nose.jpg',
     cam: { pos: CAM.pos, target: CAM.target, fov: CAM.fov },
     crop: (q.get('crop')?.split(',').map(Number) as [number, number, number, number] | undefined) ?? [80, 60, 1760, 1320],
   },
-  side: { sun: [6, 9, 4], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1')) : buildVan()), ref: './lab/ref-side.png', cam: orthoCam('side', [100, 0, 1200, 620]) },
-  front: { sun: [3, 9, 8], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1')) : buildVan()), ref: './lab/ref-front.png', cam: orthoCam('front', [1380, 60, 480, 560]) },
+  side: { sun: [6, 9, 4], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1') : buildVan()), ref: './lab/ref-side.png', cam: orthoCam('side', [100, 0, 1200, 620]) },
+  front: { sun: [3, 9, 8], build: () => (q.get('model') === 'mass' ? buildMassing(Number(q.get('open') ?? '1'), q.get('card') === '1') : buildVan()), ref: './lab/ref-front.png', cam: orthoCam('front', [1380, 60, 480, 560]) },
   windshield: {
     sun: [-2.5, 9, 3.5],
     build: () => {

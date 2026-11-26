@@ -1,4 +1,7 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Matrix4, CanvasTexture, RepeatWrapping, SRGBColorSpace, SphereGeometry, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
+import { cardify } from './cardify';
+import { headlamp } from './nose';
+import { buildWheel } from './wheel';
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
 
 /**
@@ -228,7 +231,8 @@ export function carve(): Carved {
     body = sub(body, prismX(octZY(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r), s > 0 ? hw - PORTHOLE.depth : -1.3, s > 0 ? 1.3 : -hw + PORTHOLE.depth));
   }
   // 前脸：灯（正八角筒）、格栅（先凹进去，再挤出 7 根竖条）、信箱（凸出的盒子）、保险杠
-  for (const s of [-1, 1]) body = add(body, prismZ(octXY(s * LAMP.x, LAMP.y, LAMP.r), F - 0.02, F + LAMP.depth));
+  // 灯座：一块薄的正八角底板（灯本身是细节件 headlamp，装在底板上）
+  for (const s of [-1, 1]) body = add(body, prismZ(octXY(s * LAMP.x, LAMP.y, LAMP.r + 0.03), F - 0.02, F + 0.03));
   body = sub(body, box(-GRILLE.hw, GRILLE.hw, GRILLE.y0, GRILLE.y1, F - GRILLE.depth, F + 0.1));
   const pitch = (2 * GRILLE.hw) / GRILLE.bars;
   for (let i = 0; i < GRILLE.bars; i++) {
@@ -289,19 +293,28 @@ function brush(geo: BufferGeometry): Brush {
 }
 
 /** open：服务侧两扇板打开的程度（0 合上，1 全开：上扇翻到水平、下扇放平成桌面）。 */
-export function buildMassing(open = 1): Group {
+export function buildMassing(open = 1, card = false): Group {
   const g = new Group();
   const mat = new MeshStandardMaterial({ color: 0xe6d6b8, roughness: 0.9, flatShading: true });
   const c = carve();
-  const body = new Mesh(c.body, mat);
-  body.castShadow = body.receiveShadow = true;
-  g.add(body);
+  // 卡纸模式：每个实体的面 → 一块块卡纸 + 凸棱金包边（cardify.ts）；体块本身留在里面当"芯"（深一点的纸板色）
+  const solid = (geo: BufferGeometry, color = 0xe6d6b8): Group | Mesh => {
+    if (!card) {
+      const m = new Mesh(geo, color === 0xe6d6b8 ? mat : new MeshStandardMaterial({ color, roughness: 0.9, flatShading: true }));
+      m.castShadow = m.receiveShadow = true;
+      return m;
+    }
+    const grp = new Group();
+    const core = new Mesh(geo, new MeshStandardMaterial({ color: 0x8a7458, roughness: 0.95 }));
+    grp.add(core, cardify(geo, { seed: Math.floor(color % 97) }));
+    return grp;
+  };
+  g.add(solid(c.body));
   const hinge = (geo: BufferGeometry, [hx, hy]: [number, number], angle: number): void => {
     const pivot = new Group();
     pivot.position.set(hx, hy, 0);
-    const m = new Mesh(geo, new MeshStandardMaterial({ color: 0xd9c49e, roughness: 0.9, flatShading: true }));
+    const m = solid(geo, 0xd9c49e);
     m.position.set(-hx, -hy, 0);
-    m.castShadow = m.receiveShadow = true;
     pivot.add(m);
     pivot.rotation.z = angle;
     g.add(pivot);
@@ -341,23 +354,242 @@ export function buildMassing(open = 1): Group {
   const door = (geo: BufferGeometry, hx: number, angle: number): void => {
     const pivot = new Group();
     pivot.position.set(hx, 0, -5.604);
-    const m = new Mesh(geo, new MeshStandardMaterial({ color: 0xd9c49e, roughness: 0.9, flatShading: true }));
+    const m = solid(geo, 0xd9c4a1);
     m.position.set(-hx, 0, 5.604);
-    m.castShadow = m.receiveShadow = true;
     pivot.add(m);
     pivot.rotation.y = angle;
     g.add(pivot);
   };
   door(c.doorLeft, -D.hw, 0);
   door(c.doorRight, D.hw, open * (-Math.PI / 2) * 0.95);
-  const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
+  if (card) addDetails(g, open, c);
+  else {
+    const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
+    for (const w of WHEELS)
+      for (const s of [-1, 1]) {
+        const t = new Mesh(new CylinderGeometry(w.r, w.r, WHEEL_W, 24), tire);
+        t.rotation.z = Math.PI / 2;
+        t.position.set(s * WHEEL_X, w.r, w.z);
+        t.castShadow = true;
+        g.add(t);
+      }
+  }
+  return g;
+}
+
+/** 细节件（之前做好的部件，按三视图量的位置装到体块上）：车轮、大灯、挡风玻璃的玻璃和卷帘眼皮。 */
+function addDetails(g: Group, open: number, c: Carved): void {
+  addDetails2(g, open, c);
+  // 车轮：轮胎砖块 + 八角轮毂（wheel.ts），装在车轴上
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
-      const t = new Mesh(new CylinderGeometry(w.r, w.r, WHEEL_W, 24), tire);
-      t.rotation.z = Math.PI / 2;
-      t.position.set(s * WHEEL_X, w.r, w.z);
-      t.castShadow = true;
-      g.add(t);
+      const wh = buildWheel(w.r);
+      wh.rotation.y = (s * Math.PI) / 2;
+      wh.position.set(s * (WHEEL_X + WHEEL_W / 2 - 0.02), w.r, w.z);
+      g.add(wh);
     }
-  return g;
+  // 大灯：正八角（nose.ts 的 headlamp），装在灯座上
+  for (const s of [-1, 1]) {
+    const hw = LAMP.r * Math.cos(Math.PI / 8);
+    const l = headlamp(hw, hw, 0.11, s);
+    l.position.set(s * LAMP.x, LAMP.y, F + 0.03);
+    g.add(l);
+  }
+  // 挡风玻璃：窗洞里一层淡茶色玻璃（离外面 3 厘米），后面一扇卷帘（眼皮，放下一大半）
+  const dz = WS_B[0] - WS_A[0];
+  const dy = WS_B[1] - WS_A[1];
+  const L = Math.hypot(dz, dy);
+  const n = new Vector3(0, -dz / L, dy / L); // 外法线（朝前上），世界 (x, y, z)
+  const along = new Vector3(0, dy / L, dz / L);
+  const at = (y: number): Vector3 => new Vector3(0, y, WS_A[0] + (dz * (y - WS_A[1])) / dy);
+  const W = WINDSHIELD;
+  const glass = new MeshStandardMaterial({ color: 0x8a7f70, transparent: true, opacity: 0.25, roughness: 0.08, depthWrite: false });
+  const slat = [new MeshStandardMaterial({ color: 0xf0dcbc, roughness: 0.9 }), new MeshStandardMaterial({ color: 0xe0c9a2, roughness: 0.9 })];
+  const h = W.y1 - W.y0;
+  const len = h / (dy / L);
+  for (const s of [-1, 1]) {
+    const cx = (s * (W.hw + W.mull)) / 2;
+    const w = W.hw - W.mull - 0.01;
+    const basis = new Matrix4().makeBasis(new Vector3(1, 0, 0), along, n);
+    const c0 = at(W.y0).add(new Vector3(cx, 0, 0));
+    const pane = new Mesh(new BoxGeometry(w, len, 0.004), glass);
+    pane.matrixAutoUpdate = false;
+    pane.matrix.copy(basis).setPosition(c0.clone().addScaledVector(along, len / 2).addScaledVector(n, -0.03));
+    pane.renderOrder = 2;
+    g.add(pane);
+    // 卷帘：帘片从上往下放，放下 70%
+    const pitch = 0.046;
+    const k = Math.floor((len * 0.7) / pitch);
+    for (let i = 0; i < k; i++) {
+      const sl = new Mesh(new BoxGeometry(w - 0.02, pitch - 0.004, 0.004), slat[i % 4 === 2 ? 1 : 0]!);
+      sl.matrixAutoUpdate = false;
+      sl.matrix.copy(basis).setPosition(c0.clone().addScaledVector(along, len - pitch / 2 - i * pitch).addScaledVector(n, -0.09));
+      sl.castShadow = true;
+      g.add(sl);
+    }
+  }
+}
+
+/** 第二批细节件（位置从三视图侧视 / 正视量的；每一件交代装在哪里）。 */
+function addDetails2(g: Group, open: number, c: Carved): void {
+  const brassM = new MeshStandardMaterial({ color: 0xd9a050, metalness: 0.35, roughness: 0.42 });
+  const woodM = new MeshStandardMaterial({ color: 0xb8864a, roughness: 0.8 });
+  const rod = (a: Vector3, b: Vector3, r: number, m: MeshStandardMaterial): void => {
+    const x = new Mesh(new CylinderGeometry(r, r, a.distanceTo(b), 8), m);
+    x.position.copy(a).add(b).multiplyScalar(0.5);
+    x.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    x.castShadow = true;
+    g.add(x);
+  };
+  const ball = (p: Vector3, r: number, m: MeshStandardMaterial): void => {
+    const x = new Mesh(new SphereGeometry(r, 10, 8), m);
+    x.position.copy(p);
+    x.castShadow = true;
+    g.add(x);
+  };
+  // 胡须：从鼻子正面灯下方伸出，往外、往后掠（侧视里从正面一直延到 z = −0.5，像猫胡须贴着腮帮往后）
+  for (const s of [-1, 1])
+    for (let i = 0; i < 3; i++) {
+      const y = 0.78 + i * 0.07;
+      const a = new Vector3(s * 0.36, y, F + 0.02);
+      const b = new Vector3(s * (1.08 + i * 0.03), y + 0.02 - i * 0.03, -0.45 + i * 0.05);
+      rod(a, b, 0.011, brassM);
+      ball(a, 0.02, brassM);
+      ball(b, 0.024, brassM);
+    }
+  // 铃：保险杠正中下面一个吊环，挂一只铜铃
+  const bell = new Mesh(new CylinderGeometry(0.04, 0.08, 0.13, 14), brassM);
+  bell.position.set(0, BUMPER.y0 - 0.1, F + 0.03);
+  g.add(bell);
+  rod(new Vector3(0, BUMPER.y0, F + 0.03), new Vector3(0, BUMPER.y0 - 0.035, F + 0.03), 0.008, brassM);
+  // 后视镜：A 柱外侧，弯臂根部钉在车身上，镜板竖着（z ≈ −1.0，高 1.51 ~ 1.86）
+  for (const s of [-1, 1]) {
+    const root = new Vector3(s * halfWidth(1.6), 1.6, -0.95);
+    const elbow = new Vector3(s * (halfWidth(1.6) + 0.2), 1.62, -0.95);
+    rod(root, elbow, 0.018, brassM);
+    rod(elbow, new Vector3(s * (halfWidth(1.6) + 0.2), 1.68, -0.95), 0.018, brassM);
+    const m = new Mesh(new BoxGeometry(0.05, 0.36, 0.2), new MeshStandardMaterial({ color: 0xd49a56, roughness: 0.85, flatShading: true }));
+    m.position.set(s * (halfWidth(1.6) + 0.2), 1.86, -0.98);
+    m.castShadow = true;
+    g.add(m);
+  }
+  // 车顶栏杆：z −1.18 ~ −4.27，x ±0.62，高 0.22；立柱有方座，X 形木条
+  const yR = 2.535;
+  const xs = [-0.62, 0.62];
+  const z0 = -1.18;
+  const z1 = -4.27;
+  const posts = 7;
+  for (const x of xs) {
+    for (let i = 0; i < posts; i++) {
+      const z = z0 + ((z1 - z0) * i) / (posts - 1);
+      const base = new Mesh(new BoxGeometry(0.07, 0.02, 0.07), brassM);
+      base.position.set(x, yR + 0.01, z);
+      g.add(base);
+      rod(new Vector3(x, yR + 0.02, z), new Vector3(x, yR + 0.26, z), 0.014, brassM);
+      ball(new Vector3(x, yR + 0.27, z), 0.022, brassM);
+      if (i < posts - 1) {
+        const zn = z0 + ((z1 - z0) * (i + 1)) / (posts - 1);
+        rod(new Vector3(x, yR + 0.05, z), new Vector3(x, yR + 0.23, zn), 0.008, brassM);
+        rod(new Vector3(x, yR + 0.23, z), new Vector3(x, yR + 0.05, zn), 0.008, brassM);
+      }
+    }
+    rod(new Vector3(x, yR + 0.24, z0), new Vector3(x, yR + 0.24, z1), 0.011, brassM);
+    rod(new Vector3(x, yR + 0.05, z0), new Vector3(x, yR + 0.05, z1), 0.011, brassM);
+  }
+  for (const z of [z0, z1]) {
+    rod(new Vector3(xs[0]!, yR + 0.24, z), new Vector3(xs[1]!, yR + 0.24, z), 0.011, brassM);
+    rod(new Vector3(xs[0]!, yR + 0.05, z), new Vector3(xs[1]!, yR + 0.05, z), 0.011, brassM);
+  }
+  // 风向标：栏杆前段正中一根杆（插在前横杆上的座里），顶上一只狗的剪影
+  rod(new Vector3(0, yR + 0.24, -1.82), new Vector3(0, yR + 0.6, -1.82), 0.015, brassM);
+  const dog = new Shape();
+  const dp: Array<[number, number]> = [[-0.15, 0], [-0.15, 0.1], [-0.13, 0.15], [-0.08, 0.17], [-0.06, 0.22], [-0.03, 0.2], [0, 0.22], [0.03, 0.17], [0.1, 0.16], [0.15, 0.19], [0.17, 0.14], [0.12, 0.1], [0.1, 0], [0.06, 0], [0.05, 0.07], [-0.02, 0.07], [-0.04, 0], [-0.08, 0], [-0.09, 0.07], [-0.12, 0]];
+  dp.forEach(([a, b], i) => (i === 0 ? dog.moveTo(a * 1.4, b * 1.4) : dog.lineTo(a * 1.4, b * 1.4)));
+  const dg = new Mesh(new ExtrudeGeometry(dog, { depth: 0.02, bevelEnabled: false }), new MeshStandardMaterial({ color: 0xd9b078, roughness: 0.8 }));
+  dg.rotation.y = Math.PI / 2;
+  dg.position.set(-0.01, yR + 0.6, -1.82);
+  dg.castShadow = true;
+  g.add(dg);
+  // 烟囱：车尾抬高那段车顶上（z −4.43 ~ −4.73），底座 + 方筒 + 帽 + 一根细天线
+  const ch = new Mesh(new BoxGeometry(0.26, 0.3, 0.26), new MeshStandardMaterial({ color: 0xb8aa95, roughness: 0.9, flatShading: true }));
+  ch.position.set(0.3, 2.65 + 0.15, -4.58);
+  ch.castShadow = true;
+  g.add(ch);
+  const cap = new Mesh(new BoxGeometry(0.34, 0.06, 0.34), brassM);
+  cap.position.set(0.3, 2.65 + 0.33, -4.58);
+  g.add(cap);
+  rod(new Vector3(0.3, 2.65 + 0.36, -4.58), new Vector3(0.3, 2.65 + 0.5, -4.58), 0.006, brassM);
+  // 旗帜：驾驶室 + 货箱前段侧面一排小三角旗（z −1.12 ~ −2.4，到开口前为止），挂在一根细绳上，绳两端钉在车身上
+  for (const s of [1]) {
+    const xw = s * (halfWidth(1.37) + 0.012);
+    rod(new Vector3(xw, 1.4, -1.12), new Vector3(xw, 1.4, -2.38), 0.004, brassM);
+    for (let z = -1.2; z > -2.38; z -= 0.24) {
+      const fl = new Shape();
+      fl.moveTo(-0.09, 0);
+      fl.lineTo(0.09, 0);
+      fl.lineTo(0.09, -0.15);
+      fl.lineTo(0, -0.25);
+      fl.lineTo(-0.09, -0.15);
+      const f = new Mesh(new ExtrudeGeometry(fl, { depth: 0.006, bevelEnabled: false }), new MeshStandardMaterial({ color: 0xf2e6d0, roughness: 0.9 }));
+      f.rotation.y = Math.PI / 2;
+      f.position.set(xw + 0.004, 1.4, z);
+      f.castShadow = true;
+      g.add(f);
+    }
+  }
+  // 舷窗：正八角金框 + 里面一扇卷帘（米色帘片）
+  for (const s of [-1, 1]) {
+    const xw = s * (halfWidth(PORTHOLE.y) - PORTHOLE.depth);
+    const frame = new Shape();
+    octZY(0, 0, PORTHOLE.r + 0.06).forEach(([a, b], i) => (i === 0 ? frame.moveTo(a, b) : frame.lineTo(a, b)));
+    const hole = new Shape();
+    octZY(0, 0, PORTHOLE.r - 0.01).reverse().forEach(([a, b], i) => (i === 0 ? hole.moveTo(a, b) : hole.lineTo(a, b)));
+    frame.holes.push(hole);
+    const fm = new Mesh(new ExtrudeGeometry(frame, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 }), brassM);
+    fm.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2;
+    fm.position.set(xw + (s > 0 ? 0.0 : 0.0), PORTHOLE.y, PORTHOLE.z);
+    fm.castShadow = true;
+    g.add(fm);
+    for (let i = 0; i < 6; i++) {
+      const yy = PORTHOLE.y + 0.26 - i * 0.09;
+      const half = PORTHOLE.r * Math.cos(Math.PI / 8) - Math.max(0, Math.abs(yy - PORTHOLE.y) - 0.13);
+      const sl = new Mesh(new BoxGeometry(0.01, 0.08, half * 2), new MeshStandardMaterial({ color: i % 3 === 1 ? 0xe0c9a2 : 0xf0dcbc, roughness: 0.9 }));
+      sl.position.set(xw - s * 0.005, yy, PORTHOLE.z);
+      g.add(sl);
+    }
+  }
+  // 遮阳篷：一块条纹布绷在上扇板上（比板宽：z −2.23 ~ −5.16），外沿一排扇贝边；跟着上扇板一起翻
+  const upA = open * ((75 * Math.PI) / 180);
+  const [hx, hy] = c.hingeUpper;
+  const pivot = new Group();
+  pivot.position.set(hx, hy, 0);
+  pivot.rotation.z = upA;
+  const L = OPENING.y1 - OPENING.split + 0.14;
+  const cv = document.createElement('canvas');
+  cv.width = 16;
+  cv.height = 256;
+  const cx = cv.getContext('2d')!;
+  ['#f1e6cf', '#c4cbb6', '#e2c28a', '#f1e6cf'].forEach((col, i) => {
+    cx.fillStyle = col;
+    cx.fillRect(0, i * 64, 16, 64);
+  });
+  const tex = new CanvasTexture(cv);
+  tex.colorSpace = SRGBColorSpace;
+  tex.wrapT = RepeatWrapping;
+  const zA = -2.23;
+  const zB = -5.16;
+  tex.repeat.set(1, (zA - zB) / 0.6);
+  const cloth = new Mesh(new BoxGeometry(0.012, L, zA - zB), new MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+  // 板翻起来时，板的外表面在 pivot 坐标里朝 +x：布贴在板外面
+  cloth.position.set(0.012, -L / 2 + 0.07, (zA + zB) / 2);
+  cloth.castShadow = true;
+  pivot.add(cloth);
+  for (let z = zA - 0.06; z > zB; z -= 0.12) {
+    const sc = new Mesh(new CylinderGeometry(0.06, 0.06, 0.012, 12, 1, false, 0, Math.PI), new MeshStandardMaterial({ color: 0xf1e6cf, roughness: 0.95 }));
+    sc.rotation.z = Math.PI / 2;
+    sc.rotation.y = Math.PI / 2;
+    sc.position.set(0.012, -L + 0.07, z);
+    pivot.add(sc);
+  }
+  g.add(pivot);
 }
