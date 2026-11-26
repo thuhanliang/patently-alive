@@ -1,4 +1,5 @@
 import {
+  LatheGeometry,
   type Material,
   BoxGeometry,
   BufferAttribute,
@@ -221,7 +222,13 @@ function box(
 
 export const ARCH_R = 0.5; // 轮拱：只比轮子（半径 0.42）大一圈
 export const FENDER = { r: 0.64, out: 0.07 }; // 轮眉：凸出车身 7 厘米的八角壳
-export const OPENING = { z0: -2.44, z1: -4.97, y0: 0.97, y1: 2.02, split: 1.5 }; // 服务侧开口；split = 上下两扇板的分界
+export const OPENING = {
+  z0: -2.44,
+  z1: -4.97,
+  y0: 0.97,
+  y1: 2.26,
+  split: 1.45,
+}; // 审核 r2：窗口上沿提到 2.26（设计图窗口净高约 0.9 米） // 服务侧开口；split = 上下两扇板的分界
 export const INTERIOR = { x: 0.86, y0: 0.75, y1: 2.42, z0: -2.4, z1: -5.5 }; // 货箱里面挖空（地板在后门槛高度 0.75）
 /** 后门：双开门，门洞 x ±0.47、高 0.75~2.18（侧视），铰链在两侧外沿。 */
 export const REAR_DOOR = { hw: 0.47, y0: 0.75, y1: 2.18 };
@@ -452,14 +459,17 @@ export function carve(): Carved {
     brush(sectionPrism()),
     INTERSECTION,
   );
+  // 两扇板只取墙的外面一层（约 4.5 厘米厚的薄板，审核 r2：桌面原来有 0.14 米厚，像实心砖）
+  const thin = (y0: number, y1: number, x0: number): BufferGeometry =>
+    box(x0, 1.3, y0, y1, o.z0, o.z1);
   const flapUpper = ev.evaluate(
     full,
-    brush(wall(o.split + 0.004, o.y1)),
+    brush(thin(o.split + 0.004, o.y1, halfWidth(o.y1) - 0.045)),
     INTERSECTION,
   ).geometry;
   const flapLower = ev.evaluate(
     full,
-    brush(wall(o.y0, o.split - 0.004)),
+    brush(thin(o.y0, o.split - 0.004, halfWidth(o.split) - 0.045)),
     INTERSECTION,
   ).geometry;
   body = sub(body, wall(o.y0, o.y1));
@@ -589,12 +599,16 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
       hx + Math.sin(upA) * len,
       hy - Math.cos(upA) * len,
     ];
-    for (const z of [o.z0 - 0.2, o.z1 + 0.2]) {
+    // 审核 r2：撑杆下端插在窗口两个下角外侧车身墙上的三角座里（不压在桌面上），金卡纸色
+    for (const z of [o.z0 + 0.06, o.z1 - 0.06]) {
       const a = new Vector3(tip[0] - 0.02, tip[1] - 0.03, z);
-      const b = new Vector3(halfWidth(1.1) + 0.01, 1.1, z);
+      const b = new Vector3(halfWidth(1.0) + L0 + 0.02, 1.05, z);
+      const seat = new Mesh(new BoxGeometry(0.05, 0.08, 0.06), gold);
+      seat.position.copy(b).add(new Vector3(-0.01, 0, 0));
+      g.add(seat);
       const rod = new Mesh(
-        new CylinderGeometry(0.025, 0.025, a.distanceTo(b), 8),
-        wood,
+        new CylinderGeometry(0.02, 0.02, a.distanceTo(b), 8),
+        gold,
       );
       rod.position.copy(a).add(b).multiplyScalar(0.5);
       rod.quaternion.setFromUnitVectors(
@@ -603,6 +617,25 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
       );
       rod.castShadow = true;
       g.add(rod);
+    }
+    // 桌面后段（狐狸斗托不到的地方）：两块三角托板，一边粘墙、一边粘桌面底
+    for (const z of [-3.9, -4.7]) {
+      const wx = halfWidth(0.8) + L0;
+      g.add(
+        plate(
+          [
+            new Vector3(wx, o.y0 - 0.05, z),
+            new Vector3(wx + 0.32, o.y0 - 0.05, z),
+            new Vector3(wx, o.y0 - 0.37, z),
+          ],
+          new Vector3(0, 0, 1),
+          0.02,
+          [
+            paperMaterial(0xd2bc90, { scale: 0.2 }),
+            paperMaterial(0xf6eee0, { scale: 0.2 }),
+          ],
+        ),
+      );
     }
     // 狗挡板：挂在桌板外沿（铰链），往下撑到地面，当桌腿
     const [lx, ly] = c.hingeLower;
@@ -656,38 +689,13 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
         ),
       );
     const dog = new Shape();
-    // 奔跑的狐狸侧影（带一条大尾巴），约 0.5 × 0.25 米
-    const dp: Array<[number, number]> = [
-      [0.2, 0.06],
-      [0.24, 0.1],
-      [0.27, 0.16],
-      [0.25, 0.2],
-      [0.22, 0.17],
-      [0.2, 0.2],
-      [0.18, 0.16],
-      [0.14, 0.14],
-      [0.0, 0.13],
-      [-0.1, 0.12],
-      [-0.16, 0.16],
-      [-0.24, 0.22],
-      [-0.3, 0.2],
-      [-0.28, 0.14],
-      [-0.2, 0.08],
-      [-0.12, 0.06],
-      [-0.14, 0.0],
-      [-0.1, 0.0],
-      [-0.06, 0.05],
-      [0.06, 0.05],
-      [0.1, 0.0],
-      [0.14, 0.0],
-      [0.13, 0.06],
-    ];
+    const dp = FOX;
     dp.forEach(([a, b], k) =>
-      k === 0 ? dog.moveTo(-a * 1.8, b * 1.8) : dog.lineTo(-a * 1.8, b * 1.8),
+      k === 0 ? dog.moveTo(-a * 2.2, b * 2.2) : dog.lineTo(-a * 2.2, b * 2.2),
     );
     const dm = new Mesh(
       new ExtrudeGeometry(dog, { depth: 0.006, bevelEnabled: false }),
-      new MeshStandardMaterial({ color: 0xb98d58, roughness: 0.9 }),
+      new MeshStandardMaterial({ color: 0xbfa070, roughness: 0.9 }), // 比斗的底色深一档的同色纸（审核 r2）
     );
     dm.rotation.y = Math.PI / 2;
     dm.position.set(ex - 0.026, 0.42, (za + zb) / 2);
@@ -728,6 +736,40 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
   }
   return g;
 }
+
+/** 狐狸侧影（头朝 +x，脚在 y = 0）：四条腿、尖耳尖吻、平直的背、一条上翘的大尾巴；约 0.57 × 0.25 米。 */
+const FOX: Array<[number, number]> = [
+  [-0.12, 0],
+  [-0.1, 0],
+  [-0.09, 0.07],
+  [-0.06, 0.07],
+  [-0.05, 0],
+  [-0.03, 0],
+  [-0.03, 0.08],
+  [0.06, 0.08],
+  [0.07, 0],
+  [0.09, 0],
+  [0.09, 0.07],
+  [0.11, 0.07],
+  [0.12, 0],
+  [0.14, 0],
+  [0.14, 0.09],
+  [0.18, 0.12],
+  [0.24, 0.12],
+  [0.26, 0.14],
+  [0.21, 0.17],
+  [0.21, 0.23],
+  [0.17, 0.18],
+  [0.13, 0.18],
+  [0.1, 0.16],
+  [-0.1, 0.16],
+  [-0.16, 0.18],
+  [-0.24, 0.25],
+  [-0.31, 0.24],
+  [-0.26, 0.18],
+  [-0.17, 0.12],
+  [-0.12, 0.09],
+];
 
 /** 细节件（之前做好的部件，按三视图量的位置装到体块上）：车轮、大灯、挡风玻璃的玻璃和卷帘眼皮。 */
 function addDetails(g: Group, open: number, c: Carved): void {
@@ -862,22 +904,26 @@ function addDetails(g: Group, open: number, c: Carved): void {
         .addScaledVector(n, -0.1),
     );
     g.add(back);
-    const curtain = new Mesh(
-      new BoxGeometry(0.11, len * 0.85, 0.006),
-      slat[0]!,
-    );
+    // 窗帘：外上角一片三角形（收起来的帘子）
+    const tri = [
+      new Vector2(0, 0),
+      new Vector2(-s * 0.17, 0),
+      new Vector2(0, -len * 0.75),
+    ];
+    if (s > 0) tri.reverse();
+    const curtain = new Mesh(pb(tri, 0.006, 0.001), slat[0]!);
     curtain.matrixAutoUpdate = false;
     curtain.matrix.copy(basis).setPosition(
       c0
         .clone()
-        .add(new Vector3(s * (w / 2 - 0.06), 0, 0))
-        .addScaledVector(along, len * 0.45)
+        .add(new Vector3(s * (w / 2), 0, 0))
+        .addScaledVector(along, len - 0.01)
         .addScaledVector(n, -0.085),
     );
     g.add(curtain);
     // 卷帘（眼皮）：帘片从上往下放，放下 30%
     const pitch = 0.046;
-    const k = Math.floor((len * 0.3) / pitch);
+    const k = Math.floor((len * 0.1) / pitch); // 眼皮卷起来只剩一窄条（审核 r2：帘子挡住了玻璃）
     for (let i = 0; i < k; i++) {
       const sl = new Mesh(
         new BoxGeometry(w - 0.02, pitch - 0.004, 0.004),
@@ -984,15 +1030,27 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       g.add(btn);
     }
     // 铃：保险杠正中下面一个吊环，挂一只铜铃
-    const bell = new Mesh(new CylinderGeometry(0.04, 0.08, 0.13, 14), brassM);
-    bell.position.set(0, BUMPER.y0 - 0.1, F + 0.03);
+    // 车铃（审核 r2）：保险杠正中伸出一个 L 形金托架（水平 0.1、下垂 0.05），铃挂在托架头上；铃身是圆顶加外翻唇口
+    const zb = F + BUMPER.depth + L0;
+    const arm = new Mesh(new BoxGeometry(0.03, 0.02, 0.12), brassM);
+    arm.position.set(0, BUMPER.y0 + 0.04, zb + 0.06);
+    const drop = new Mesh(new BoxGeometry(0.03, 0.06, 0.02), brassM);
+    drop.position.set(0, BUMPER.y0 + 0.01, zb + 0.11);
+    g.add(arm, drop);
+    const prof = [
+      new Vector2(0.0, 0.0),
+      new Vector2(0.075, 0.0),
+      new Vector2(0.07, 0.015),
+      new Vector2(0.055, 0.04),
+      new Vector2(0.045, 0.1),
+      new Vector2(0.04, 0.13),
+      new Vector2(0.02, 0.15),
+      new Vector2(0.0, 0.152),
+    ];
+    const bell = new Mesh(new LatheGeometry(prof, 18), brassM);
+    bell.position.set(0, BUMPER.y0 - 0.1, zb + 0.11); // 铃下沿离地约 0.2
+    bell.castShadow = true;
     g.add(bell);
-    rod(
-      new Vector3(0, BUMPER.y0, F + 0.03),
-      new Vector3(0, BUMPER.y0 - 0.035, F + 0.03),
-      0.008,
-      brassM,
-    );
     // 后视镜：A 柱外侧，弯臂根部钉在车身上，镜板竖着（z ≈ −1.0，高 1.51 ~ 1.86）
     for (const s of [-1, 1]) {
       // 后视镜装在 A 柱根部（挡风玻璃下角外侧），在司机看得见的位置：镜子在侧窗前面、车身外面
@@ -1093,35 +1151,16 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       brassM,
     );
     const dog = new Shape();
-    const dp: Array<[number, number]> = [
-      [-0.15, 0],
-      [-0.15, 0.1],
-      [-0.13, 0.15],
-      [-0.08, 0.17],
-      [-0.06, 0.22],
-      [-0.03, 0.2],
-      [0, 0.22],
-      [0.03, 0.17],
-      [0.1, 0.16],
-      [0.15, 0.19],
-      [0.17, 0.14],
-      [0.12, 0.1],
-      [0.1, 0],
-      [0.06, 0],
-      [0.05, 0.07],
-      [-0.02, 0.07],
-      [-0.04, 0],
-      [-0.08, 0],
-      [-0.09, 0.07],
-      [-0.12, 0],
-    ];
-    dp.forEach(([a, b], i) => (i === 0 ? dog.moveTo(a, b) : dog.lineTo(a, b)));
+    const dp = FOX;
+    dp.forEach(([a, b], i) =>
+      i === 0 ? dog.moveTo(a * 1.6, b * 1.6) : dog.lineTo(a * 1.6, b * 1.6),
+    );
     const dg = new Mesh(
       new ExtrudeGeometry(dog, { depth: 0.02, bevelEnabled: false }),
       gold,
     );
     dg.rotation.y = Math.PI / 2;
-    dg.position.set(-0.01, yR + 0.34, -1.82); // 杆只露出一小截：狐狸蹲在栏杆上栏的接头上
+    dg.position.set(-0.01, yR + 0.34 - 0.08 * 1.6, -1.82); // 杆顶插进狐狸肚子下沿（局部 y 0.08）
     dg.castShadow = true;
     g.add(dg);
     // 烟囱：车尾抬高那段车顶上（z −4.43 ~ −4.73），底座 + 方筒 + 帽 + 一根细天线
@@ -1310,7 +1349,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   cv.width = 256;
   cv.height = 16;
   const cx = cv.getContext("2d")!;
-  ["#f1e6cf", "#c4cbb6", "#e2c28a", "#f1e6cf"].forEach((col, i) => {
+  ["#f3e8d2", "#a9b8a0", "#f3e8d2", "#d6ab70"].forEach((col, i) => {
     cx.fillStyle = col;
     cx.fillRect(i * 64, 0, 64, 16);
   });
@@ -1421,10 +1460,17 @@ function cabSideSkin(g: Group, s: number): void {
   );
   // （顺着引擎盖斜边的金条去掉了：它跨过腰线的倒角，会悬在车身外面）
   // 腰线以上：灰绿底板
-  const winHole: Array<[number, number]> = rectZY(-0.96, -1.2, 1.7, 2.16);
   // 车身侧面的前沿：挡风玻璃斜边（侧面轮廓上 (−0.758, 1.685) → (−0.989, 2.369)）；贴纸都要退到这条线后面 2 厘米
   const zs = (y: number): number =>
     -0.758 + ((y - 1.685) * (-0.989 + 0.758)) / (2.369 - 1.685) - 0.02;
+  // 侧窗：梯形，前沿和 A 柱平行（审核 r2）
+  const win = (d: number): Array<[number, number]> => [
+    [zs(1.72 - d) - 0.07 + d, 1.72 - d],
+    [-1.2 - d, 1.72 - d],
+    [-1.2 - d, 2.16 + d],
+    [zs(2.16 + d) - 0.07 + d, 2.16 + d],
+  ];
+  const winHole = win(0);
   sideSheet(
     g,
     s,
@@ -1442,16 +1488,8 @@ function cabSideSkin(g: Group, s: number): void {
     [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.04), winHole],
   );
   // 侧窗：A 柱和舷窗框之间一扇竖窗——深色玻璃（缩在底板后面）+ 金框
-  sideSheet(g, s, xu - 0.01, winHole, 0x4a4036, 0.004);
-  sideSheet(
-    g,
-    s,
-    xu + LT,
-    rectZY(-0.94, -1.22, 1.68, 2.18),
-    [gold, goldDark],
-    0.006,
-    [rectZY(-0.965, -1.195, 1.705, 2.155)],
-  );
+  sideSheet(g, s, xu - 0.02, winHole, 0x6a6258, 0.004); // 和挡风玻璃同色，凹进 2 厘米
+  sideSheet(g, s, xu + LT, win(0.03), [gold, goldDark], 0.006, [win(0)]);
   // 舷窗外圈：奶油色八角圈（挖掉中间）
   sideSheet(
     g,
@@ -1595,6 +1633,7 @@ function cargoSideSkin(g: Group, s: number): void {
   for (let i = 0; i < n; i++) {
     const a = z0 + ((z1 - z0) * i) / n;
     const b = z0 + ((z1 - z0) * (i + 1)) / n;
+    if (s > 0 && b < OPENING.z0 && a > OPENING.z1) continue; // 服务侧开口上面没有墙了
     sideSheet(
       g,
       s,
@@ -1603,7 +1642,9 @@ function cargoSideSkin(g: Group, s: number): void {
       i % 2 ? C_GREEN : C_CREAM,
     );
   }
-  sideGold(g, s, xu + LT, z0, z1, 2.04, 2.08, 0.5);
+  if (s > 0)
+    sideGold(g, s, xu, OPENING.z0 + 0.02, OPENING.z1 - 0.02, 2.26, 2.3, 0.5);
+  else sideGold(g, s, xu + LT, z0, z1, 2.04, 2.08, 0.5);
   const panel = (
     za: number,
     zb: number,
@@ -1698,8 +1739,23 @@ function rearSkin(g: Group): void {
         ] as [number, number],
     );
   for (const s of [-1, 1]) {
-    backSheet(g, z, hex(s * 0.74, 0.62, 0.11), [gold, goldDark], 0.01);
-    backSheet(g, z - 0.01, hex(s * 0.74, 0.62, 0.08), 0xb5523a, 0.012);
+    // 审核 r2：尾灯放大一倍、上移，镶在一块灰绿竖板里
+    backSheet(g, z, rectXY(s * 0.58, s * 0.86, 0.45, 1.35), C_GREEN);
+    backSheet(g, z - LT, hex(s * 0.72, 0.95, 0.16), [gold, goldDark], 0.01);
+    backSheet(g, z - LT - 0.01, hex(s * 0.72, 0.95, 0.12), 0xb5523a, 0.012);
+  }
+  // 门下一级踏板（厚纸板，两个金角码托着）
+  const step = new Mesh(
+    new BoxGeometry(1.0, 0.04, 0.16),
+    new MeshStandardMaterial({ color: 0xd2bc90, roughness: 0.9 }),
+  );
+  step.position.set(0, 0.5, -5.604 - 0.08);
+  step.castShadow = step.receiveShadow = true;
+  g.add(step);
+  for (const x of [-0.4, 0.4]) {
+    const br = new Mesh(new BoxGeometry(0.04, 0.12, 0.12), gold);
+    br.position.set(x, 0.42, -5.604 - 0.06);
+    g.add(br);
   }
   backSheet(
     g,
@@ -1764,8 +1820,27 @@ function roofSkin(g: Group): void {
     [gold, goldDark],
     0.02,
   );
-  // 中线长板
-  topSheet(g, yF, rectXZ(-0.12, 0.12, -2.5, -4.2), C_CREAM, 0.008);
+  // 中段：一张横跨车宽的条纹帆布（奶油、灰绿、沙色，沿车长每 0.15 米一条），和遮阳篷的条纹一样
+  const stripeC = [0xf3e8d2, 0xa9b8a0, 0xf3e8d2, 0xd6ab70];
+  for (let k = 0, z = -2.5; z > -4.2; z -= 0.15, k++)
+    topSheet(
+      g,
+      yF,
+      rectXZ(-0.7, 0.7, z, Math.max(-4.2, z - 0.15)),
+      stripeC[k % 4]!,
+      0.006,
+    );
+  // 车尾抬高段：2 × 2 块灰绿、灰色方纸（天窗压在上面）
+  const sq = [0xbcc6b0, 0xc9c4b8];
+  for (const [i, x0, x1] of [
+    [0, -0.62, -0.02],
+    [1, 0.02, 0.62],
+  ] as const)
+    for (const [j, z0, z1] of [
+      [0, -4.32, -4.84],
+      [1, -4.88, -5.38],
+    ] as const)
+      topSheet(g, yR, rectXZ(x0, x1, z0, z1), sq[(i + j) % 2]!, LT);
   // 天窗
   for (const [x, z] of [
     [-0.32, -4.85],
@@ -1773,7 +1848,7 @@ function roofSkin(g: Group): void {
   ] as const) {
     topSheet(
       g,
-      yR,
+      yR + LT,
       rectXZ(x - 0.2, x + 0.2, z + 0.17, z - 0.17),
       [gold, goldDark],
       0.01,
@@ -1781,7 +1856,7 @@ function roofSkin(g: Group): void {
     );
     topSheet(
       g,
-      yR - 0.004,
+      yR + LT - 0.002,
       rectXZ(x - 0.15, x + 0.15, z + 0.12, z - 0.12),
       0x5a6a72,
       0.006,
