@@ -19,7 +19,7 @@ import {
   Vector3,
 } from "three";
 import { cardify } from "./cardify";
-import { pb } from "./common";
+import { pb, plate } from "./common";
 import { paperMaterial } from "../paper";
 import {
   L0,
@@ -241,7 +241,7 @@ export const PORTHOLE = { z: -1.74, y: 1.88, r: 0.32, depth: 0.04 }; // 底边�
 const F = 0.05;
 export const LAMP = { x: 0.59, y: 1.02, r: 0.26, depth: 0.14 };
 export const GRILLE = { hw: 0.24, y0: 0.92, y1: 1.22, depth: 0.05, bars: 7 };
-export const MAILBOX = { hw: 0.25, y0: 0.63, y1: 0.94, depth: 0.17 };
+export const MAILBOX = { hw: 0.25, y0: 0.63, y1: 0.94, depth: 0.07 }; // 浅浅凸出（审核：原来 0.17 比灯和保险杠都靠前，像积木）
 export const BUMPER = { hw: 1.0, y0: 0.3, y1: 0.52, depth: 0.07 };
 
 /** 上半个八角环（轮拱、轮眉用）：外接半径 r，中心 (z, y)，底边落在 y0。 */
@@ -576,7 +576,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     g.add(pivot);
   };
   // 上扇 = 遮阳篷：翻起来后略往下斜（约 15°）；下扇 = 桌面：放平
-  const upA = open * ((75 * Math.PI) / 180);
+  const upA = open * ((63 * Math.PI) / 180); // 外沿往下斜，侧视落差约 0.3 米
   hinge(c.flapUpper, c.hingeUpper, upA);
   hinge(c.flapLower, c.hingeLower, (-open * Math.PI) / 2);
   const wood = new MeshStandardMaterial({ color: 0xa0703e, roughness: 0.8 });
@@ -615,8 +615,8 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     const trap = new Shape();
     trap.moveTo(-za, 0);
     trap.lineTo(-zb, 0);
-    trap.lineTo(-zb - 0.08, -(ey - 0.3));
-    trap.lineTo(-za + 0.08, -(ey - 0.3));
+    trap.lineTo(-zb - 0.075, -(ey - 0.3));
+    trap.lineTo(-za + 0.075, -(ey - 0.3));
     trap.lineTo(-za, 0);
     const pm = new Mesh(
       new ExtrudeGeometry(trap, {
@@ -632,28 +632,55 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
     pm.position.set(ex - 0.06, ey, 0);
     pm.castShadow = pm.receiveShadow = true;
     g.add(pm);
+    // 两片侧板：把挡板和车身墙连成一个三面的斗（侧板一边折出粘口粘在墙上，顶边粘在桌面下面）
+    const wallX = halfWidth(0.6) + L0;
+    const sideM = [
+      paperMaterial(0xd2bc90, { scale: 0.2 }),
+      paperMaterial(0xf6eee0, { scale: 0.2 }),
+    ];
+    for (const [zt, zbot, nz] of [
+      [za, za - 0.075, 1],
+      [zb, zb + 0.075, -1],
+    ] as const)
+      g.add(
+        plate(
+          [
+            new Vector3(wallX, ey, zt),
+            new Vector3(ex - 0.06, ey, zt),
+            new Vector3(ex - 0.06, 0.3, zbot),
+            new Vector3(wallX, 0.3, zbot),
+          ],
+          new Vector3(0, 0, nz),
+          0.02,
+          sideM,
+        ),
+      );
     const dog = new Shape();
+    // 奔跑的狐狸侧影（带一条大尾巴），约 0.5 × 0.25 米
     const dp: Array<[number, number]> = [
-      [-0.15, 0],
-      [-0.15, 0.1],
-      [-0.13, 0.15],
-      [-0.08, 0.17],
-      [-0.06, 0.22],
-      [-0.03, 0.2],
-      [0, 0.22],
-      [0.03, 0.17],
-      [0.1, 0.16],
-      [0.15, 0.19],
-      [0.17, 0.14],
-      [0.12, 0.1],
-      [0.1, 0],
-      [0.06, 0],
-      [0.05, 0.07],
-      [-0.02, 0.07],
-      [-0.04, 0],
-      [-0.08, 0],
-      [-0.09, 0.07],
-      [-0.12, 0],
+      [0.2, 0.06],
+      [0.24, 0.1],
+      [0.27, 0.16],
+      [0.25, 0.2],
+      [0.22, 0.17],
+      [0.2, 0.2],
+      [0.18, 0.16],
+      [0.14, 0.14],
+      [0.0, 0.13],
+      [-0.1, 0.12],
+      [-0.16, 0.16],
+      [-0.24, 0.22],
+      [-0.3, 0.2],
+      [-0.28, 0.14],
+      [-0.2, 0.08],
+      [-0.12, 0.06],
+      [-0.14, 0.0],
+      [-0.1, 0.0],
+      [-0.06, 0.05],
+      [0.06, 0.05],
+      [0.1, 0.0],
+      [0.14, 0.0],
+      [0.13, 0.06],
     ];
     dp.forEach(([a, b], k) =>
       k === 0 ? dog.moveTo(-a * 1.8, b * 1.8) : dog.lineTo(-a * 1.8, b * 1.8),
@@ -863,11 +890,8 @@ function addDetails(g: Group, open: number, c: Carved): void {
 
 /** 第二批细节件（位置从三视图侧视 / 正视量的；每一件交代装在哪里）。 */
 function addDetails2(g: Group, open: number, c: Carved): void {
-  const brassM = new MeshStandardMaterial({
-    color: 0xd9a050,
-    metalness: 0.35,
-    roughness: 0.42,
-  });
+  // 栏杆、风向标、扣件都用和金框同一种金卡纸（审核：深红褐的金属色和整车的金铜体系脱节）
+  const brassM = gold;
   const woodM = new MeshStandardMaterial({ color: 0xb8864a, roughness: 0.8 });
   const rod = (
     a: Vector3,
@@ -939,7 +963,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
             pts[(k + 1) % pts.length]!.x * pts[k]!.y;
         if (area < 0) pts.reverse();
         const wm = new Mesh(pb(pts, 0.005, 0.001), whiskerMat);
-        wm.position.z = F + 0.1 + i * 0.006;
+        wm.position.z = F + 0.04 + i * 0.006; // 信箱变浅后，纸条跟着贴近正面（在灯座下面）
         wm.castShadow = true;
         g.add(wm);
       }
@@ -947,7 +971,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       const btn = new Mesh(new CylinderGeometry(0.045, 0.05, 0.03, 16), brassM);
       btn.rotation.x = Math.PI / 2;
       btn.rotation.set(0, 0, Math.PI / 2); // 圆扣贴在信箱侧面（朝 ±x）
-      btn.position.set(root.x + s * 0.015, root.y, F + 0.11);
+      btn.position.set(root.x + s * 0.015, root.y, F + 0.045);
       btn.castShadow = true;
       g.add(btn);
     }
@@ -978,7 +1002,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       const m = new Mesh(
         new BoxGeometry(0.24, 0.42, 0.05),
         new MeshStandardMaterial({
-          color: 0xd49a56,
+          color: 0xf2e5cc,
           roughness: 0.85,
           flatShading: true,
         }),
@@ -1056,7 +1080,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     // 风向标：栏杆前段正中一根杆（插在前横杆上的座里），顶上一只狗的剪影
     rod(
       new Vector3(0, yR + 0.24, -1.82),
-      new Vector3(0, yR + 0.6, -1.82),
+      new Vector3(0, yR + 0.34, -1.82),
       0.015,
       brassM,
     );
@@ -1083,15 +1107,13 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       [-0.09, 0.07],
       [-0.12, 0],
     ];
-    dp.forEach(([a, b], i) =>
-      i === 0 ? dog.moveTo(a * 1.4, b * 1.4) : dog.lineTo(a * 1.4, b * 1.4),
-    );
+    dp.forEach(([a, b], i) => (i === 0 ? dog.moveTo(a, b) : dog.lineTo(a, b)));
     const dg = new Mesh(
       new ExtrudeGeometry(dog, { depth: 0.02, bevelEnabled: false }),
-      new MeshStandardMaterial({ color: 0xd9b078, roughness: 0.8 }),
+      gold,
     );
     dg.rotation.y = Math.PI / 2;
-    dg.position.set(-0.01, yR + 0.6, -1.82);
+    dg.position.set(-0.01, yR + 0.34, -1.82); // 杆只露出一小截：狐狸蹲在栏杆上栏的接头上
     dg.castShadow = true;
     g.add(dg);
     // 烟囱：车尾抬高那段车顶上（z −4.43 ~ −4.73），底座 + 方筒 + 帽 + 一根细天线
@@ -1197,26 +1219,26 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   }
   if (STAGE < 6) return;
   // 遮阳篷：一块条纹布绷在上扇板上（比板宽：z −2.23 ~ −5.16），外沿一排扇贝边；跟着上扇板一起翻
-  const upA = open * ((75 * Math.PI) / 180);
+  const upA = open * ((63 * Math.PI) / 180); // 外沿往下斜，侧视落差约 0.3 米
   const [hx, hy] = c.hingeUpper;
   const pivot = new Group();
   pivot.position.set(hx, hy, 0);
   pivot.rotation.z = upA;
   const L = OPENING.y1 - OPENING.split + 0.14;
   const cv = document.createElement("canvas");
-  cv.width = 16;
-  cv.height = 256;
+  cv.width = 256;
+  cv.height = 16;
   const cx = cv.getContext("2d")!;
   ["#f1e6cf", "#c4cbb6", "#e2c28a", "#f1e6cf"].forEach((col, i) => {
     cx.fillStyle = col;
-    cx.fillRect(0, i * 64, 16, 64);
+    cx.fillRect(i * 64, 0, 64, 16);
   });
   const tex = new CanvasTexture(cv);
   tex.colorSpace = SRGBColorSpace;
-  tex.wrapT = RepeatWrapping;
+  tex.wrapS = RepeatWrapping;
   const zA = -2.23;
   const zB = -5.16;
-  tex.repeat.set(1, (zA - zB) / 0.6);
+  tex.repeat.set((zA - zB) / 0.6, 1); // 沿车长方向每 0.15 米一条
   // 布在板的卡纸外面（板外表面 + 卡纸厚 ≈ 2 厘米）
   const cloth = new Mesh(
     new BoxGeometry(0.01, L, zA - zB),
@@ -1492,12 +1514,32 @@ function cargoSideSkin(g: Group, s: number): void {
   for (let i = 0; i < n; i++) {
     const a = z0 + ((z1 - z0) * i) / n;
     const b = z0 + ((z1 - z0) * (i + 1)) / n;
-    sideSheet(g, s, xu, rectZY(a - 0.004, b + 0.004, 2.08, 2.28), i % 2 ? C_GREEN : C_CREAM);
+    sideSheet(
+      g,
+      s,
+      xu,
+      rectZY(a - 0.004, b + 0.004, 2.08, 2.28),
+      i % 2 ? C_GREEN : C_CREAM,
+    );
   }
   sideGold(g, s, xu + LT, z0, z1, 2.04, 2.08, 0.5);
-  const panel = (za: number, zb: number, ya: number, yb: number, x: number): void => {
+  const panel = (
+    za: number,
+    zb: number,
+    ya: number,
+    yb: number,
+    x: number,
+  ): void => {
     sideSheet(g, s, x, rectZY(za, zb, ya, yb), C_GREEN);
-    sideSheet(g, s, x + LT, rectZY(za - 0.03, zb + 0.03, ya - 0.03, yb + 0.03), [gold, goldDark], 0.006, [rectZY(za + 0.01, zb - 0.01, ya + 0.01, yb - 0.01)]);
+    sideSheet(
+      g,
+      s,
+      x + LT,
+      rectZY(za - 0.03, zb + 0.03, ya - 0.03, yb + 0.03),
+      [gold, goldDark],
+      0.006,
+      [rectZY(za + 0.01, zb - 0.01, ya + 0.01, yb - 0.01)],
+    );
   };
   if (s > 0) {
     // 开口后面的高板（腰线上下两段：上段在 0.93 的墙上，下段在 1.02 的墙上）

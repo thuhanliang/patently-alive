@@ -33,7 +33,7 @@ export function buildWheel(R = 0.42, seed = 3): Group {
     const pts = c.map((p) => new Vector2(p.clone().sub(ctr).dot(u), p.clone().sub(ctr).dot(v)));
     if (ShapeUtils.isClockWise(pts)) pts.reverse();
     // col：0 浅、1 深（一圈深浅交替），再加一点点随机的浓淡。
-    const base = col ? 0x3e3a37 : 0x56514b;
+    const base = col ? 0x7a6e62 : 0x908274; // 暖灰褐（审核：近乎纯黑的轮胎是全画面最重的色块）
     const tint = new Color(base).multiplyScalar(0.94 + r() * 0.12).getHex();
     const mm = new Mesh(bev(pts, depth, Math.min(0.007, depth * 0.3), [], 2), brick(tint));
     mm.matrixAutoUpdate = false;
