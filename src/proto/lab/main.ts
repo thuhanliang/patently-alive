@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { card, flat, ngon } from '../../render/three/craft';
 import { buildNose } from '../../render/three/parts/nose';
 import { buildVan } from '../../render/three/parts/van';
+import { buildMassing } from '../../render/three/parts/massing';
 import { buildWheel } from '../../render/three/parts/wheel';
 import { buildWindshield } from '../../render/three/parts/windshield';
 import { Stage } from '../../render/three/stage';
@@ -30,6 +31,27 @@ interface PartDef {
  */
 const CAM = { pos: [60.647, 17.756, 49.145] as [number, number, number], target: [1.59, 1.123, -2.192] as [number, number, number], fov: 4.536 };
 const FILM = { w: 2000, h: 1500 };
+/**
+ * 三视图（art/incoming/lovart/011/3-orthographic.png）的正交对比：比例尺取侧视图里轮子半径 78 像素 = 0.42 米。
+ * 侧视：地面在 y 像素 610，车头正面在 x 像素 145（世界 z = 0.05）；正视：车的中线在 x 像素 1610，地面在 y 像素 600。
+ * 用一台 80 米外、视场角很小的相机模拟正交投影；画面对上参考图的裁切范围。
+ */
+const BP = 0.42 / 78;
+function orthoCam(kind: 'side' | 'front', crop: [number, number, number, number]): { pos: [number, number, number]; target: [number, number, number]; fov: number } {
+  const [x0, y0, w, h] = crop;
+  const D = 80;
+  const fov = (2 * Math.atan((h * BP) / 2 / D) * 180) / Math.PI;
+  if (kind === 'side') {
+    const zc = 0.05 - (x0 + w / 2 - 157) * BP;
+    const yc = (610 - (y0 + h / 2)) * BP;
+    return { pos: [D, yc, zc], target: [0, yc, zc], fov };
+  }
+  const BF = 0.00526; // 正视图自己的比例尺（按车顶高度和侧视对齐）
+  const xc = (x0 + w / 2 - 1626) * BF;
+  const yc = (613 - (y0 + h / 2)) * BF;
+  return { pos: [xc, yc, D], target: [xc, yc, 0], fov: (2 * Math.atan((h * BF) / 2 / D) * 180) / Math.PI };
+  return { pos: [xc, yc, D], target: [xc, yc, 0], fov };
+}
 /** 引擎盖 + 下面的车身：侧面轮廓是一个楔形（前脸顶 → 斜着抬到窗台 → 往下到底），整块挤出，没有缝。 */
 function hoodWedge(): Mesh {
   const zFront = 0.0;
@@ -79,11 +101,13 @@ const PARTS: Record<string, PartDef> = {
   },
   van: {
     sun: [-2.5, 9, 3.5],
-    build: () => buildVan(),
+    build: () => (q.get('model') === 'mass' ? buildMassing() : buildVan()),
     ref: './lab/ref-nose.jpg',
     cam: { pos: CAM.pos, target: CAM.target, fov: CAM.fov },
     crop: (q.get('crop')?.split(',').map(Number) as [number, number, number, number] | undefined) ?? [80, 60, 1760, 1320],
   },
+  side: { sun: [6, 9, 4], build: () => (q.get('model') === 'mass' ? buildMassing() : buildVan()), ref: './lab/ref-side.png', cam: orthoCam('side', [100, 0, 1200, 620]) },
+  front: { sun: [3, 9, 8], build: () => (q.get('model') === 'mass' ? buildMassing() : buildVan()), ref: './lab/ref-front.png', cam: orthoCam('front', [1380, 60, 480, 560]) },
   windshield: {
     sun: [-2.5, 9, 3.5],
     build: () => {
@@ -132,11 +156,11 @@ ground.receiveShadow = true;
 st.scene.add(ground);
 st.scene.add(def.build());
 if (def.sun) st.sun.position.set(...def.sun);
-if (part === 'nose' || part === 'windshield' || part === 'van') {
+if (part === 'nose' || part === 'windshield' || part === 'van' || part === 'side' || part === 'front') {
   // 太阳强一点、天光弱一点：零件下面要有清楚的投影（审核意见：没有投影，零件像贴在墙上）。
-  st.sun.intensity = 3.0;
-  st.sky.intensity = 0.4;
-  st.renderer.toneMappingExposure = part === 'van' ? 0.72 : 0.9;
+  st.sun.intensity = part === 'van' ? 3.6 : 3.0;
+  st.sky.intensity = part === 'van' ? 0.3 : 0.4;
+  st.renderer.toneMappingExposure = part === 'van' ? 0.78 : 0.9;
 }
 st.camera.fov = def.cam.fov;
 st.camera.position.set(...def.cam.pos);

@@ -216,18 +216,19 @@ function frustum(pts: Vector2[], cx: number, cy: number, depth: number, bevel: n
 export function buildNose(seed = 5): Group {
   const g = new Group();
   const r = rng(seed);
-  const W = 1.56;
-  const y0 = 0.52;
-  const y1 = 1.44;
+  // 尺寸来自三视图的正视图（art/incoming/lovart/011/3-orthographic.png，0.0056 米/像素，车的中线 x=1610、地面 y=600）。
+  const W = 1.9;
+  const y0 = 0.6;
+  const y1 = 1.51;
   const F = 0.05;
   const shade = (c: number, k: number): number => (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
   // 厚纸板块：侧面同色略深（体块的侧面不能比正面亮）。
   const block = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(shade(c, 0.78), { scale: 0.25 })];
   // 薄卡纸：切边露浅色纸芯。
   const sheet = (c: number): Material[] => [paperMaterial(c, { scale: 0.25 }), paperMaterial(0xf7efe0, { scale: 0.25 })];
-  const gx = 0.295;
-  const gy0 = 0.9;
-  const gy1 = 1.366;
+  const gx = 0.2;
+  const gy0 = 0.94;
+  const gy1 = 1.2;
   // 底板：一整块厚纸板（颜色深一点，拼缝里露出来），格栅处开口。
   for (const [a, b, c, d] of [
     [-W / 2, y0, W / 2, gy0],
@@ -238,7 +239,7 @@ export function buildNose(seed = 5): Group {
     g.add(m(pb(rect(a, b, c, d), F - 0.016, 0.0015), block(0xc4ae90), 0));
   // 面上几大块暖奶油色厚卡纸拼到边，每块一样厚（正面都在 z = F）；格栅开口处不贴。
   const tones = [0xf1e2c8, 0xeed8bb, 0xf4e8d4, 0xe9d8c0, 0xe2dccd, 0xf0dcc2];
-  const rows = [y0, 0.7, 1.05, y1];
+  const rows = [y0, 0.85, 1.2, y1];
   for (let ri = 0; ri < rows.length - 1; ri++) {
     let x = -W / 2;
     while (x < W / 2 - 0.02) {
@@ -277,7 +278,7 @@ export function buildNose(seed = 5): Group {
   }
   // 格栅：后面一块深褐的板；7 根薄金片（侧面暗，免得被看成两根；条:缝约 0.7:1，宽度、角度带一点手裁的随机）；
   // 格栅很浅：金片几乎和外框齐平，后板只退 3 厘米；外框略凸、上两角切斜角（拼成几块，不带洞的多边形三角化才稳）。
-  const gb = 1.0; // 信箱衬板的上沿：格栅只做这以上看得见的部分（下面被信箱挡住，也不和衬板穿插）
+  const gb = 0.96; // 信箱衬板的上沿：格栅只做这以上看得见的部分（下面被信箱挡住，也不和衬板穿插）
   g.add(m(pb(rect(-gx, gb + 0.002, gx, gy1), 0.01, 0.002), [paperMaterial(0x3a2618, { scale: 0.2 }), paperMaterial(0x3a2618, { scale: 0.2 })], F - 0.03));
   const pitch = (2 * gx) / 7;
   const barSide = new MeshStandardMaterial({ color: 0x6a4a22, roughness: 0.7 });
@@ -302,11 +303,11 @@ export function buildNose(seed = 5): Group {
   ];
   g.add(m(pb(frame, 0.024, 0.0015), block(0xf0e8da), F - 0.016));
   // 方鼻头（信箱）：横长（0.44 × 0.25，比格栅略宽，像外挂上去的盒子），伸出 0.15（约高的 0.6），略呈棱台，折痕级的小倒角；背后一圈和面板同色的窄压边。
-  const bw = 0.205;
-  const by0 = 0.71;
-  const by1 = 0.975;
+  const bw = 0.235;
+  const by0 = 0.64;
+  const by1 = 0.94;
   const bcy = (by0 + by1) / 2;
-  const bd = 0.22;
+  const bd = 0.18;
   const bz = F + 0.01;
   g.add(m(pb(rect(-bw - 0.012, by0 - 0.012, bw + 0.012, by1 + 0.022), 0.026, 0.0015), block(0xf2e6d2), F - 0.016));
   g.add(m(frustum(chamfered(-bw, by0, bw, by1, 0.009), 0, bcy, bd, 0.0015, 0.96), block(0xe0c4a2), bz));
@@ -333,16 +334,16 @@ export function buildNose(seed = 5): Group {
   for (const sx of [-1, 1]) bolt(g, sx * 0.058, bcy - 0.06, fz + 0.004, 0.005);
   // 大灯、胡须。胡须从鼻头外侧的小黄铜座伸出（和鼻头留一个杆径的空隙），三根扇形张开（相邻约 6°），外端圆球帽。
   for (const s of [-1, 1]) {
-    const lamp = headlamp(0.195, 0.195, 0.09, s);
-    lamp.position.set(s * 0.68, 1.096, F);
+    const lamp = headlamp(0.27, 0.27, 0.1, s); // 正八边形，宽 0.54；中心 ±0.56、高 1.01，整只灯都在面板里
+    lamp.position.set(s * 0.56, 1.01, F);
     g.add(lamp);
     // 胡须是悬臂：只在根部的圆座上固定，往外伸出车身轮廓（面板边 ±0.64）外约 0.1。
-    const sx = s * (bw + 0.07);
+    const sx = s * 0.33;
     for (let i = 0; i < 3; i++) {
       // 三根近乎平行、往外略上扬；最上面一根经过灯底时要低于灯（程序算过间隙）。
-      const yi = 0.84 - i * 0.075;
+      const yi = 0.71 - i * 0.075;
       const ang = ((4 - i * 2) * Math.PI) / 180;
-      const len = 0.6;
+      const len = 0.52;
       const seat = new Mesh(new CylinderGeometry(0.02, 0.022, 0.016, 18), goldDark);
       seat.rotation.x = Math.PI / 2;
       seat.position.set(sx, yi, F + 0.008);

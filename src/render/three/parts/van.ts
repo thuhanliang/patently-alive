@@ -1,4 +1,4 @@
-import { CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, Vector2, Vector3 } from 'three';
+import { CanvasTexture, CylinderGeometry, Group, Mesh, MeshStandardMaterial, RepeatWrapping, SphereGeometry, SRGBColorSpace, Vector2, Vector3 } from 'three';
 import { rng } from '../craft';
 import { paperMaterial } from '../paper';
 import { block, bolt, convex, goldMats, mesh, pb, plain, plate, pole, polyPlate, rect, sheet, shade, strip, tileFace, woodMats } from './common';
@@ -166,7 +166,8 @@ function addCab(g: Group): void {
     void i;
   });
   // 前轮拱：金边的圆弧（八角拱）+ 米色边条，围着车轮
-  archTrim(g, XC + 0.002, -1.8, 0.45);
+  archTrim(g, XC + 0.002, -1.88, 0.45);
+  archTrim(g, XG + 0.004, -4.65, 0.45);
   // 驾驶室后墙（舱内看见的那面，朝 +z）和货箱接缝处的金压条（竖的）
   strip(g, V(XC + 0.006, yb + 0.1, Z_CAB), V(XC + 0.006, yTop, Z_CAB), 0.045, 0.01, X, true);
 }
@@ -439,6 +440,35 @@ function addService(g: Group): void {
   for (const y of [0.9, 1.7, 2.2]) strip(g, V(dxx + 0.004, y, zB - 0.0), V(dxx - 0.06, y, zB + 0.0), 0.05, 0.008, V(0, 0, 1), false);
 }
 
+/** 前保险杠（米色厚板 + 两条金带，带螺栓）、下面吊一只铜铃；车顶栏杆上的小狗风向标。 */
+function addExtras(g: Group): void {
+  const zb0 = F + 0.2;
+  const zb1 = F - 0.04;
+  // 保险杠：横在鼻子下面的一块厚纸板条（实心体，前面略探出鼻子面板 0.2）
+  g.add(convex([[-0.86, 0.38, zb0], [0.86, 0.38, zb0], [-0.86, 0.62, zb0], [0.86, 0.62, zb0], [-0.82, 0.38, zb1], [0.82, 0.38, zb1], [-0.82, 0.62, zb1], [0.82, 0.62, zb1]], plain(0xdcc79c)));
+  tileFace(g, V(-0.86, 0.38, zb0 + 0.002), X, Y, 1.72, 0.24, { seed: 91, tones: TONES, cw: 0.34, ch: 0.2 });
+  for (const x of [-0.7, 0.7]) strip(g, V(x, 0.38, zb0 + 0.01), V(x, 0.62, zb0 + 0.01), 0.07, 0.012, Z, true);
+  strip(g, V(-0.86, 0.62, zb0 + 0.01), V(0.86, 0.62, zb0 + 0.01), 0.04, 0.012, Z, false);
+  // 铃铛：挂在保险杠下面一个小金座上（座 → 吊环 → 铃）
+  g.add(convex([[-0.04, 0.38, zb0 - 0.02], [0.04, 0.38, zb0 - 0.02], [-0.04, 0.35, zb0 - 0.02], [0.04, 0.35, zb0 - 0.02], [-0.04, 0.38, zb0 - 0.1], [0.04, 0.38, zb0 - 0.1], [-0.04, 0.35, zb0 - 0.1], [0.04, 0.35, zb0 - 0.1]], new MeshStandardMaterial({ color: 0xd9a050, metalness: 0.3, roughness: 0.45 })));
+  const bell = new Mesh(new CylinderGeometry(0.035, 0.07, 0.1, 14), brass);
+  bell.position.set(0, 0.27, zb0 - 0.06);
+  bell.castShadow = true;
+  g.add(bell);
+  pole(g, V(0, 0.35, zb0 - 0.06), V(0, 0.32, zb0 - 0.06), 0.006, brass, false);
+  // 小狗风向标：栏杆前角上立一根铜杆，顶上一只狗的剪影（两面都看得见的薄板，下面有座）
+  const px = -0.35;
+  const pz = -2.05;
+  const yb = 2.7;
+  pole(g, V(px, yb, pz), V(px, yb + 0.4, pz), 0.02, brass, true);
+  const ball = new Mesh(new SphereGeometry(0.03, 12, 8), gold);
+  ball.position.set(px, yb + 0.4, pz);
+  g.add(ball);
+  const dogFace = new Mesh(new CylinderGeometry(0.0001, 0.0001, 0.0001), brass);
+  void dogFace;
+  g.add(polyPlate(dogShape().map((q) => q.clone().multiplyScalar(1.5)), V(px + 0.006, yb + 0.42, pz + 0.22), V(0, 0, -1), Y, 0.012, sheet(0xd9b078)));
+}
+
 function lamp(g: Group, p: Vector3): void {
   const brassMat = brass;
   g.add(convex([[p.x - 0.07, p.y, p.z - 0.07], [p.x + 0.07, p.y, p.z - 0.07], [p.x - 0.05, p.y + 0.03, p.z - 0.05], [p.x + 0.05, p.y + 0.03, p.z - 0.05], [p.x - 0.07, p.y, p.z + 0.07], [p.x + 0.07, p.y, p.z + 0.07], [p.x - 0.05, p.y + 0.03, p.z + 0.05], [p.x + 0.05, p.y + 0.03, p.z + 0.05]], brassMat));
@@ -517,6 +547,7 @@ export function buildVan(): Group {
   addCabRoof(g);
   addCargo(g);
   addService(g);
+  addExtras(g);
   // 驾驶室侧墙（x = 0.8）和货箱外面（x = 0.9）差 10 厘米：这个台阶的立面（朝 +z）用一整块米色厚板封住，再压一根金条
   for (const sx of [-1, 1]) {
     g.add(plate([V(sx * XC, 0.6, Z_CAB + 0.002), V(sx * XG, 0.6, Z_CAB + 0.002), V(sx * XG, yAt(Z_CAB) - 0.0, Z_CAB + 0.002), V(sx * XC, yAt(Z_CAB) - 0.0, Z_CAB + 0.002)].map((p, i, a) => (sx > 0 ? p : a[(4 - i) % 4]!)), V(0, 0, 1), 0.03, block(0xdcc79c)));

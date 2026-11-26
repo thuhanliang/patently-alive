@@ -32,11 +32,12 @@ function m(geo: BufferGeometry, mats: Material | Material[], z = 0): Mesh {
 }
 
 // 玻璃在世界里的位置（见文件开头）。
-const B = new Vector3(0, 1.782, -1.102);
-const T = new Vector3(0, 2.347, -1.386);
+// 三视图：侧视里玻璃底边 (z -0.97, 高 1.72)、顶边 (z -1.13, 高 2.30)，正视里半宽 0.645 / 0.62。
+const B = new Vector3(0, 1.72, -0.97);
+const T = new Vector3(0, 2.3, -1.13);
 export const GLASS_H = B.distanceTo(T); // ≈ 0.64
 const HW0 = 0.645;
-const HW1 = 0.592;
+const HW1 = 0.62;
 /** 玻璃在高度 w 处的半宽。 */
 const hwAt = (w: number): number => HW0 + ((HW1 - HW0) * w) / GLASS_H;
 
@@ -62,7 +63,7 @@ function plate(c: Vector3[], nrm: Vector3, t: number, mats: Material | Material[
 }
 
 /** 驾驶室侧墙内表面的半宽（A 柱的"肩"、顶梁的折角都接到这里）。 */
-export const CAB_HW = 0.8;
+export const CAB_HW = 0.82;
 /** A 柱的"肩"往后折到的深度（本地 n）。 */
 export const SHOULDER_N = -0.12;
 
