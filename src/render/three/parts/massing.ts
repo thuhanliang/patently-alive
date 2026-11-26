@@ -508,11 +508,12 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   // 扣下面压着三根细长的奶油色卡纸条，根部宽、尖部细，略弯，水平往外伸出车身；离正面 2 厘米，在灯的下面（灯底约 0.75）。
   const whiskerMat = [paperMaterial(0xf6ead4, { scale: 0.15 }), paperMaterial(0xc9a66a, { scale: 0.15 })];
   for (const s of [-1, 1]) {
-    const root = new Vector2(s * 0.3, 0.7);
+    // 根部插在信箱侧面（x ±0.25，信箱从正面伸出 0.17），纸条在灯的下面（灯框底约 0.72）、在正面外 0.1，整根都露在外面
+    const root = new Vector2(s * 0.25, 0.67);
     for (let i = 0; i < 3; i++) {
-      const tipY = 0.7 + (i - 1) * 0.07;
+      const tipY = 0.67 + (i - 1) * 0.05;
       const tip = new Vector2(s * (1.16 - Math.abs(i - 1) * 0.06), tipY + (i - 1) * 0.03);
-      const mid = new Vector2(s * 0.75, (root.y + tipY) / 2 + 0.03);
+      const mid = new Vector2(s * 0.7, (root.y + tipY) / 2 - 0.02);
       const pts: Vector2[] = [];
       const N = 12;
       const curve = (t: number): Vector2 => new Vector2((1 - t) * (1 - t) * root.x + 2 * (1 - t) * t * mid.x + t * t * tip.x, (1 - t) * (1 - t) * root.y + 2 * (1 - t) * t * mid.y + t * t * tip.y);
@@ -532,14 +533,15 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       for (let k = 0; k < pts.length; k++) area += pts[k]!.x * pts[(k + 1) % pts.length]!.y - pts[(k + 1) % pts.length]!.x * pts[k]!.y;
       if (area < 0) pts.reverse();
       const wm = new Mesh(pb(pts, 0.005, 0.001), whiskerMat);
-      wm.position.z = F + L0 + 0.02 + i * 0.004;
+      wm.position.z = F + 0.1 + i * 0.006;
       wm.castShadow = true;
       g.add(wm);
     }
     // 腮扣：金色圆扣压住三根纸条的根部
     const btn = new Mesh(new CylinderGeometry(0.045, 0.05, 0.03, 16), brassM);
     btn.rotation.x = Math.PI / 2;
-    btn.position.set(root.x, root.y, F + L0 + 0.04);
+    btn.rotation.set(0, 0, Math.PI / 2); // 圆扣贴在信箱侧面（朝 ±x）
+    btn.position.set(root.x + s * 0.015, root.y, F + 0.11);
     btn.castShadow = true;
     g.add(btn);
   }
