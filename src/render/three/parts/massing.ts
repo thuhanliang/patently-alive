@@ -713,6 +713,7 @@ export function buildMassing(open = 1, card = false, upto = 99): Group {
   door(c.doorLeft, -D.hw, 0);
   door(c.doorRight, D.hw, open * (-Math.PI / 2) * 0.95);
   if (card && STAGE >= 4) rearSkin(g);
+  if (card && STAGE >= 5) roofSkin(g);
   if (card) addDetails(g, open, c);
   else {
     const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
@@ -1639,4 +1640,78 @@ function rearSkin(g: Group): void {
     [gold, goldDark],
     0.006,
   );
+}
+
+/** 朝上的面贴纸：轮廓在 (x, z)，面在 y0，往上厚 t。 */
+function topSheet(
+  g: Group,
+  y0: number,
+  pts: Array<[number, number]>,
+  color: number | Material[],
+  t = LT,
+  holes: Array<Array<[number, number]>> = [],
+): void {
+  const m = frontSheet(
+    g,
+    0,
+    pts.map(([x, z]) => [x, -z] as [number, number]),
+    color,
+    t,
+    holes.map((h) => h.map(([x, z]) => [x, -z] as [number, number])),
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(0, y0, 0);
+}
+const rectXZ = (
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+): Array<[number, number]> => [
+  [x0, z0],
+  [x1, z0],
+  [x1, z1],
+  [x0, z1],
+];
+
+/**
+ * 车顶（俯视图读的）：栏杆里面驾驶室顶上一扇检修盖（灰绿板 + 金框 + 把手）；车尾抬高那段上两扇方天窗（深色玻璃 + 金框）；
+ * 沿车顶中线一条奶油长板压在顶上（从栏杆后面一直到车尾那段的台阶）。
+ */
+function roofSkin(g: Group): void {
+  const yF = 2.54 + L0; // 前段、中段车顶（侧面轮廓 2.531 ~ 2.547）
+  const yR = 2.649 + L0; // 车尾抬高的那段
+  // 检修盖
+  topSheet(g, yF, rectXZ(-0.28, 0.28, -1.72, -2.24), [gold, goldDark], 0.008);
+  topSheet(g, yF + 0.008, rectXZ(-0.24, 0.24, -1.76, -2.2), C_GREEN, 0.008);
+  topSheet(
+    g,
+    yF + 0.016,
+    rectXZ(-0.08, 0.08, -1.95, -2.0),
+    [gold, goldDark],
+    0.02,
+  );
+  // 中线长板
+  topSheet(g, yF, rectXZ(-0.12, 0.12, -2.5, -4.2), C_CREAM, 0.008);
+  // 天窗
+  for (const [x, z] of [
+    [-0.32, -4.85],
+    [0.32, -5.1],
+  ] as const) {
+    topSheet(
+      g,
+      yR,
+      rectXZ(x - 0.2, x + 0.2, z + 0.17, z - 0.17),
+      [gold, goldDark],
+      0.01,
+      [rectXZ(x - 0.15, x + 0.15, z + 0.12, z - 0.12)],
+    );
+    topSheet(
+      g,
+      yR - 0.004,
+      rectXZ(x - 0.15, x + 0.15, z + 0.12, z - 0.12),
+      0x5a6a72,
+      0.006,
+    );
+  }
 }
