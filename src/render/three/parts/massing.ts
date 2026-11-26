@@ -1,7 +1,7 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Matrix4, CanvasTexture, RepeatWrapping, SRGBColorSpace, SphereGeometry, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
 import { cardify } from './cardify';
 import { L0, LT, octZY as oct8, rectZY, sideGold, sideRivet, sideSheet } from './skin';
-import { headlamp } from './nose';
+import { gold, goldDark, headlamp } from './nose';
 import { buildWheel } from './wheel';
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
 
@@ -403,6 +403,7 @@ function addDetails(g: Group, open: number, c: Carved): void {
   for (const s of [-1, 1]) {
     noseSideSkin(g, s);
     cabSideSkin(g, s);
+    fenderSkin(g, s);
   }
   // 车轮：轮胎砖块 + 八角轮毂（wheel.ts），装在车轴上
   for (const w of WHEELS)
@@ -569,9 +570,10 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     const hole = new Shape();
     octZY(0, 0, PORTHOLE.r - 0.01).reverse().forEach(([a, b], i) => (i === 0 ? hole.moveTo(a, b) : hole.lineTo(a, b)));
     frame.holes.push(hole);
-    const fm = new Mesh(new ExtrudeGeometry(frame, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 }), brassM);
+    const fm = new Mesh(new ExtrudeGeometry(frame, { depth: 0.035, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 }), brassM);
     fm.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2;
-    fm.position.set(xw + (s > 0 ? 0.0 : 0.0), PORTHOLE.y, PORTHOLE.z);
+    // 金框压在外皮最外一层上（凹槽外沿），框的里沿伸进凹槽
+    fm.position.set(s * (halfWidth(PORTHOLE.y) + L0 + LT), PORTHOLE.y, PORTHOLE.z);
     fm.castShadow = true;
     g.add(fm);
     for (let i = 0; i < 6; i++) {
@@ -643,8 +645,8 @@ function paintBody(c: Vector3, n: Vector3): number {
  */
 const C_CREAM = 0xf2e5cc;
 const C_CREAM2 = 0xeedcbc;
-const C_PEACH = 0xe8c8a0;
-const C_GREEN = 0xc5ccb8;
+const C_PEACH = 0xe6bf8e;
+const C_GREEN = 0xbcc6b0;
 const C_SAND = 0xdcc49a;
 function noseSideSkin(g: Group, s: number): void {
   const x1 = halfWidth(1.0) + L0; // 第 1 层贴在这里
@@ -684,7 +686,11 @@ function cabSideSkin(g: Group, s: number): void {
   // 轮眉后面那一小段车身：沙色板
   sideSheet(g, s, xl, rectZY(-2.2, -2.42, 0.36, 1.06), C_SAND);
   // 腰线以上：灰绿底板
-  sideSheet(g, s, xu, rectZY(-1.02, -2.42, 1.5, 2.26), C_GREEN);
+  const winHole: Array<[number, number]> = rectZY(-0.96, -1.2, 1.7, 2.16);
+  sideSheet(g, s, xu, rectZY(-0.9, -2.42, 1.5, 2.26), C_GREEN, LT, [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.04), winHole]);
+  // 侧窗：A 柱和舷窗框之间一扇竖窗——深色玻璃（缩在底板后面）+ 金框
+  sideSheet(g, s, xu - 0.01, winHole, 0x4a4036, 0.004);
+  sideSheet(g, s, xu + LT, rectZY(-0.94, -1.22, 1.68, 2.18), [gold, goldDark], 0.006, [rectZY(-0.965, -1.195, 1.705, 2.155)]);
   // 奶油方框（四条板）
   const fz0 = -1.24;
   const fz1 = -2.3;
@@ -709,8 +715,27 @@ function cabSideSkin(g: Group, s: number): void {
     sideRivet(g, s, xu + 2 * LT, PORTHOLE.z + Math.cos(ang) * (PORTHOLE.r + 0.09), PORTHOLE.y + Math.sin(ang) * (PORTHOLE.r + 0.09), 0.009);
   }
   // A 柱后沿：竖金条
-  sideGold(g, s, xu, -1.02, -1.07, 1.5, 2.26, 0.22);
+  sideGold(g, s, xu, -0.88, -0.93, 1.5, 2.26, 0.22);
   // 顶梁：奶油横板 + 金条
-  sideSheet(g, s, xu, rectZY(-1.02, -2.42, 2.26, 2.33), C_CREAM);
-  sideGold(g, s, xu + LT, -1.02, -2.42, 2.29, 2.33, 0.3);
+  sideSheet(g, s, xu, rectZY(-0.95, -2.42, 2.26, 2.33), C_CREAM);
+  sideGold(g, s, xu + LT, -0.95, -2.42, 2.29, 2.33, 0.3);
+}
+
+/** 轮眉外面的纸：一圈奶油色厚纸板（八角环），外沿一道金边、几颗铆钉。轮眉外表面在 x = 1.02 + 0.07 + 整纸。 */
+function fenderSkin(g: Group, s: number): void {
+  const xf = halfWidth(0.5) + FENDER.out + L0;
+  for (const w of WHEELS) {
+    const ring = (r0: number, r1: number): Array<Array<[number, number]>> => {
+      const top = (r: number): Array<[number, number]> => oct8(w.z, w.r, r).filter(([, y]) => y > w.r - 1e-6);
+      const o = top(r1).sort((a, b) => b[0] - a[0]);
+      const i = top(r0).sort((a, b) => a[0] - b[0]);
+      return [[[w.z + r1, w.r - 0.02], ...o, [w.z - r1, w.r - 0.02], [w.z - r0, w.r - 0.02], ...i, [w.z + r0, w.r - 0.02]]];
+    };
+    sideSheet(g, s, xf, ring(ARCH_R + 0.02, FENDER.r - 0.03)[0]!, C_CREAM);
+    sideSheet(g, s, xf, ring(FENDER.r - 0.028, FENDER.r)[0]!, [gold, goldDark], 0.006);
+    for (let k = 0; k < 4; k++) {
+      const ang = Math.PI / 8 + (k * Math.PI) / 4;
+      sideRivet(g, s, xf + LT, w.z + Math.cos(ang) * (FENDER.r - 0.07), w.r + Math.sin(ang) * (FENDER.r - 0.07), 0.012);
+    }
+  }
 }
