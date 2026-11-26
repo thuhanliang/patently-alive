@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape, ShapeUtils, Vector2 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
 
 /**
@@ -152,7 +152,14 @@ function box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: num
 export const ARCH_R = 0.5; // 轮拱：只比轮子（半径 0.42）大一圈
 export const FENDER = { r: 0.64, out: 0.07 }; // 轮眉：凸出车身 7 厘米的八角壳
 export const OPENING = { z0: -2.44, z1: -4.97, y0: 0.97, y1: 2.02, split: 1.5 }; // 服务侧开口；split = 上下两扇板的分界
-export const INTERIOR = { x: 0.86, y0: 0.97, y1: 2.42, z0: -2.4, z1: -5.5 }; // 货箱里面挖空的部分（墙厚约 0.07–0.16）
+export const INTERIOR = { x: 0.86, y0: 0.75, y1: 2.42, z0: -2.4, z1: -5.5 }; // 货箱里面挖空（地板在后门槛高度 0.75）
+/** 后门：双开门，门洞 x ±0.47、高 0.75~2.18（侧视），铰链在两侧外沿。 */
+export const REAR_DOOR = { hw: 0.47, y0: 0.75, y1: 2.18 };
+/** 挡风玻璃：斜面上 y 1.73~2.17（侧视和正视一致），x ±0.72，中间立柱 6 厘米；往里凹 12 厘米（玻璃后面放卷帘眼皮）。 */
+export const WINDSHIELD = { hw: 0.72, mull: 0.03, y0: 1.73, y1: 2.17, depth: 0.12 };
+/** 挡风玻璃所在的斜面（侧面轮廓上的两点）。 */
+const WS_A: [number, number] = [-0.758, 1.685];
+const WS_B: [number, number] = [-0.989, 2.369];
 export const PORTHOLE = { z: -1.74, y: 1.86, r: 0.33, depth: 0.04 };
 // 前脸（正视图读的；正面在 z = 0.05）
 const F = 0.05;
@@ -195,6 +202,9 @@ export interface Carved {
   flapLower: BufferGeometry;
   hingeUpper: [number, number]; // (x, y)
   hingeLower: [number, number];
+  /** 后门两扇，铰链在 x = ∓REAR_DOOR.hw、z = 后墙外面（-5.604）。 */
+  doorLeft: BufferGeometry;
+  doorRight: BufferGeometry;
 }
 
 /** 体块 → 雕刻。每一步都是一个"是什么"的东西（见 docs/research/van-inventory.md）。 */
@@ -227,6 +237,20 @@ export function carve(): Carved {
   }
   body = add(body, box(-MAILBOX.hw, MAILBOX.hw, MAILBOX.y0, MAILBOX.y1, F - 0.02, F + MAILBOX.depth));
   body = add(body, box(-BUMPER.hw, BUMPER.hw, BUMPER.y0, BUMPER.y1, F - 0.1, F + BUMPER.depth));
+  // 引擎盖中间的凸起：顺着引擎盖斜面，高 7 厘米，x ±0.38（正视）
+  body = add(body, prismX([[-0.06, 1.3], [-0.06, 1.5], [-0.585, 1.64], [-0.7, 1.72], [-0.7, 1.3]], -0.38, 0.38));
+  // 挡风玻璃窗洞：沿斜面往里凹（两片，中间留立柱）
+  {
+    const dz = WS_B[0] - WS_A[0];
+    const dy = WS_B[1] - WS_A[1];
+    const L = Math.hypot(dz, dy);
+    const n: [number, number] = [dy / L, -dz / L]; // 斜面的外法线（朝前上）
+    const at = (y: number): [number, number] => [WS_A[0] + (dz * (y - WS_A[1])) / dy, y];
+    const W = WINDSHIELD;
+    const q = (p: [number, number], k: number): [number, number] => [p[0] + n[0] * k, p[1] + n[1] * k];
+    const pts: Array<[number, number]> = [q(at(W.y0), -W.depth), q(at(W.y1), -W.depth), q(at(W.y1), 0.4), q(at(W.y0), 0.4)];
+    for (const s of [-1, 1]) body = sub(body, prismX(pts, s > 0 ? W.mull : -W.hw, s > 0 ? W.hw : -W.mull));
+  }
   // 货箱：先挖空里面（留墙、地板、车顶）
   const I = INTERIOR;
   body = sub(body, box(-I.x, I.x, I.y0, I.y1, I.z0, I.z1));
@@ -237,7 +261,13 @@ export function carve(): Carved {
   const flapUpper = ev.evaluate(full, brush(wall(o.split + 0.004, o.y1)), INTERSECTION).geometry;
   const flapLower = ev.evaluate(full, brush(wall(o.y0, o.split - 0.004)), INTERSECTION).geometry;
   body = sub(body, wall(o.y0, o.y1));
-  return { body: body.geometry, flapUpper, flapLower, hingeUpper: [halfWidth(o.y1), o.y1], hingeLower: [halfWidth(o.y0), o.y0] };
+  // 后门：从后墙上切下来的两扇门板
+  const D = REAR_DOOR;
+  const leaf = (x0: number, x1: number): BufferGeometry => box(x0, x1, D.y0, D.y1, -5.7, I.z1 - 0.01);
+  const doorLeft = ev.evaluate(full, brush(leaf(-D.hw, -0.004)), INTERSECTION).geometry;
+  const doorRight = ev.evaluate(full, brush(leaf(0.004, D.hw)), INTERSECTION).geometry;
+  body = sub(body, leaf(-D.hw, D.hw));
+  return { body: body.geometry, flapUpper, flapLower, hingeUpper: [halfWidth(o.y1), o.y1], hingeLower: [halfWidth(o.y0), o.y0], doorLeft, doorRight };
 }
 
 /** 正面截面沿 z 挤出的长条（比车长一点）。 */
@@ -276,8 +306,50 @@ export function buildMassing(open = 1): Group {
     pivot.rotation.z = angle;
     g.add(pivot);
   };
-  hinge(c.flapUpper, c.hingeUpper, (open * Math.PI) / 2);
+  // 上扇 = 遮阳篷：翻起来后略往下斜（约 15°）；下扇 = 桌面：放平
+  const upA = open * ((75 * Math.PI) / 180);
+  hinge(c.flapUpper, c.hingeUpper, upA);
   hinge(c.flapLower, c.hingeLower, (-open * Math.PI) / 2);
+  const wood = new MeshStandardMaterial({ color: 0xa0703e, roughness: 0.8 });
+  const o = OPENING;
+  if (open > 0.05) {
+    // 遮阳篷的两根斜撑：上端顶在篷板外沿下面，下端顶在桌板高度的车身上（各有座）
+    const [hx, hy] = c.hingeUpper;
+    const len = o.y1 - o.split;
+    const tip: [number, number] = [hx + Math.sin(upA) * len, hy - Math.cos(upA) * len];
+    for (const z of [o.z0 - 0.2, o.z1 + 0.2]) {
+      const a = new Vector3(tip[0] - 0.02, tip[1] - 0.03, z);
+      const b = new Vector3(halfWidth(1.1) + 0.01, 1.1, z);
+      const rod = new Mesh(new CylinderGeometry(0.025, 0.025, a.distanceTo(b), 8), wood);
+      rod.position.copy(a).add(b).multiplyScalar(0.5);
+      rod.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      rod.castShadow = true;
+      g.add(rod);
+    }
+    // 狗挡板：挂在桌板外沿（铰链），往下撑到地面，当桌腿
+    const [lx, ly] = c.hingeLower;
+    const tw = o.split - o.y0; // 桌板伸出的宽度
+    const ex = lx + tw * Math.sin((open * Math.PI) / 2);
+    const ey = ly + tw * Math.cos((open * Math.PI) / 2);
+    const panel = new Mesh(new BoxGeometry(0.03, ey - 0.02, 1.2), new MeshStandardMaterial({ color: 0xcfa56e, roughness: 0.9, flatShading: true }));
+    panel.position.set(ex - 0.03, (ey - 0.02) / 2, (o.z0 + o.z1) / 2 + 0.55);
+    panel.castShadow = panel.receiveShadow = true;
+    g.add(panel);
+  }
+  // 后门：右扇开（转到车身 +x 那侧，贴着侧墙），左扇关着
+  const D = REAR_DOOR;
+  const door = (geo: BufferGeometry, hx: number, angle: number): void => {
+    const pivot = new Group();
+    pivot.position.set(hx, 0, -5.604);
+    const m = new Mesh(geo, new MeshStandardMaterial({ color: 0xd9c49e, roughness: 0.9, flatShading: true }));
+    m.position.set(-hx, 0, 5.604);
+    m.castShadow = m.receiveShadow = true;
+    pivot.add(m);
+    pivot.rotation.y = angle;
+    g.add(pivot);
+  };
+  door(c.doorLeft, -D.hw, 0);
+  door(c.doorRight, D.hw, open * (-Math.PI / 2) * 0.95);
   const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
