@@ -107,7 +107,7 @@ export function buildWheel(R = 0.42, seed = 3): Group {
   // 金色轮毂：八角的金卡纸块，上面一颗八芒星，正中一颗圆钉。
   const gold = new MeshStandardMaterial({ color: 0xe6b552, metalness: 0.6, roughness: 0.32, emissive: 0x3a2508 });
   const goldDark = new MeshStandardMaterial({ color: 0xa97a2c, metalness: 0.7, roughness: 0.45 });
-  const hub = new Mesh(bev(ngon(8, rimR * 0.72, Math.PI / 8), 0.02, 0.004), [paperMaterial(0x3a2a1e, { scale: 0.1 }), paperMaterial(0x4a3626, { scale: 0.1 })]);
+  const hub = new Mesh(bev(ngon(8, rimR * 0.72, Math.PI / 8), 0.02, 0.004), [paperMaterial(0x6a5a4a, { scale: 0.1 }), paperMaterial(0x5a4a3c, { scale: 0.1 })]);
   hub.position.z = -0.024; // 前面在 -0.004：比瓣、段都低，不共面
   // 轮毂（照效果图放大看）：一块金色八角，被 8 道暗缝分成 8 瓣（每瓣一块倒角的金卡纸），
   // 中间一颗小八角凸台；外面那圈深色环也分成 8 段。
@@ -118,15 +118,21 @@ export function buildWheel(R = 0.42, seed = 3): Group {
     const off = new Vector2(Math.cos(am), Math.sin(am)).multiplyScalar(sep);
     return [new Vector2(Math.cos(a0) * r0, Math.sin(a0) * r0).add(off), new Vector2(Math.cos(a0) * r1, Math.sin(a0) * r1).add(off), new Vector2(Math.cos(a1) * r1, Math.sin(a1) * r1).add(off), new Vector2(Math.cos(a1) * r0, Math.sin(a1) * r0).add(off)];
   };
+  // 新三视图（011）：轮毂是一圈奶油色八角板，中间一个金色齿轮（8 个齿），中心一颗金钉。
   const petals = new Group();
-  for (let k = 0; k < 8; k++) {
-    const pm = new Mesh(bev(wedge(rimR * 0.09, rimR * 0.42, k, 0.004), 0.014, 0.005), [gold, goldDark]);
-    pm.position.z = 0.002;
-    petals.add(pm);
-    const seg = new Mesh(bev(wedge(rimR * 0.46, rimR * 0.69, k, 0.003), 0.014, 0.004), [paperMaterial(0x5a4634, { scale: 0.1 }), paperMaterial(0x6a5440, { scale: 0.1 })]);
-    seg.position.z = -0.006;
-    petals.add(seg);
+  const cog: Vector2[] = [];
+  for (let k = 0; k < 16; k++) {
+    const r = k % 2 ? rimR * 0.3 : rimR * 0.4;
+    const a0 = (k / 16) * Math.PI * 2 - Math.PI / 32;
+    const a1 = a0 + Math.PI / 16;
+    cog.push(new Vector2(Math.cos(a0) * r, Math.sin(a0) * r), new Vector2(Math.cos(a1) * r, Math.sin(a1) * r));
   }
+  const cg = new Mesh(bev(cog, 0.02, 0.004, [ngon(16, rimR * 0.12).reverse()]), [gold, goldDark]);
+  cg.position.z = 0.002;
+  petals.add(cg);
+  const creamHub = new Mesh(bev(ngon(8, rimR * 0.7, Math.PI / 8), 0.014, 0.004, [ngon(8, rimR * 0.46, Math.PI / 8).reverse()]), [paperMaterial(0xe8dcc6, { scale: 0.1 }), paperMaterial(0xcdbfa8, { scale: 0.1 })]);
+  creamHub.position.z = -0.006;
+  petals.add(creamHub);
   petals.position.z = 0.0;
   const boss = new Mesh(bev(ngon(8, rimR * 0.1, Math.PI / 8), 0.02, 0.006), [gold, goldDark]);
   boss.position.z = 0.008;
