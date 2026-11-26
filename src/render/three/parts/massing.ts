@@ -1,5 +1,5 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Shape, ShapeUtils, Vector2 } from 'three';
-import { Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
+import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
 
 /**
  * 整车体块（2026-11-26，用户建议的建模顺序：先描外轮廓 → 推出实体 → 用三视图定大轮廓 → 再定车轮、窗、门 → 最后细化每个面）。
@@ -149,27 +149,95 @@ function box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: num
   return g;
 }
 
-export const ARCH_R = 0.6; // 轮拱八角的外接半径（侧视：拱宽约 0.57·2，顶在 0.97 米）
-export const OPENING = { z0: -2.44, z1: -4.97, y0: 0.97, y1: 2.02 }; // 服务侧开口：x 从 +1.2 挖到 -0.9（留 12 厘米的远侧墙）
+export const ARCH_R = 0.5; // 轮拱：只比轮子（半径 0.42）大一圈
+export const FENDER = { r: 0.64, out: 0.07 }; // 轮眉：凸出车身 7 厘米的八角壳
+export const OPENING = { z0: -2.44, z1: -4.97, y0: 0.97, y1: 2.02, split: 1.5 }; // 服务侧开口；split = 上下两扇板的分界
+export const INTERIOR = { x: 0.86, y0: 0.97, y1: 2.42, z0: -2.4, z1: -5.5 }; // 货箱里面挖空的部分（墙厚约 0.07–0.16）
 export const PORTHOLE = { z: -1.74, y: 1.86, r: 0.33, depth: 0.04 };
+// 前脸（正视图读的；正面在 z = 0.05）
+const F = 0.05;
+export const LAMP = { x: 0.59, y: 1.02, r: 0.26, depth: 0.14 };
+export const GRILLE = { hw: 0.24, y0: 0.92, y1: 1.22, depth: 0.05, bars: 7 };
+export const MAILBOX = { hw: 0.25, y0: 0.63, y1: 0.94, depth: 0.17 };
+export const BUMPER = { hw: 1.0, y0: 0.3, y1: 0.52, depth: 0.07 };
 
-export function cuts(): Cut[] {
-  const out: Cut[] = [];
-  // 轮拱：八角，只挖掉两侧（轮子之间的车底保留，中间是底盘）
-  for (const w of WHEELS) {
-    const oct = octZY(w.z, w.r, ARCH_R).filter(([, y]) => y > w.r - 0.01); // 上半个八角
-    const pts: Array<[number, number]> = [[w.z + ARCH_R, -0.1], ...oct.sort((a, b) => b[0] - a[0]), [w.z - ARCH_R, -0.1]];
-    for (const s of [-1, 1]) out.push({ name: 'arch', geo: prismX(pts, s > 0 ? 0.52 : -1.2, s > 0 ? 1.2 : -0.52) });
-  }
-  // 服务侧开口（+x）
-  const o = OPENING;
-  out.push({ name: 'opening', geo: box(-0.9, 1.2, o.y0, o.y1, o.z0, o.z1) });
-  // 舷窗凹槽（两侧）
-  for (const s of [-1, 1]) {
-    const hw = 0.93;
-    out.push({ name: 'porthole', geo: prismX(octZY(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r), s > 0 ? hw - PORTHOLE.depth : -1.2, s > 0 ? 1.2 : -hw + PORTHOLE.depth) });
+/** 上半个八角环（轮拱、轮眉用）：外接半径 r，中心 (z, y)，底边落在 y0。 */
+function archPts(z: number, y: number, r: number, y0: number): Array<[number, number]> {
+  const top = octZY(z, y, r).filter(([, yy]) => yy > y - 1e-6).sort((a, b) => b[0] - a[0]);
+  return [[z + r, y0], ...top, [z - r, y0]];
+}
+function ringPts(z: number, y: number, r0: number, r1: number): Array<[number, number]> {
+  const outer = octZY(z, y, r1).filter(([, yy]) => yy > y - 1e-6).sort((a, b) => b[0] - a[0]);
+  const inner = octZY(z, y, r0).filter(([, yy]) => yy > y - 1e-6).sort((a, b) => a[0] - b[0]);
+  return [[z + r1, y], ...outer, [z - r1, y], [z - r0, y], ...inner, [z + r0, y]];
+}
+/** 在 (x, y) 平面里画的轮廓，沿 z 从 z0 挤到 z1 的实体。 */
+function prismZ(pts: Array<[number, number]>, z0: number, z1: number): BufferGeometry {
+  const sh = new Shape();
+  pts.forEach(([x, y], i) => (i === 0 ? sh.moveTo(x, y) : sh.lineTo(x, y)));
+  const geo = new ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false });
+  geo.translate(0, 0, z0);
+  return geo;
+}
+function octXY(x: number, y: number, r: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let k = 0; k < 8; k++) {
+    const a = Math.PI / 8 + (k * Math.PI) / 4;
+    out.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
   }
   return out;
+}
+
+export interface Carved {
+  body: BufferGeometry;
+  /** 服务侧的两扇板（合上时正好补上开口），在世界坐标里；铰链轴沿 z。 */
+  flapUpper: BufferGeometry;
+  flapLower: BufferGeometry;
+  hingeUpper: [number, number]; // (x, y)
+  hingeLower: [number, number];
+}
+
+/** 体块 → 雕刻。每一步都是一个"是什么"的东西（见 docs/research/van-inventory.md）。 */
+export function carve(): Carved {
+  const ev = new Evaluator();
+  ev.attributes = ['position', 'uv', 'normal'];
+  const add = (a: Brush, g: BufferGeometry): Brush => ev.evaluate(a, brush(g), ADDITION);
+  const sub = (a: Brush, g: BufferGeometry): Brush => ev.evaluate(a, brush(g), SUBTRACTION);
+  // 大块：侧面轮廓 ∩ 正面截面
+  let body = ev.evaluate(brush(prismX(PROFILE, -1.2, 1.2)), brush(sectionPrism()), INTERSECTION);
+  // 轮拱：只挖车身两侧，比轮子大一圈；外面一圈凸出来的八角轮眉壳
+  for (const w of WHEELS)
+    for (const s of [-1, 1]) {
+      body = sub(body, prismX(archPts(w.z, w.r, ARCH_R, -0.1), s > 0 ? 0.55 : -1.3, s > 0 ? 1.3 : -0.55));
+      const hw = halfWidth(0.5);
+      body = add(body, prismX(ringPts(w.z, w.r, ARCH_R, FENDER.r), s > 0 ? hw - 0.05 : -hw - FENDER.out, s > 0 ? hw + FENDER.out : -hw + 0.05));
+    }
+  // 舷窗凹槽
+  for (const s of [-1, 1]) {
+    const hw = halfWidth(PORTHOLE.y);
+    body = sub(body, prismX(octZY(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r), s > 0 ? hw - PORTHOLE.depth : -1.3, s > 0 ? 1.3 : -hw + PORTHOLE.depth));
+  }
+  // 前脸：灯（正八角筒）、格栅（先凹进去，再挤出 7 根竖条）、信箱（凸出的盒子）、保险杠
+  for (const s of [-1, 1]) body = add(body, prismZ(octXY(s * LAMP.x, LAMP.y, LAMP.r), F - 0.02, F + LAMP.depth));
+  body = sub(body, box(-GRILLE.hw, GRILLE.hw, GRILLE.y0, GRILLE.y1, F - GRILLE.depth, F + 0.1));
+  const pitch = (2 * GRILLE.hw) / GRILLE.bars;
+  for (let i = 0; i < GRILLE.bars; i++) {
+    const x = -GRILLE.hw + (i + 0.5) * pitch;
+    body = add(body, box(x - pitch * 0.2, x + pitch * 0.2, GRILLE.y0 - 0.005, GRILLE.y1 + 0.005, F - GRILLE.depth - 0.01, F - 0.012));
+  }
+  body = add(body, box(-MAILBOX.hw, MAILBOX.hw, MAILBOX.y0, MAILBOX.y1, F - 0.02, F + MAILBOX.depth));
+  body = add(body, box(-BUMPER.hw, BUMPER.hw, BUMPER.y0, BUMPER.y1, F - 0.1, F + BUMPER.depth));
+  // 货箱：先挖空里面（留墙、地板、车顶）
+  const I = INTERIOR;
+  body = sub(body, box(-I.x, I.x, I.y0, I.y1, I.z0, I.z1));
+  // 服务侧开口：切下来的那块墙 = 两扇能开合的板（上扇向上翻、下扇向下翻成桌面）
+  const o = OPENING;
+  const wall = (y0: number, y1: number): BufferGeometry => box(I.x - 0.01, 1.3, y0, y1, o.z0, o.z1);
+  const full = ev.evaluate(brush(prismX(PROFILE, -1.2, 1.2)), brush(sectionPrism()), INTERSECTION);
+  const flapUpper = ev.evaluate(full, brush(wall(o.split + 0.004, o.y1)), INTERSECTION).geometry;
+  const flapLower = ev.evaluate(full, brush(wall(o.y0, o.split - 0.004)), INTERSECTION).geometry;
+  body = sub(body, wall(o.y0, o.y1));
+  return { body: body.geometry, flapUpper, flapLower, hingeUpper: [halfWidth(o.y1), o.y1], hingeLower: [halfWidth(o.y0), o.y0] };
 }
 
 /** 正面截面沿 z 挤出的长条（比车长一点）。 */
@@ -190,28 +258,34 @@ function brush(geo: BufferGeometry): Brush {
   return b;
 }
 
-/** 体块 = 侧面轮廓挤出 ∩ 正面截面挤出；再减掉每一刀。 */
-export function carvedBody(withCuts = true): BufferGeometry {
-  const ev = new Evaluator();
-  ev.attributes = ['position', 'uv', 'normal'];
-  let cur = ev.evaluate(brush(prismX(PROFILE, -1.2, 1.2)), brush(sectionPrism()), INTERSECTION);
-  if (withCuts) for (const c of cuts()) cur = ev.evaluate(cur, brush(c.geo), SUBTRACTION);
-  return cur.geometry;
-}
-
-export function buildMassing(): Group {
+/** open：服务侧两扇板打开的程度（0 合上，1 全开：上扇翻到水平、下扇放平成桌面）。 */
+export function buildMassing(open = 1): Group {
   const g = new Group();
-  const body = new Mesh(carvedBody(), new MeshStandardMaterial({ color: 0xe6d6b8, roughness: 0.9, flatShading: true }));
+  const mat = new MeshStandardMaterial({ color: 0xe6d6b8, roughness: 0.9, flatShading: true });
+  const c = carve();
+  const body = new Mesh(c.body, mat);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
+  const hinge = (geo: BufferGeometry, [hx, hy]: [number, number], angle: number): void => {
+    const pivot = new Group();
+    pivot.position.set(hx, hy, 0);
+    const m = new Mesh(geo, new MeshStandardMaterial({ color: 0xd9c49e, roughness: 0.9, flatShading: true }));
+    m.position.set(-hx, -hy, 0);
+    m.castShadow = m.receiveShadow = true;
+    pivot.add(m);
+    pivot.rotation.z = angle;
+    g.add(pivot);
+  };
+  hinge(c.flapUpper, c.hingeUpper, (open * Math.PI) / 2);
+  hinge(c.flapLower, c.hingeLower, (-open * Math.PI) / 2);
   const tire = new MeshStandardMaterial({ color: 0x4a4440, roughness: 0.9 });
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
-      const c = new Mesh(new CylinderGeometry(w.r, w.r, WHEEL_W, 24), tire);
-      c.rotation.z = Math.PI / 2;
-      c.position.set(s * WHEEL_X, w.r, w.z);
-      c.castShadow = true;
-      g.add(c);
+      const t = new Mesh(new CylinderGeometry(w.r, w.r, WHEEL_W, 24), tire);
+      t.rotation.z = Math.PI / 2;
+      t.position.set(s * WHEEL_X, w.r, w.z);
+      t.castShadow = true;
+      g.add(t);
     }
   return g;
 }
