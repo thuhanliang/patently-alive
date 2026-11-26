@@ -1226,6 +1226,79 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     }
   }
   if (STAGE < 6) return;
+  // 坡道：后门（右扇开着）门槛上挂下来的一块木板，往后斜着落到地上；两条边框 + 几道防滑横条，上端两个金挂钩扣在门槛上
+  {
+    const wood2 = [
+      paperMaterial(0xc9a26a, { scale: 0.15 }),
+      paperMaterial(0xa8834e, { scale: 0.15 }),
+    ];
+    const top = new Vector3(0, 0.75, -5.62);
+    const bot = new Vector3(0, 0.02, -6.5);
+    const x0 = 0.03;
+    const x1 = 0.45;
+    const dir = bot.clone().sub(top).normalize();
+    const nrm = new Vector3(0, -dir.z, dir.y).normalize(); // 朝上
+    const up = nrm.y > 0 ? nrm : nrm.negate();
+    g.add(
+      plate(
+        [
+          new Vector3(x0, top.y, top.z),
+          new Vector3(x1, top.y, top.z),
+          new Vector3(x1, bot.y, bot.z),
+          new Vector3(x0, bot.y, bot.z),
+        ],
+        up,
+        0.03,
+        wood2,
+      ),
+    );
+    const L = top.distanceTo(bot);
+    for (let k = 1; k < 6; k++) {
+      const p = top
+        .clone()
+        .addScaledVector(dir, (L * k) / 6)
+        .addScaledVector(up, 0.012);
+      g.add(
+        plate(
+          [
+            new Vector3(x0 + 0.03, p.y, p.z + 0.02 * dir.z),
+            new Vector3(x1 - 0.03, p.y, p.z + 0.02 * dir.z),
+            new Vector3(x1 - 0.03, p.y - 0.02 * dir.y, p.z - 0.02 * dir.z),
+            new Vector3(x0 + 0.03, p.y - 0.02 * dir.y, p.z - 0.02 * dir.z),
+          ],
+          up,
+          0.012,
+          wood2,
+        ),
+      );
+    }
+    for (const x of [x0 + 0.06, x1 - 0.06]) {
+      const hook = new Mesh(new BoxGeometry(0.05, 0.06, 0.04), gold);
+      hook.position.set(x, 0.77, -5.6);
+      g.add(hook);
+    }
+  }
+  // 折叠凳：放在桌子前面的地上（侧视 z −2.9 ~ −3.4），两组交叉的木腿 + 一块凳面
+  {
+    const cx = 1.85;
+    const cz = -3.15;
+    const legM = new MeshStandardMaterial({ color: 0xb8864a, roughness: 0.8 });
+    for (const dx of [-0.16, 0.16])
+      for (const sgn of [-1, 1])
+        rod(
+          new Vector3(cx + dx, 0.01, cz - sgn * 0.2),
+          new Vector3(cx + dx, 0.46, cz + sgn * 0.2),
+          0.016,
+          legM,
+        );
+    const seat = new Mesh(
+      new BoxGeometry(0.4, 0.03, 0.46),
+      new MeshStandardMaterial({ color: 0xd8b680, roughness: 0.85 }),
+    );
+    seat.position.set(cx, 0.48, cz);
+    seat.castShadow = seat.receiveShadow = true;
+    g.add(seat);
+  }
   // 遮阳篷：一块条纹布绷在上扇板上（比板宽：z −2.23 ~ −5.16），外沿一排扇贝边；跟着上扇板一起翻
   const upA = open * ((63 * Math.PI) / 180); // 外沿往下斜，侧视落差约 0.3 米
   const [hx, hy] = c.hingeUpper;
