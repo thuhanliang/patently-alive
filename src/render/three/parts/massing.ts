@@ -558,10 +558,11 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     const elbow = new Vector3(s * (halfWidth(1.6) + 0.3), 1.66, -0.74);
     rod(root, elbow, 0.02, brassM);
     rod(elbow, new Vector3(s * (halfWidth(1.6) + 0.33), 1.76, -0.74), 0.02, brassM);
-    const m = new Mesh(new BoxGeometry(0.05, 0.42, 0.24), new MeshStandardMaterial({ color: 0xd49a56, roughness: 0.85, flatShading: true }));
+    // 镜面朝后（司机从侧窗往后看得见）：镜板在 x–y 平面里，宽 0.24、高 0.42、厚 0.05；从侧面看只是一条窄边，从正面看是一整块
+    const m = new Mesh(new BoxGeometry(0.24, 0.42, 0.05), new MeshStandardMaterial({ color: 0xd49a56, roughness: 0.85, flatShading: true }));
     m.position.set(s * (halfWidth(1.6) + 0.35), 1.96, -0.74);
     m.rotation.z = -s * 0.12;
-    m.rotation.y = s * 0.35;
+    m.rotation.y = -s * 0.25;
     m.castShadow = true;
     g.add(m);
   }
@@ -750,8 +751,6 @@ function cabSideSkin(g: Group, s: number): void {
   sideSheet(g, s, xl, rectZY(-0.88, -2.42, 1.09, 1.38), C_GREEN);
   sideGold(g, s, xl + LT, -0.88, -2.42, 1.35, 1.395, 0.24);
   sideGold(g, s, xl, -0.88, -2.42, 1.065, 1.09, 0.0);
-  // 轮眉后面那一小段车身：沙色板
-  sideSheet(g, s, xl, rectZY(-2.2, -2.42, 0.36, 1.06), C_SAND);
   // 引擎盖侧面上沿（腰线以上、挡风玻璃前面那一小块三角）：奶油板 + 顺着引擎盖斜边一条金条
   const hood = (z: number): number => (z > -0.058 ? 1.481 : z > -0.585 ? 1.481 + ((1.572 - 1.481) * (z + 0.058)) / (-0.585 + 0.058) : 1.572 + ((1.658 - 1.572) * (z + 0.585)) / (-0.72 + 0.585));
   sideSheet(g, s, xu, [[-0.3, 1.49], [-0.86, 1.49], [-0.86, 1.67], [-0.72, hood(-0.72) - 0.012], [-0.585, hood(-0.585) - 0.012], [-0.3, hood(-0.3) - 0.012]], C_CREAM);
