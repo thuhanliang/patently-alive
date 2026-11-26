@@ -1,6 +1,6 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, Mesh, MeshStandardMaterial, Matrix4, CanvasTexture, RepeatWrapping, SRGBColorSpace, SphereGeometry, Shape, ShapeUtils, Vector2, Vector3 } from 'three';
 import { cardify } from './cardify';
-import { L0, LT, octZY as oct8, rectZY, sideGold, sideRivet, sideSheet } from './skin';
+import { L0, LT, frontGold, frontRivet, frontSheet, octZY as oct8, rectXY, rectZY, sideGold, sideRivet, sideSheet } from './skin';
 import { gold, goldDark, headlamp } from './nose';
 import { buildWheel } from './wheel';
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg';
@@ -405,6 +405,7 @@ function addDetails(g: Group, open: number, c: Carved): void {
     cabSideSkin(g, s);
     fenderSkin(g, s);
   }
+  frontSkin(g);
   // 车轮：轮胎砖块 + 八角轮毂（wheel.ts），装在车轴上
   for (const w of WHEELS)
     for (const s of [-1, 1]) {
@@ -580,7 +581,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       const yy = PORTHOLE.y + 0.26 - i * 0.09;
       const half = PORTHOLE.r * Math.cos(Math.PI / 8) - Math.max(0, Math.abs(yy - PORTHOLE.y) - 0.13);
       const sl = new Mesh(new BoxGeometry(0.01, 0.08, half * 2), new MeshStandardMaterial({ color: i % 3 === 1 ? 0xe0c9a2 : 0xf0dcbc, roughness: 0.9 }));
-      sl.position.set(xw - s * 0.005, yy, PORTHOLE.z);
+      sl.position.set(xw + s * (L0 + 0.008), yy, PORTHOLE.z); // 凹槽底的整纸外面
       g.add(sl);
     }
   }
@@ -685,6 +686,10 @@ function cabSideSkin(g: Group, s: number): void {
   sideGold(g, s, xl, -0.88, -2.42, 1.065, 1.09, 0.0);
   // 轮眉后面那一小段车身：沙色板
   sideSheet(g, s, xl, rectZY(-2.2, -2.42, 0.36, 1.06), C_SAND);
+  // 引擎盖侧面上沿（腰线以上、挡风玻璃前面那一小块三角）：奶油板 + 顺着引擎盖斜边一条金条
+  const hood = (z: number): number => (z > -0.058 ? 1.481 : z > -0.585 ? 1.481 + ((1.572 - 1.481) * (z + 0.058)) / (-0.585 + 0.058) : 1.572 + ((1.658 - 1.572) * (z + 0.585)) / (-0.72 + 0.585));
+  sideSheet(g, s, xu, [[-0.12, 1.49], [-0.86, 1.49], [-0.86, 1.67], [-0.72, hood(-0.72) - 0.012], [-0.585, hood(-0.585) - 0.012], [-0.12, hood(-0.12) - 0.012]], C_CREAM);
+  sideSheet(g, s, xu + LT, [[-0.12, hood(-0.12) - 0.05], [-0.585, hood(-0.585) - 0.05], [-0.72, hood(-0.72) - 0.05], [-0.72, hood(-0.72) - 0.015], [-0.585, hood(-0.585) - 0.015], [-0.12, hood(-0.12) - 0.015]], [gold, goldDark], 0.006);
   // 腰线以上：灰绿底板
   const winHole: Array<[number, number]> = rectZY(-0.96, -1.2, 1.7, 2.16);
   sideSheet(g, s, xu, rectZY(-0.9, -2.42, 1.5, 2.26), C_GREEN, LT, [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.04), winHole]);
@@ -738,4 +743,33 @@ function fenderSkin(g: Group, s: number): void {
       sideRivet(g, s, xf + LT, w.z + Math.cos(ang) * (FENDER.r - 0.07), w.r + Math.sin(ang) * (FENDER.r - 0.07), 0.012);
     }
   }
+}
+
+/**
+ * 车头正面（正视图读的，z = 0.05 + 整纸）：两侧灯后面各一块灰绿竖板，格栅两边各一条竖金条，
+ * 鼻子顶上一条横金条（引擎盖下沿）；保险杠上四个金卡扣（带两颗铆钉）、两端金包角；信箱正面一块方金搭扣。
+ */
+function frontSkin(g: Group): void {
+  const z1 = F + L0;
+  for (const s of [-1, 1]) {
+    frontSheet(g, z1, rectXY(s * 0.98, s * 0.74, 0.62, 1.33), C_GREEN);
+    frontGold(g, z1 + LT, s * 0.995, s * 0.965, 0.6, 1.36, 0.22);
+    frontGold(g, z1, s * 0.26, s * 0.3, GRILLE.y1 + 0.02, 1.36, 0.0);
+  }
+  frontGold(g, z1, -1.0, 1.0, 1.36, 1.4, 0.32);
+  // 灯下面一条横的奶油板（灯和保险杠之间）
+  frontSheet(g, z1, rectXY(-0.72, -0.27, 0.6, 0.72), C_CREAM2);
+  frontSheet(g, z1, rectXY(0.27, 0.72, 0.6, 0.72), C_CREAM2);
+  // 保险杠（正面在 z = F + BUMPER.depth + 整纸）
+  const zb = F + BUMPER.depth + L0;
+  for (const x of [-0.74, -0.37, 0.37, 0.74]) {
+    frontSheet(g, zb, rectXY(x - 0.045, x + 0.045, BUMPER.y0 + 0.01, BUMPER.y1 - 0.01), [gold, goldDark], 0.008);
+    frontRivet(g, zb + 0.008, x, BUMPER.y1 - 0.06, 0.012);
+    frontRivet(g, zb + 0.008, x, BUMPER.y0 + 0.06, 0.012);
+  }
+  for (const s of [-1, 1]) frontSheet(g, zb, rectXY(s * BUMPER.hw, s * (BUMPER.hw - 0.08), BUMPER.y0, BUMPER.y1), [gold, goldDark], 0.01);
+  // 信箱正面的金搭扣
+  const zm = F + MAILBOX.depth + L0;
+  frontSheet(g, zm, rectXY(-0.06, 0.06, 0.74, 0.86), [gold, goldDark], 0.012, [rectXY(-0.035, 0.035, 0.765, 0.835)]);
+  frontSheet(g, zm, rectXY(-0.035, 0.035, 0.765, 0.835), 0x6a5040, 0.004);
 }

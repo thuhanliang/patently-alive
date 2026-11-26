@@ -96,3 +96,49 @@ export function sideGold(g: Group, s: number, x0: number, z0: number, z1: number
     }
   }
 }
+
+/** 在车头正面（朝 +z）贴一层纸：轮廓在 (x, y) 里，面在 z0，往外厚 t。 */
+export function frontSheet(g: Group, z0: number, pts: Array<[number, number]>, color: number | Material[], t = LT, holes: Array<Array<[number, number]>> = []): Mesh {
+  const toV = (p: Array<[number, number]>): Vector2[] => {
+    const v = p.map(([x, y]) => new Vector2(x, y));
+    let area = 0;
+    for (let i = 0; i < v.length; i++) area += v[i]!.x * v[(i + 1) % v.length]!.y - v[(i + 1) % v.length]!.x * v[i]!.y;
+    return area < 0 ? v.reverse() : v;
+  };
+  const geo = pb(toV(pts), t, Math.min(0.0015, t * 0.3), holes.map((h) => toV(h).reverse()));
+  const m = new Mesh(geo, typeof color === 'number' ? paper(color) : color);
+  m.position.z = z0;
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  return m;
+}
+export const rectXY = (x0: number, x1: number, y0: number, y1: number): Array<[number, number]> => [
+  [x0, y0],
+  [x1, y0],
+  [x1, y1],
+  [x0, y1],
+];
+/** 正面一颗铆钉。 */
+export function frontRivet(g: Group, z0: number, x: number, y: number, r = 0.012): void {
+  const w = new Mesh(new CylinderGeometry(r * 1.5, r * 1.5, 0.003, 14), goldDark);
+  w.rotation.x = Math.PI / 2;
+  w.position.set(x, y, z0 + 0.0015);
+  const c = new Mesh(new SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), gold);
+  c.rotation.x = Math.PI / 2;
+  c.scale.set(1, 0.55, 1);
+  c.position.set(x, y, z0 + 0.003);
+  c.castShadow = true;
+  g.add(w, c);
+}
+export function frontGold(g: Group, z0: number, x0: number, x1: number, y0: number, y1: number, rivetStep = 0): void {
+  frontSheet(g, z0, rectXY(x0, x1, y0, y1), [gold, goldDark], 0.006);
+  if (rivetStep > 0) {
+    const horiz = Math.abs(x1 - x0) > Math.abs(y1 - y0);
+    const len = horiz ? Math.abs(x1 - x0) : Math.abs(y1 - y0);
+    const k = Math.max(2, Math.round(len / rivetStep) + 1);
+    for (let i = 0; i < k; i++) {
+      const t = (i + 0.5) / k;
+      frontRivet(g, z0 + 0.006, horiz ? x0 + (x1 - x0) * t : (x0 + x1) / 2, horiz ? (y0 + y1) / 2 : y0 + (y1 - y0) * t, Math.min(0.011, Math.min(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 0.3));
+    }
+  }
+}
