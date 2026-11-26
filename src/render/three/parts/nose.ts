@@ -212,6 +212,11 @@ function frustum(pts: Vector2[], cx: number, cy: number, depth: number, bevel: n
   return geo;
 }
 
+export const NOSE_KX = 1.19;
+export const NOSE_KY = 0.957;
+export const NOSE_KZ = 0.8;
+export const NOSE_DY = 0.085;
+
 /** 车鼻子正面：面板正面在 z = F。 */
 export function buildNose(seed = 5): Group {
   const g = new Group();
@@ -351,5 +356,10 @@ export function buildNose(seed = 5): Group {
       whisker(g, new Vector3(sx, yi, F + 0.02), new Vector3(sx + s * len * Math.cos(ang), yi + len * Math.sin(ang), F + 0.075));
     }
   }
+  // 镜头校正（2026-11-26）：这件的尺寸是在"偏转 31°、俯视 23°"的镜头下量的，后来用轮毂（正八边形）重新定镜头，
+  // 偏转是 40°、俯视 16°。同一个画面里：横向（x）要放大约 1.19 倍，深度（z）缩到约 0.8 倍，纵向缩到约 0.96 并上移 0.085。
+  // 灯因此更接近正八边形，灯筒、信箱更浅。
+  g.scale.set(NOSE_KX, NOSE_KY, NOSE_KZ);
+  g.position.y = NOSE_DY;
   return g;
 }
