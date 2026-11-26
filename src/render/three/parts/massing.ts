@@ -308,7 +308,7 @@ export function buildMassing(open = 1, card = false): Group {
     }
     const grp = new Group();
     const core = new Mesh(geo, new MeshStandardMaterial({ color: 0x8a7458, roughness: 0.95 }));
-    grp.add(core, cardify(geo, { seed: Math.floor(color % 97) }));
+    grp.add(core, cardify(geo, color === 0xe6d6b8 ? { paint: paintBody } : { color }));
     return grp;
   };
   g.add(solid(c.body));
@@ -540,8 +540,13 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   rod(new Vector3(0.3, 2.65 + 0.36, -4.58), new Vector3(0.3, 2.65 + 0.5, -4.58), 0.006, brassM);
   // 旗帜：驾驶室 + 货箱前段侧面一排小三角旗（z −1.12 ~ −2.4，到开口前为止），挂在一根细绳上，绳两端钉在车身上
   for (const s of [1]) {
-    const xw = s * (halfWidth(1.37) + 0.012);
-    rod(new Vector3(xw, 1.4, -1.12), new Vector3(xw, 1.4, -2.38), 0.004, brassM);
+    const xw = s * (halfWidth(1.2) + 0.016);
+    // 灰绿腰带：驾驶室侧面腰线下一条长拼板（贴在侧墙卡纸外面），旗子挂在它上面
+    const band = new Mesh(new BoxGeometry(0.008, 0.3, 1.36), new MeshStandardMaterial({ color: 0xc9cfbd, roughness: 0.9 }));
+    band.position.set(xw - 0.002, 1.23, -1.74);
+    band.castShadow = band.receiveShadow = true;
+    g.add(band);
+    rod(new Vector3(xw + 0.006, 1.34, -1.12), new Vector3(xw + 0.006, 1.34, -2.38), 0.004, brassM);
     for (let z = -1.2; z > -2.38; z -= 0.24) {
       const fl = new Shape();
       fl.moveTo(-0.09, 0);
@@ -551,7 +556,7 @@ function addDetails2(g: Group, open: number, c: Carved): void {
       fl.lineTo(-0.09, -0.15);
       const f = new Mesh(new ExtrudeGeometry(fl, { depth: 0.006, bevelEnabled: false }), new MeshStandardMaterial({ color: 0xf2e6d0, roughness: 0.9 }));
       f.rotation.y = Math.PI / 2;
-      f.position.set(xw + 0.004, 1.4, z);
+      f.position.set(xw + 0.01, 1.34, z);
       f.castShadow = true;
       g.add(f);
     }
@@ -615,4 +620,19 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     pivot.add(sc);
   }
   g.add(pivot);
+}
+
+/**
+ * 车身每张纸的颜色（按部位，不随机）：顶面最浅；侧墙奶油；腰线以下略深的米色；轮眉、保险杠沙色；
+ * 前脸奶油；格栅凹槽里深褐。拼板（灰绿腰带）是单独贴上去的部件，见 addDetails2。
+ */
+function paintBody(c: Vector3, n: Vector3): number {
+  if (c.z < F - 0.03 && c.z > F - GRILLE.depth - 0.02 && Math.abs(c.x) < GRILLE.hw && c.y > GRILLE.y0 && c.y < GRILLE.y1) return 0x3a2a1c; // 格栅里面
+  if (c.y < BUMPER.y1 + 0.01 && c.z > F - 0.12) return 0xdcc49a; // 保险杠
+  if (Math.abs(c.x) > halfWidth(0.5) + 0.01 && c.y < 1.2) return 0xdcc49a; // 轮眉
+  if (n.y > 0.5) return 0xf6ecd9; // 顶面、引擎盖
+  if (n.z > 0.7) return 0xf0e2c6; // 前脸
+  if (Math.abs(n.x) > 0.7 && c.y < 1.4) return 0xe8d6b4; // 腰线以下的侧墙
+  if (Math.abs(n.x) > 0.7) return 0xf2e5cc; // 腰线以上的侧墙
+  return 0xece0c6; // 其它（斜面、后墙、内壁）
 }

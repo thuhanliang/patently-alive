@@ -24,8 +24,10 @@ export interface CardOpts {
   trim?: number;
   /** 只包夹角大于这个角度的棱（度） */
   trimAngle?: number;
-  /** 不切块（整面一张）：小零件用 */
-  whole?: boolean;
+  /** 切块（旧做法）；默认不切：一个面就是一张整纸 */
+  tiles?: boolean;
+  /** 按部位给颜色：面的中心（世界坐标）和法线 → 颜色 */
+  paint?: (c: Vector3, n: Vector3) => number;
   /** 竖直面上卡纸的水平分带（世界高度）：放在真实的结构线上，全车上下对齐 */
   bands?: number[];
   /** 单一颜色（不随机） */
@@ -152,7 +154,18 @@ export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
     // 网格切块（每块一个颜色）。布尔运算后的三角形在接缝处有 T 形接头，按边界追轮廓不可靠，
     // 所以每块卡纸 = 网格块 ∩ 这个面里的每个三角形（碎片同色、无缝，看起来是一整块）。
     const cells: Array<[number, number, number, number, number]> = [];
-    if (opts.whole) cells.push([minX - 1, minY - 1, maxX + 1, maxY + 1, opts.color ?? tones[Math.floor(r() * tones.length)]!]);
+    if (!opts.tiles) {
+      // 一个面 = 一张整纸，颜色按部位定
+      const cen = new Vector3();
+      let wsum = 0;
+      for (const t of f.tris) {
+        const [a, b, c2] = tri[t]!;
+        cen.addScaledVector(verts[a]!.clone().add(verts[b]!).add(verts[c2]!).multiplyScalar(1 / 3), areas[t]!);
+        wsum += areas[t]!;
+      }
+      cen.multiplyScalar(1 / wsum);
+      cells.push([minX - 1, minY - 1, maxX + 1, maxY + 1, opts.paint ? opts.paint(cen, n) : (opts.color ?? 0xf0e2c6)]);
+    }
     else {
       // 竖直面：按全车统一的水平带切（面内的 y 就是世界高度）；其它面：按尺寸均分
       let edges: number[];
@@ -175,7 +188,7 @@ export function cardify(geo: BufferGeometry, opts: CardOpts = {}): Group {
     const M = new Matrix4().makeBasis(u, v, n).setPosition(o);
     for (const [x0, y0, x1, y1, tone] of cells) {
       const rect = [new Vector2(x0 + gap / 2, y0 + gap / 2), new Vector2(x1 - gap / 2, y0 + gap / 2), new Vector2(x1 - gap / 2, y1 - gap / 2), new Vector2(x0 + gap / 2, y1 - gap / 2)];
-      const lift = !opts.whole && r() < 0.06 ? thick * 0.5 : 0; // 有的块多叠一层，露出切边
+      const lift = opts.tiles && r() < 0.06 ? thick * 0.5 : 0; // 有的块多叠一层，露出切边
       for (const tr of tri2) {
         let pts = tr.slice();
         if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
