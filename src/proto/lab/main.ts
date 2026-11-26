@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, ExtrudeGeometry, Group, Matrix4, Mesh, type Object3D, Shape, Vector3 } from 'three';
+import { Plane, Box3, BoxGeometry, ExtrudeGeometry, Group, Matrix4, Mesh, type Object3D, Shape, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { card, flat, ngon } from '../../render/three/craft';
 import { buildNose } from '../../render/three/parts/nose';
@@ -182,6 +182,12 @@ if (ex > 0) {
   }
 }
 st.scene.add(built);
+// ?clip=axis,sign,value：剖面（例如 y,-1,2.3 只留 y ≤ 2.3；x,1,0 只留 x ≥ 0），给内部设计出图用
+if (q.get('clip')) {
+  const [ax, sg, val] = q.get('clip')!.split(',');
+  const n = new Vector3(ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0).multiplyScalar(Number(sg));
+  st.renderer.clippingPlanes = [new Plane(n, -Number(sg) * Number(val))];
+}
 if (def.sun) st.sun.position.set(...def.sun);
 if (part === 'nose' || part === 'windshield' || part === 'van' || part === 'side' || part === 'front') {
   // 太阳强一点、天光弱一点：零件下面要有清楚的投影（审核意见：没有投影，零件像贴在墙上）。
