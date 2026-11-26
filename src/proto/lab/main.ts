@@ -1,4 +1,4 @@
-import { BoxGeometry, ExtrudeGeometry, Group, Mesh, Shape, Vector3 } from 'three';
+import { Box3, BoxGeometry, ExtrudeGeometry, Group, Matrix4, Mesh, type Object3D, Shape, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { card, flat, ngon } from '../../render/three/craft';
 import { buildNose } from '../../render/three/parts/nose';
@@ -154,7 +154,34 @@ const ground = new Mesh(flat(ngon(48, 6), 0.01), card(0xcfc6b6, 1.2, 'kraft'));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 st.scene.add(ground);
-st.scene.add(def.build());
+const built = def.build();
+// ?explode=k：炸开分解。每个部件沿"离车中心的方向"往外推（横向推得最多），大块（车身壳）留在原地，
+// 车身壳里面的层（体块芯、整纸）也拆开，能看到每一层纸是怎么叠在车身上的。
+const ex = Number(q.get('explode') ?? '0');
+if (ex > 0) {
+  built.updateMatrixWorld(true);
+  const all = new Box3().setFromObject(built);
+  const ctr = all.getCenter(new Vector3());
+  const push = (o: Object3D, k: number): void => {
+    const b = new Box3().setFromObject(o);
+    if (b.isEmpty()) return;
+    const c = b.getCenter(new Vector3());
+    const d = c.sub(ctr);
+    const off = new Vector3(d.x * 1.8, d.y * 0.9 + 0.15, d.z * 0.35).multiplyScalar(k);
+    if (o.matrixAutoUpdate) o.position.add(off);
+    else o.matrix.premultiply(new Matrix4().makeTranslation(off.x, off.y, off.z));
+  };
+  for (const ch of [...built.children]) {
+    const size = new Box3().setFromObject(ch).getSize(new Vector3());
+    if (size.z > 3 && ch.children.length > 1) {
+      // 车身：芯留在原地，整纸壳往外推一点（看得见两层）
+      ch.children.forEach((c, i) => {
+        if (i > 0) c.position.y += 0.6 * ex;
+      });
+    } else push(ch, ex);
+  }
+}
+st.scene.add(built);
 if (def.sun) st.sun.position.set(...def.sun);
 if (part === 'nose' || part === 'windshield' || part === 'van' || part === 'side' || part === 'front') {
   // 太阳强一点、天光弱一点：零件下面要有清楚的投影（审核意见：没有投影，零件像贴在墙上）。
