@@ -504,16 +504,45 @@ function addDetails2(g: Group, open: number, c: Carved): void {
     x.castShadow = true;
     g.add(x);
   };
-  // 胡须：从鼻子正面灯下方伸出，往外、往后掠（侧视里从正面一直延到 z = −0.5，像猫胡须贴着腮帮往后）
-  for (const s of [-1, 1])
+  // 胡须（换掉金属杆，用户：金属杆的感觉不好）：剪纸的猫胡须——每侧一颗金色圆"腮扣"钉在信箱两边，
+  // 扣下面压着三根细长的奶油色卡纸条，根部宽、尖部细，略弯，水平往外伸出车身；离正面 2 厘米，在灯的下面（灯底约 0.75）。
+  const whiskerMat = [paperMaterial(0xf6ead4, { scale: 0.15 }), paperMaterial(0xc9a66a, { scale: 0.15 })];
+  for (const s of [-1, 1]) {
+    const root = new Vector2(s * 0.3, 0.7);
     for (let i = 0; i < 3; i++) {
-      const y = 0.74 + i * 0.065;
-      const a = new Vector3(s * 0.36, y, F + 0.02);
-      const b = new Vector3(s * (1.2 - i * 0.03), y + 0.01 - i * 0.02, -0.12 - i * 0.04); // 正视：水平往外伸出车身；侧视：略往后掠
-      rod(a, b, 0.011, brassM);
-      ball(a, 0.02, brassM);
-      ball(b, 0.024, brassM);
+      const tipY = 0.7 + (i - 1) * 0.07;
+      const tip = new Vector2(s * (1.16 - Math.abs(i - 1) * 0.06), tipY + (i - 1) * 0.03);
+      const mid = new Vector2(s * 0.75, (root.y + tipY) / 2 + 0.03);
+      const pts: Vector2[] = [];
+      const N = 12;
+      const curve = (t: number): Vector2 => new Vector2((1 - t) * (1 - t) * root.x + 2 * (1 - t) * t * mid.x + t * t * tip.x, (1 - t) * (1 - t) * root.y + 2 * (1 - t) * t * mid.y + t * t * tip.y);
+      const halfW = (t: number): number => 0.018 * (1 - t) + 0.003;
+      const top: Vector2[] = [];
+      const bot: Vector2[] = [];
+      for (let k = 0; k <= N; k++) {
+        const t = k / N;
+        const p = curve(t);
+        const q = curve(Math.min(1, t + 0.01)).sub(curve(Math.max(0, t - 0.01))).normalize();
+        const nrm = new Vector2(-q.y, q.x);
+        top.push(p.clone().addScaledVector(nrm, halfW(t)));
+        bot.push(p.clone().addScaledVector(nrm, -halfW(t)));
+      }
+      pts.push(...top, ...bot.reverse());
+      let area = 0;
+      for (let k = 0; k < pts.length; k++) area += pts[k]!.x * pts[(k + 1) % pts.length]!.y - pts[(k + 1) % pts.length]!.x * pts[k]!.y;
+      if (area < 0) pts.reverse();
+      const wm = new Mesh(pb(pts, 0.005, 0.001), whiskerMat);
+      wm.position.z = F + L0 + 0.02 + i * 0.004;
+      wm.castShadow = true;
+      g.add(wm);
     }
+    // 腮扣：金色圆扣压住三根纸条的根部
+    const btn = new Mesh(new CylinderGeometry(0.045, 0.05, 0.03, 16), brassM);
+    btn.rotation.x = Math.PI / 2;
+    btn.position.set(root.x, root.y, F + L0 + 0.04);
+    btn.castShadow = true;
+    g.add(btn);
+  }
   // 铃：保险杠正中下面一个吊环，挂一只铜铃
   const bell = new Mesh(new CylinderGeometry(0.04, 0.08, 0.13, 14), brassM);
   bell.position.set(0, BUMPER.y0 - 0.1, F + 0.03);
@@ -521,13 +550,14 @@ function addDetails2(g: Group, open: number, c: Carved): void {
   rod(new Vector3(0, BUMPER.y0, F + 0.03), new Vector3(0, BUMPER.y0 - 0.035, F + 0.03), 0.008, brassM);
   // 后视镜：A 柱外侧，弯臂根部钉在车身上，镜板竖着（z ≈ −1.0，高 1.51 ~ 1.86）
   for (const s of [-1, 1]) {
-    const root = new Vector3(s * halfWidth(1.6), 1.6, -0.95);
+    // 后视镜装在 A 柱根部（挡风玻璃下角外侧），在司机看得见的位置：镜子在侧窗前面、车身外面
+    const root = new Vector3(s * (halfWidth(1.6) - 0.02), 1.62, -0.74);
     // 正视：镜子在车身外 0.35，镜板高 0.42、宽 0.22，斜着装；弯臂从 A 柱根部出来
-    const elbow = new Vector3(s * (halfWidth(1.6) + 0.3), 1.66, -0.95);
+    const elbow = new Vector3(s * (halfWidth(1.6) + 0.3), 1.66, -0.74);
     rod(root, elbow, 0.02, brassM);
-    rod(elbow, new Vector3(s * (halfWidth(1.6) + 0.33), 1.74, -0.95), 0.02, brassM);
+    rod(elbow, new Vector3(s * (halfWidth(1.6) + 0.33), 1.76, -0.74), 0.02, brassM);
     const m = new Mesh(new BoxGeometry(0.05, 0.42, 0.24), new MeshStandardMaterial({ color: 0xd49a56, roughness: 0.85, flatShading: true }));
-    m.position.set(s * (halfWidth(1.6) + 0.35), 1.96, -0.98);
+    m.position.set(s * (halfWidth(1.6) + 0.35), 1.96, -0.74);
     m.rotation.z = -s * 0.12;
     m.rotation.y = s * 0.35;
     m.castShadow = true;
@@ -722,11 +752,13 @@ function cabSideSkin(g: Group, s: number): void {
   sideSheet(g, s, xl, rectZY(-2.2, -2.42, 0.36, 1.06), C_SAND);
   // 引擎盖侧面上沿（腰线以上、挡风玻璃前面那一小块三角）：奶油板 + 顺着引擎盖斜边一条金条
   const hood = (z: number): number => (z > -0.058 ? 1.481 : z > -0.585 ? 1.481 + ((1.572 - 1.481) * (z + 0.058)) / (-0.585 + 0.058) : 1.572 + ((1.658 - 1.572) * (z + 0.585)) / (-0.72 + 0.585));
-  sideSheet(g, s, xu, [[-0.12, 1.49], [-0.86, 1.49], [-0.86, 1.67], [-0.72, hood(-0.72) - 0.012], [-0.585, hood(-0.585) - 0.012], [-0.12, hood(-0.12) - 0.012]], C_CREAM);
-  sideSheet(g, s, xu + LT, [[-0.12, hood(-0.12) - 0.05], [-0.585, hood(-0.585) - 0.05], [-0.72, hood(-0.72) - 0.05], [-0.72, hood(-0.72) - 0.015], [-0.585, hood(-0.585) - 0.015], [-0.12, hood(-0.12) - 0.015]], [gold, goldDark], 0.006);
+  sideSheet(g, s, xu, [[-0.3, 1.49], [-0.86, 1.49], [-0.86, 1.67], [-0.72, hood(-0.72) - 0.012], [-0.585, hood(-0.585) - 0.012], [-0.3, hood(-0.3) - 0.012]], C_CREAM);
+  // （顺着引擎盖斜边的金条去掉了：它跨过腰线的倒角，会悬在车身外面）
   // 腰线以上：灰绿底板
   const winHole: Array<[number, number]> = rectZY(-0.96, -1.2, 1.7, 2.16);
-  sideSheet(g, s, xu, rectZY(-0.9, -2.42, 1.5, 2.26), C_GREEN, LT, [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.04), winHole]);
+  // 车身侧面的前沿：挡风玻璃斜边（侧面轮廓上 (−0.758, 1.685) → (−0.989, 2.369)）；贴纸都要退到这条线后面 2 厘米
+  const zs = (y: number): number => -0.758 + ((y - 1.685) * (-0.989 + 0.758)) / (2.369 - 1.685) - 0.02;
+  sideSheet(g, s, xu, [[-0.86, 1.5], [-2.42, 1.5], [-2.42, 2.26], [zs(2.26), 2.26], [zs(1.69), 1.69], [-0.86, 1.69]], C_GREEN, LT, [oct8(PORTHOLE.z, PORTHOLE.y, PORTHOLE.r + 0.04), winHole]);
   // 侧窗：A 柱和舷窗框之间一扇竖窗——深色玻璃（缩在底板后面）+ 金框
   sideSheet(g, s, xu - 0.01, winHole, 0x4a4036, 0.004);
   sideSheet(g, s, xu + LT, rectZY(-0.94, -1.22, 1.68, 2.18), [gold, goldDark], 0.006, [rectZY(-0.965, -1.195, 1.705, 2.155)]);
@@ -754,10 +786,11 @@ function cabSideSkin(g: Group, s: number): void {
     sideRivet(g, s, xu + 2 * LT, PORTHOLE.z + Math.cos(ang) * (PORTHOLE.r + 0.09), PORTHOLE.y + Math.sin(ang) * (PORTHOLE.r + 0.09), 0.009);
   }
   // A 柱后沿：竖金条
-  sideGold(g, s, xu, -0.88, -0.93, 1.5, 2.26, 0.22);
+  // A 柱后沿：顺着挡风玻璃斜边的一条金条
+  sideSheet(g, s, xu + LT, [[zs(1.69), 1.69], [zs(2.26), 2.26], [zs(2.26) - 0.045, 2.26], [zs(1.69) - 0.045, 1.69]], [gold, goldDark], 0.006);
   // 顶梁：奶油横板 + 金条
-  sideSheet(g, s, xu, rectZY(-0.95, -2.42, 2.26, 2.33), C_CREAM);
-  sideGold(g, s, xu + LT, -0.95, -2.42, 2.29, 2.33, 0.3);
+  sideSheet(g, s, xu, rectZY(zs(2.3), -2.42, 2.26, 2.33), C_CREAM);
+  sideGold(g, s, xu + LT, zs(2.3), -2.42, 2.29, 2.33, 0.3);
 }
 
 /** 轮眉外面的纸：一圈奶油色厚纸板（八角环），外沿一道金边、几颗铆钉。轮眉外表面在 x = 1.02 + 0.07 + 整纸。 */
