@@ -700,6 +700,7 @@ function addDetails(g: Group, open: number, c: Carved): void {
   for (const s of [-1, 1]) {
     if (STAGE >= 4) noseSideSkin(g, s);
     if (STAGE >= 4) cabSideSkin(g, s);
+    if (STAGE >= 4) cargoSideSkin(g, s);
     if (STAGE >= 3) fenderSkin(g, s);
   }
   if (STAGE >= 2) frontSkin(g);
@@ -1473,4 +1474,39 @@ function frontSkin(g: Group): void {
     rectXY(-0.035, 0.035, 0.765, 0.835),
   ]);
   frontSheet(g, zm, rectXY(-0.035, 0.035, 0.765, 0.835), 0x6a5040, 0.004);
+}
+
+/**
+ * 货箱侧面（z −2.42 ~ −5.55，侧视读的）：
+ * - 檐口带（y 2.06 ~ 2.29）：一排奶油、灰绿交替的长板（每块约 0.55 米），下沿一根金条（服务侧是开口的上楣，带铆钉）；
+ * - 服务侧开口后面：一块灰绿高板（金框），下面桃色底带；
+ * - 另一侧（没有开口）：一块大的灰绿板（金框）占住中间，下面桃色底带。
+ */
+function cargoSideSkin(g: Group, s: number): void {
+  const xl = halfWidth(1.2) + L0;
+  const xu = halfWidth(1.9) + L0;
+  const z0 = -2.44;
+  const z1 = -5.5;
+  // 檐口带
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a = z0 + ((z1 - z0) * i) / n;
+    const b = z0 + ((z1 - z0) * (i + 1)) / n;
+    sideSheet(g, s, xu, rectZY(a - 0.004, b + 0.004, 2.08, 2.28), i % 2 ? C_GREEN : C_CREAM);
+  }
+  sideGold(g, s, xu + LT, z0, z1, 2.04, 2.08, 0.5);
+  const panel = (za: number, zb: number, ya: number, yb: number, x: number): void => {
+    sideSheet(g, s, x, rectZY(za, zb, ya, yb), C_GREEN);
+    sideSheet(g, s, x + LT, rectZY(za - 0.03, zb + 0.03, ya - 0.03, yb + 0.03), [gold, goldDark], 0.006, [rectZY(za + 0.01, zb - 0.01, ya + 0.01, yb - 0.01)]);
+  };
+  if (s > 0) {
+    // 开口后面的高板（腰线上下两段：上段在 0.93 的墙上，下段在 1.02 的墙上）
+    panel(-5.06, -5.4, 1.52, 2.0, xu);
+    panel(-5.06, -5.4, 0.98, 1.36, xl);
+    sideSheet(g, s, xl, rectZY(OPENING.z1 - 0.02, z1, 0.36, 0.92), C_PEACH);
+  } else {
+    panel(-2.7, -5.25, 1.52, 2.0, xu);
+    panel(-2.7, -5.25, 0.98, 1.36, xl);
+    sideSheet(g, s, xl, rectZY(z0, z1, 0.36, 0.92), C_PEACH);
+  }
 }
