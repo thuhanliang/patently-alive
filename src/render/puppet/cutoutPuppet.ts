@@ -1,6 +1,6 @@
 import type { Container, Texture } from 'pixi.js';
 import { Cutout, type CutData, type CutPart, type Dye } from './cutout';
-import { boneWarp, compose, mapShape, reach, regionStretch, scale, type P, type Shape, type Warp } from './fit';
+import { boneWarp, compose, mapShape, reach, scale, snoutStretch, type P, type Shape, type Warp } from './fit';
 import { earShape, fitEar, type EarModel } from './ear';
 import { fringe, inside, teethFor } from './fringe';
 import type { HandleSpot, XrayBones } from './handles';
@@ -8,7 +8,7 @@ import { pendulumOmega, springStep, type Spring } from './gait';
 import { TailChain, idleSwish } from './tail';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { legJoints, standPose, type Pose, type Vec } from './pose';
-import { KERATIN, RHINO_HORN, extraPart, hornShape, neckShape } from './extras';
+import { KERATIN, RHINO_HORN, extraPart, hoofShape, hornShape, neckShape, waistShape } from './extras';
 
 /**
  * 用成品图切出来的零件（cutout.ts）拼出任意一具身体，演设计台的动作：和 Puppet 一样吃 BodyPlan 和每帧的 Pose。
@@ -92,6 +92,8 @@ export class CutoutPuppet {
   private lastHead = 0;
   /** 代码剪的颈片：多出来的长度（像素，负的是颈比成品图短，头往肩那边挪）。 */
   private neckExt = 0;
+  /** 腰片的长度（像素）；负的是臀片、胸片多叠了这么多。 */
+  private waist = 0;
   /** 颈片分几节（0 = 没有颈片）。 */
   private neckSegs = 0;
   /** 角：每只角在头片上的插口和朝向（头片的零件坐标）。 */
@@ -220,8 +222,29 @@ export class CutoutPuppet {
     const hip = piv(rig.legs.nearHind.parts[0]);
     const shoulder = piv(rig.legs.nearFore.parts[0]);
     const tailRoot = piv(rig.tail[0]!);
-    fitPiece(rig.hind, scale(kx, plan.hindH / ref.hindH), { hip, tail: tailRoot });
-    fitPiece(rig.chest, scale(kx, plan.chestH / ref.chestH), { shoulder, head: piv(rig.head) });
+    // 纸偶 v2（审核 r1 第 6、7 条）：臀片、胸片横向最多拉到 1.3 倍、最少压到和竖向相称（不挤成两个圆）；
+    // 髋到肩剩下的距离由中间的腰片补（拉长的鼬），或者两片多叠一点（短粗的犀牛、河马）。
+    const ky = plan.chestH / ref.chestH;
+    // 只限制横竖的比例（体重大了两个方向一起变大，不算拉长）。
+    const kxPiece = Math.min(1.3 * ky, Math.max(kx, 0.8 * ky));
+    this.waist = ((kx - kxPiece) * (ref.shoulderX - ref.hipX)) / this.s;
+    fitPiece(rig.hind, scale(kxPiece, plan.hindH / ref.hindH), { hip, tail: tailRoot });
+    fitPiece(rig.chest, scale(kxPiece, plan.chestH / ref.chestH), { shoulder, head: piv(rig.head) });
+    const hasWaist = this.waist > 4;
+    this.cut.setVisible(WAIST, hasWaist);
+    if (hasWaist) {
+      // 腰片的上下沿：臀片在铆钉（零件原点）附近的上下沿。
+      const hs = shapes.get(rig.hind)!;
+      let top = Infinity;
+      let bot = -Infinity;
+      for (let k = 0; k < hs.outline.length; k += 2) {
+        if (Math.abs(hs.outline[k]!) > 25 * kxPiece) continue;
+        top = Math.min(top, hs.outline[k + 1]!);
+        bot = Math.max(bot, hs.outline[k + 1]!);
+      }
+      shapes.set(WAIST, waistShape(this.waist, top, bot, 60 * kxPiece));
+      fitted.set(WAIST, { sockets: { end: [this.waist, 0] } });
+    }
 
     // 腿：近侧的零件贴好，远侧复用。
     for (const k of ['nearHind', 'nearFore'] as const) {
@@ -255,6 +278,20 @@ export class CutoutPuppet {
       });
     }
 
+    // 蹄（蹄行，stance ≥ 0.75）：趾尖包一只深色的角质蹄，挂在掌（跖）片的末端。
+    const hoofOn = plan.stance >= 0.75;
+    for (const k of LEGS) {
+      const id = HOOF[k];
+      this.cut.setVisible(id, hoofOn);
+      if (!hoofOn) continue;
+      // 蹄和掌一样粗（掌片末端的搭接半径），包住掌的下半截，把猫的趾垫盖住。
+      const w = this.part(rig.legs[k].parts[2]).lapR * (plan.legW / ref.legW) * 1.05;
+      shapes.set(id, hoofShape(w * 2.2, w));
+      fitted.set(id, { sockets: {} });
+      this.cut.setPartDye(id, HOOF_DYE);
+      if (k.startsWith('far')) this.cut.setShade(id, FAR_SHADE);
+    }
+
     // 头：整片按头的大小；吻按嘴型拉；下颌跟着吻。耳朵按耳长、耳宽。
     const kh = plan.headR / ref.headR;
     // 嘴型表里的吻长是代码纸偶的（草食的吻按马、鹿定的），切图的头只拉一部分：开方，夹在 0.8–1.35 倍。
@@ -262,7 +299,9 @@ export class CutoutPuppet {
     const snoutK = Math.min(4, Math.max(0.3, Math.min(1.35, Math.max(0.8, Math.sqrt(plan.snout / plan.snoutK / plan.headR / (ref.snout / ref.snoutK / ref.headR)))) * plan.snoutK));
     const head = this.part(rig.head);
     const snoutFrom = sub(rig.snout.from, head.pivot);
-    const headWarp = compose(regionStretch(snoutFrom, rig.snout.dir, snoutK, plan.snoutDepth / ref.snoutDepth), scale(kh));
+    // 吻（审核 r1 第 5 条）：吻尖那一段（鼻垫、嘴）整段平移出去不变形，只拉中间；很长的吻就像一根管子。
+    const snoutLen = Math.hypot(...sub(regionTip(rig.snout.from, rig.snout.dir, head), rig.snout.from));
+    const headWarp = compose(snoutStretch(snoutFrom, rig.snout.dir, snoutK, plan.snoutDepth / ref.snoutDepth, snoutLen), scale(kh));
     const headSockets: Record<string, P> = { [rig.jaw]: piv(rig.jaw) };
     // 耳：按参数剪（ear.ts）。插口沿头的轮廓滑（耳位置），垂下来的耳再往头里挪一点。
     const earK = plan.earH / plan.headR / (ref.earH / ref.headR);
@@ -299,6 +338,21 @@ export class CutoutPuppet {
       }
     });
     fitPiece(rig.head, headWarp, headSockets);
+    // 眼睛不跟着吻拉（食蚁兽的眼小、在吻根后面）：头片上最小的那块深色色区（眼）只按头的大小缩放。
+    {
+      const hp = this.part(rig.head);
+      const area = (q: number[]): number => (Math.max(...q.filter((_, j) => j % 2 === 0)) - Math.min(...q.filter((_, j) => j % 2 === 0))) * (Math.max(...q.filter((_, j) => j % 2 === 1)) - Math.min(...q.filter((_, j) => j % 2 === 1)));
+      let eye = -1;
+      hp.stripe.forEach((q, j) => {
+        if (area(q) < 600 && (eye < 0 || area(q) < area(hp.stripe[eye]!))) eye = j;
+      });
+      if (eye >= 0) {
+        const sh = shapes.get(rig.head)!;
+        const stripe = sh.stripe.slice();
+        stripe[eye] = hp.stripe[eye]!.map((v) => v * kh);
+        shapes.set(rig.head, { ...sh, stripe });
+      }
+    }
     // 下颌在头的变换里变（它是从头上切下来的），再挪回自己的转轴。
     const jawPiv = piv(rig.jaw);
     const jawAt = headWarp(...sub(jawPiv, head.pivot));
@@ -449,7 +503,10 @@ export class CutoutPuppet {
     };
     const so = (id: string, k: string): P => fitted.get(id)!.sockets[k]!;
     const lapW = (id: string, w: number): number => this.part(id).lapR * w;
-    pin(rig.chest, rig.hind, [0, 0], lapW(rig.chest, Math.min(kx, plan.chestH / ref.chestH)));
+    if (hasWaist) {
+      pin(WAIST, rig.hind, [0, 0], lapW(rig.chest, Math.min(kxPiece, ky)));
+      pin(rig.chest, WAIST, [this.waist, 0], lapW(rig.chest, Math.min(kxPiece, ky)));
+    } else pin(rig.chest, rig.hind, [0, 0], lapW(rig.chest, Math.min(kxPiece, ky)));
     for (const k of LEGS) {
       const ps = rig.legs[k].parts;
       const near = isHind(k) ? rig.legs.nearHind.parts : rig.legs.nearFore.parts;
@@ -602,9 +659,13 @@ export class CutoutPuppet {
     const aChest = aHind - pose.spine;
     const rChest = this.part(rig.chest).angle + aChest;
     this.cut.place(rig.hind, ...midV, rHind);
-    this.cut.place(rig.chest, ...midV, rChest, 1 + 0.03 * breath);
+    // 腰片（拉长的身体）：从臀片的铆钉伸出去，转一半的脊背弯曲；胸片挂在它的另一头。没有腰片时 waist ≤ 0：两片叠得更多。
+    const rWaist = (rHind + rChest) / 2;
+    if (this.waist > 4) this.cut.place(WAIST, ...midV, rWaist);
+    const chestV = add(midV, rot([this.waist, 0], this.waist > 4 ? rWaist : rHind));
+    this.cut.place(rig.chest, ...chestV, rChest, 1 + 0.03 * breath);
     const hipAt = at(midV, rHind, so(rig.hind, 'hip'));
-    const shoulderAt = at(midV, rChest, so(rig.chest, 'shoulder'));
+    const shoulderAt = at(chestV, rChest, so(rig.chest, 'shoulder'));
 
     // 腿：贴好的三节长度。
     let toe: P = [0, 0];
@@ -641,11 +702,12 @@ export class CutoutPuppet {
       for (let i = 0; i < 3; i++) {
         const viewA = Math.atan2(j[i + 1]![1] - j[i]![1], j[i + 1]![0] - j[i]![0]);
         this.cut.place(leg.parts[i]!, ...j[i]!, viewA - angleOf(ends[i]!));
+        if (i === 2) this.cut.place(HOOF[k], ...j[3]!, viewA);
       }
     }
 
     // 头：虚拟脖子（肩 → 头的铆钉）按 pose.neck 摆，头的铆钉跟着画弧；头片按脖子 + 头相对站姿的角度转。
-    const headRest = at(midV, rChest, so(rig.chest, 'head'));
+    const headRest = at(chestV, rChest, so(rig.chest, 'head'));
     const aNeck = -(pose.neck - this.rest.neck);
     const headV = add(shoulderAt, rot(sub(headRest, shoulderAt), aNeck));
     // 胸片前上方本来画着脖子：这一块跟着虚拟脖子弯，越靠近头转得越多（否则低头时脖子后面会翘出一个尖）。
@@ -701,7 +763,7 @@ export class CutoutPuppet {
     const bl = this.belly;
     if (bl && !plan.bird) {
       const off = (bl.k - 1) * bl.unit;
-      spots.push({ id: 'fur', at: at(midV, rChest, add(bl.from, [bl.dir[0] * off, bl.dir[1] * off])), from: at(midV, rChest, bl.from), unit: bl.unit });
+      spots.push({ id: 'fur', at: at(chestV, rChest, add(bl.from, [bl.dir[0] * off, bl.dir[1] * off])), from: at(chestV, rChest, bl.from), unit: bl.unit });
     }
     rig.ears.forEach((id, i) => {
       const earAt = at(headAt, rHead, so(rig.head, id));
@@ -768,6 +830,10 @@ export class CutoutPuppet {
 
 /** 代码剪的零件的 id（不和成品图的零件重名）。 */
 const NECKS = ['xNeck0', 'xNeck1', 'xNeck2', 'xNeck3'];
+const WAIST = 'xWaist';
+const HOOF: Record<LegKey, string> = { nearHind: 'xHoofNH', farHind: 'xHoofFH', nearFore: 'xHoofNF', farFore: 'xHoofFF' };
+/** 蹄：深褐的角质。 */
+const HOOF_DYE = { main: 0x4b4038, stripe: 0x3a312b, pale: 0x6a5d52 };
 const HORN_NEAR = 'xHornNear';
 const HORN_FAR = 'xHornFar';
 const HORN_NEAR2 = 'xHornNear2';
@@ -783,6 +849,8 @@ function withExtras(raw: CutData): CutData {
   const z = (id: string): number => raw.parts.find((p) => p.id === id)!.z;
   const headPiv = raw.parts.find((p) => p.id === rig.head)!.pivot;
   const extras = [
+    extraPart(WAIST, rig.hind, (z(rig.hind) + z(rig.chest)) / 2, raw.parts.find((p) => p.id === rig.hind)!.pivot),
+    ...LEGS.map((k) => extraPart(HOOF[k], rig.legs[k].parts[2], z(rig.legs[k].parts[2]) + 0.3, rig.legs[k].toe)),
     ...NECKS.map((id, i) => extraPart(id, i === 0 ? rig.chest : NECKS[i - 1]!, z(rig.chest) + 0.5 + 0.01 * i, headPiv)),
     extraPart(HORN_FAR, rig.head, z(rig.head) - 0.6, headPiv, KERATIN),
     extraPart(HORN_FAR2, rig.head, z(rig.head) - 0.7, headPiv, KERATIN),

@@ -91,6 +91,30 @@ export function regionStretch(from: P, dir: P, k: number, wide = 1): Warp {
   };
 }
 
+/**
+ * 吻的拉伸（纸偶 v2）：和 regionStretch 一样沿 dir 拉，但吻尖那一段（长 keep·len，鼻垫和嘴）整段平移、不变形，
+ * 只拉吻根到吻尖之间那一段；len 是吻从 from 到吻尖的长度。中间那段压得太短时退回整段等比拉伸。
+ */
+export function snoutStretch(from: P, dir: P, k: number, wide: number, len: number, keep = 0.4): Warp {
+  const T = keep * len;
+  const a = len - T;
+  const mid = k * len - T;
+  if (len <= 0 || mid < 0.3 * a) return regionStretch(from, dir, k, wide);
+  const n = Math.hypot(dir[0], dir[1]);
+  const ax: P = [dir[0] / n, dir[1] / n];
+  return (x, y) => {
+    const dx = x - from[0];
+    const dy = y - from[1];
+    const u = dx * ax[0] + dy * ax[1];
+    let v = -dx * ax[1] + dy * ax[0];
+    if (u <= 0) return [x, y];
+    const t = Math.min(1, u / 40);
+    v *= 1 + (wide - 1) * t;
+    const u2 = u < a ? (u * mid) / a : mid + (u - a);
+    return [from[0] + u2 * ax[0] - v * ax[1], from[1] + u2 * ax[1] + v * ax[0]];
+  };
+}
+
 /** 两个变换接起来：先 f 后 g。 */
 export const compose =
   (f: Warp, g: Warp): Warp =>
