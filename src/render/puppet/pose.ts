@@ -239,7 +239,13 @@ export function legJoints(plan: BodyPlan, k: LegKey, root: Vec, foot: Vec, fold 
   const hind = isHind(k);
   const [a, b, c] = hind ? plan.hindSegs : plan.foreSegs;
   const lifted = Math.min(1, foot.y / (0.1 * plan.legLen + 1e-9));
-  const t0 = (hind ? 0.35 : 0.15) + lifted * (hind ? 0.5 : 0.9);
+  // 跖（掌）着地时往后斜多少：趾行（stance 0.5，猫、狗）是原来的值；跖行（0）整个脚掌几乎平贴地面；蹄行（1）几乎竖直。
+  const st = plan.stance ?? 0.5;
+  const flat = hind ? 1.3 : 1.2;
+  const mid = hind ? 0.35 : 0.15;
+  const tip = hind ? 0.1 : 0.05;
+  const base = st <= 0.5 ? flat + (mid - flat) * (st / 0.5) : mid + (tip - mid) * ((st - 0.5) / 0.5);
+  const t0 = base + lifted * (hind ? 0.5 : 0.9);
   const tilt = t0 + fold * (Math.PI / 2 - t0);
   const ankle = { x: foot.x - c * Math.sin(tilt), y: foot.y + c * Math.cos(tilt) };
   const knee = solveTwoBone(root, ankle, a, b, hind ? 1 : -1);

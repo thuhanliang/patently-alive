@@ -24,6 +24,8 @@ export interface CutPart {
   outline: number[];
   stripe: number[][];
   pale: number[][];
+  /** 固定的颜色（角、蹄这类不随毛色变的零件，代码剪的）；不写就用纸偶的毛色。 */
+  dye?: Dye;
 }
 
 export interface CutData {
@@ -96,7 +98,7 @@ export class Cutout {
    * 每次重画一片零件时通知外面（3D 纸偶照着它重建这片纸的形状，2026-11-22）。
    * outline、stripe、pale 是零件自己坐标里的多边形（成品图像素）；shade 是明暗（远侧的腿调暗）。
    */
-  onPaint: ((id: string, outline: number[], stripe: number[][], pale: number[][], shade: number) => void) | null = null;
+  onPaint: ((id: string, outline: number[], stripe: number[][], pale: number[][], shade: number, dye: Dye) => void) | null = null;
 
   constructor(
     readonly data: CutData,
@@ -201,7 +203,8 @@ export class Cutout {
   /** 按给定的轮廓和色区重画一片零件（白边、颜色、纸纹遮罩、影子）。 */
   private paint(piece: Piece, outline: number[], stripe: number[][], pale: number[][]): void {
     const k = piece.shade;
-    const dye = k === 1 ? this.dye : { main: darken(this.dye.main, k), stripe: darken(this.dye.stripe, k), pale: darken(this.dye.pale, k) };
+    const own = piece.part.dye ?? this.dye;
+    const dye = k === 1 ? own : { main: darken(own.main, k), stripe: darken(own.stripe, k), pale: darken(own.pale, k) };
     piece.shadow.clear().poly(outline).fill({ color: 0x000000, alpha: SHADOW.alpha });
     // 白边：轮廓描粗。
     const rim = this.flat ? dye.main : k === 1 ? RIM : darken(RIM, k);
@@ -210,7 +213,7 @@ export class Cutout {
     for (const s of stripe) piece.body.poly(s).fill(dye.stripe);
     for (const s of pale) piece.body.poly(s).fill(dye.pale);
     piece.mask.clear().poly(outline).fill(0xffffff);
-    this.onPaint?.(piece.part.id, outline, stripe, pale, k);
+    this.onPaint?.(piece.part.id, outline, stripe, pale, 1, dye);
   }
 
   /**

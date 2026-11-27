@@ -1,5 +1,5 @@
 import { BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Material } from 'three';
-import type { Cutout } from '../puppet/cutout';
+import type { Cutout, Dye } from '../puppet/cutout';
 import { brass, paperMaterial, thinPiece } from './paper';
 
 /**
@@ -38,12 +38,11 @@ export class Puppet3D {
   ) {
     this.inner.scale.set(metersPerPx, -metersPerPx, metersPerPx);
     this.root.add(this.inner);
-    cut.onPaint = (id, outline, stripe, pale, shade) => this.paint(id, outline, stripe, pale, shade);
+    cut.onPaint = (id, outline, stripe, pale, shade, dye) => this.paint(id, outline, stripe, pale, shade, dye);
     cut.repaintAll();
   }
 
-  private materials(shade: number): { main: Material[]; stripe: Material[]; pale: Material[] } {
-    const d = this.cut.colors;
+  private materials(shade: number, d: Dye): { main: Material[]; stripe: Material[]; pale: Material[] } {
     const dk = (c: number): number => {
       const k = shade;
       return (Math.round(((c >> 16) & 255) * k) << 16) | (Math.round(((c >> 8) & 255) * k) << 8) | Math.round((c & 255) * k);
@@ -53,9 +52,9 @@ export class Puppet3D {
     return { main: mk(d.main), stripe: mk(d.stripe), pale: mk(d.pale) };
   }
 
-  private paint(id: string, outline: number[], stripe: number[][], pale: number[][], shade: number): void {
+  private paint(id: string, outline: number[], stripe: number[][], pale: number[][], shade: number, dye: Dye): void {
     let p = this.pieces.get(id);
-    const mats = this.materials(shade);
+    const mats = this.materials(shade, dye);
     if (!p) {
       const group = new Group();
       const body = new Mesh(new BufferGeometry(), mats.main);
