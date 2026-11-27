@@ -18,12 +18,15 @@ interface Sp {
 const species = floraSpecies as unknown as Sp[];
 const q = new URLSearchParams(location.search);
 const month = Number(q.get('month') ?? 3);
-const cols = 5;
+// ?mode=variants：每种一行，四株不同的个体（前两株不开花、后两株开花结果），看同一种植物的变化。
+const variants = q.get('mode') === 'variants';
+const cols = variants ? 4 : 5;
 const cellW = 300;
 const cellH = 330;
 const dpr = 2;
 const cv = document.createElement('canvas');
-const rows = Math.ceil(species.length / cols);
+const items = variants ? species.flatMap((sp) => [0, 1, 2, 3].map((v) => ({ sp, v }))) : species.map((sp) => ({ sp, v: -1 }));
+const rows = Math.ceil(items.length / cols);
 cv.width = cols * cellW * dpr;
 cv.height = rows * cellH * dpr + 60 * dpr;
 cv.style.width = `${cols * cellW}px`;
@@ -61,14 +64,14 @@ function path(p: number[], ox: number, oy: number, k: number): Path2D {
 void document.fonts.ready.then(() => {
   g.fillStyle = '#4a3527';
   g.font = '22px "LXGW WenKai Screen"';
-  g.fillText(`岛上的植物 · 游戏的第 ${month} 个月（0 = 春季第一个月）`, 20, 38);
-  species.forEach((sp, i) => {
+  g.fillText(variants ? '岛上的植物 · 每种四株（后两株开花、结果）' : `岛上的植物 · 游戏的第 ${month} 个月（0 = 春季第一个月）`, 20, 38);
+  items.forEach(({ sp, v }, i) => {
     const cx = (i % cols) * cellW + cellW / 2;
     const top = 60 + Math.floor(i / cols) * cellH;
     const ground = top + cellH - 70;
-    const flower = sp.flowerMonths.includes(month) ? 1 : 0;
-    const fruit = sp.fruitMonths.includes(month) ? 1 : 0;
-    const cut = cutPlant(sp.look, i * 7 + 3, flower, fruit);
+    const flower = v >= 0 ? (v >= 2 && sp.flowerMonths.length ? 1 : 0) : sp.flowerMonths.includes(month) ? 1 : 0;
+    const fruit = v >= 0 ? (v >= 2 && sp.fruitMonths.length ? 1 : 0) : sp.fruitMonths.includes(month) ? 1 : 0;
+    const cut = cutPlant(sp.look, v >= 0 ? v * 17 + 5 : i * 7 + 3, flower, fruit);
     // 按格子缩放：最高的那种也放得下；比例尺写在下面。
     const k = Math.min(210 / Math.max(0.3, cut.height), (cellW - 40) / Math.max(0.3, cut.width));
     g.fillStyle = '#e4d6b8';

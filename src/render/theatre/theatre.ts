@@ -1,3 +1,7 @@
+import { floraSpecies } from '../../data';
+import { cutPlant } from '../flora/shapes';
+import { floraFor, pickPlants, type FloraSite } from '../flora/zone';
+import { plantView } from '../flora/pixiPlant';
 import { Assets, BlurFilter, Container, Graphics, Sprite, Text, Texture, type Application, type FederatedPointerEvent } from 'pixi.js';
 import type { GaitRules } from '../../data/schema/gait';
 import { HAND } from '../font';
@@ -32,6 +36,8 @@ export interface TheatreCast {
   hour: number;
   /** 时间在走吗、走多快（倍速）。 */
   speed: number;
+  /** 这一带长什么植物（植物图鉴，docs/research/flora.md）；不给就用原来的素材草和灌丛。 */
+  flora?: FloraSite & { month: number };
 }
 
 export interface TheatreHooks {
@@ -103,6 +109,12 @@ const mixColor = (a: number, b: number, t: number): number => {
 };
 
 export class PaperTheatre {
+  private readonly floraFar = new Container();
+  private readonly floraMid = new Container();
+  private readonly floraNear = new Container();
+  private floraKey = '';
+  private lovartBushes: Container | null = null;
+  private lovartFront: Container | null = null;
   readonly root = new Container();
   /** 台口里的东西（被开口裁掉）。 */
   private readonly inside = new Container();
@@ -291,8 +303,13 @@ export class PaperTheatre {
       ['bush-2', 1010, 0.7],
       ['bush-5', 1230, 0.58],
     ] as const) bushes.addChild(this.paper(n, x, 432, k, 7));
+    this.inside.addChild(this.floraFar);
+    this.addLayer(this.floraFar, 0.5);
     this.inside.addChild(bushes);
     this.addLayer(bushes, 0.42);
+    this.lovartBushes = bushes;
+    this.inside.addChild(this.floraMid);
+    this.addLayer(this.floraMid, 0.42);
 
     // 地面：中间一段带洞穴，两边是普通的地面（镜像接）。
     const ground = new Container();
@@ -357,6 +374,9 @@ export class PaperTheatre {
     });
     this.inside.addChild(front);
     this.addLayer(front, 0.12);
+    this.lovartFront = front;
+    this.inside.addChild(this.floraNear);
+    this.addLayer(this.floraNear, 0.12);
 
     // 开口：台口里面的东西只在开口里看得见。
     const mask = new Graphics().rect(O.x, O.y, O.w, O.h).fill(0xffffff);
@@ -527,9 +547,52 @@ export class PaperTheatre {
     const f = this.fade * this.fade * (3 - 2 * this.fade);
     this.root.alpha = f;
     this.layout(f);
+    this.plantFlora(cast);
     this.animate(cast, dt);
     this.castActors(cast, dt);
     return f < 1;
+  }
+
+  /**
+   * 植物图鉴（2026-11-27）：按这一带的地带、灌丛和草本的多少、月份，摆三排真实的植物，取代素材里不知道是什么的草和灌丛。
+   * 远排是树（按远处的比例画小），中排是灌木和丛，近排是台口前的草和莎草。同一处、同一个月，摆法每次一样。
+   */
+  private plantFlora(cast: TheatreCast): void {
+    const fl = cast.flora;
+    const key = fl ? `${fl.seed}|${fl.month}|${fl.terrain}|${Math.round(fl.woody * 5)}|${Math.round(fl.herb * 5)}|${Math.round(fl.wet * 3)}` : '';
+    if (key === this.floraKey) return;
+    this.floraKey = key;
+    for (const c of [this.floraFar, this.floraMid, this.floraNear]) for (const ch of c.removeChildren()) ch.destroy({ children: true });
+    this.lovartBushes!.visible = !fl;
+    this.lovartFront!.visible = !fl;
+    if (!fl) return;
+    const picks = floraFor(fl);
+    const byId = new Map(floraSpecies.map((sp) => [sp.id, sp]));
+    // 每排：基线的高度、每米多少像素（远小近大）、几株、横向的范围、明暗（远的暗一点、蓝一点）。
+    const rows = [
+      { row: 'far', c: this.floraFar, y: 412, k: 24, max: 150, n: 7, shade: 0.8, shadow: 2 },
+      { row: 'mid', c: this.floraMid, y: 446, k: 100, max: 240, n: 6, shade: 0.9, shadow: 5 },
+      { row: 'near', c: this.floraNear, y: 615, k: 200, max: 210, n: 6, shade: 1, shadow: 8 },
+    ] as const;
+    rows.forEach((r, ri) => {
+      const chosen = pickPlants(picks, r.row, r.n, fl.seed * 7 + ri);
+      // 近排的植物要避开台中间（动物在那儿），远排、中排铺满。
+      chosen.forEach((p, i) => {
+        const sp = byId.get(p.id);
+        if (!sp) return;
+        const t = (i + 0.5) / chosen.length;
+        const x = r.row === 'near' ? (i % 2 === 0 ? 70 + t * 260 : 1130 + t * 260) : 60 + t * 1340 + (((fl.seed * 31 + i * 17) % 60) - 30);
+        const flower = sp.flowerMonths.includes(fl.month) ? 1 : 0;
+        const fruit = sp.fruitMonths.includes(fl.month) ? 1 : 0;
+        const cut = cutPlant({ ...sp.look, height: sp.look.height * p.height }, fl.seed * 13 + ri * 101 + i, flower, fruit);
+        // 每排有个最高的像素：太高的（远处的大树、近处的高丛）按比例缩，不挡住天和台中间。
+        const kk = Math.min(r.k, r.max / Math.max(0.05, cut.height));
+        const v = plantView(cut, kk, r.shade, r.shadow);
+        v.position.set(x, r.y + (i % 3) * 4);
+        if ((fl.seed + i) % 2) v.scale.x = -1;
+        r.c.addChild(v);
+      });
+    });
   }
 
   private layout(f: number): void {

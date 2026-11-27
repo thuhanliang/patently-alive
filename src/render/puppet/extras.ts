@@ -125,3 +125,43 @@ export function hornShape(len: number, w0: number, curve: number, rings = true):
   for (let i = N; i >= tipFrom; i--) pale.push(right[i]![0], right[i]![1]);
   return { outline, stripe, pale: [pale] };
 }
+
+/**
+ * 腰片：插在臀片和胸片之间（拉长的身体），从原点（臀片的铆钉）沿 +x 到 len（胸片的铆钉）。
+ * top、bot 是上下沿（零件坐标，y 朝下，top < 0 < bot），两头是圆的搭接。色区：背上一道道楔形条纹、肚子一条浅色。
+ */
+export function waistShape(len: number, top: number, bot: number, stripes: number): Shape {
+  const h = (bot - top) / 2;
+  const cy = (top + bot) / 2;
+  const outline: number[] = [];
+  const N = 10;
+  for (let i = 0; i <= N; i++) outline.push((len * i) / N, top);
+  for (let i = 1; i < 12; i++) {
+    const a = -Math.PI / 2 + (Math.PI * i) / 12;
+    outline.push(len + Math.cos(a) * h * 0.35, cy + Math.sin(a) * h);
+  }
+  for (let i = N; i >= 0; i--) outline.push((len * i) / N, bot);
+  for (let i = 1; i < 12; i++) {
+    const a = Math.PI / 2 + (Math.PI * i) / 12;
+    outline.push(Math.cos(a) * h * 0.35, cy + Math.sin(a) * h);
+  }
+  const stripe: number[][] = [];
+  const n = Math.max(0, Math.floor(len / stripes));
+  for (let k = 0; k < n; k++) {
+    const x0 = ((k + 0.5) * len) / n;
+    const half = stripes * 0.18;
+    stripe.push([x0 - half, top + 1, x0 + half, top + 1, x0 - half * 0.1, top + h * 1.1, x0 - half * 0.5, top + h * 1.05]);
+  }
+  const pale = [[0, bot - h * 0.32, len, bot - h * 0.28, len, bot - 1, 0, bot - 1]];
+  return { outline, stripe, pale };
+}
+
+/**
+ * 蹄：原点在趾尖，+x 是掌（跖）骨的方向（从踝指向趾尖），蹄往回包住 len 那么长，半宽 w。
+ * 蹄底平、蹄尖略圆；一条浅一点的蹄冠线。
+ */
+export function hoofShape(len: number, w: number): Shape {
+  const outline = [-len, -w * 0.85, -len * 0.15, -w * 1.05, w * 0.18, -w * 0.7, w * 0.25, 0, w * 0.18, w * 0.75, -len * 0.1, w * 1.05, -len, w * 0.85, -len * 1.08, 0];
+  const pale = [[-len * 1.0, -w * 0.82, -len * 0.82, -w * 0.9, -len * 0.82, w * 0.9, -len * 1.0, w * 0.82]];
+  return { outline, stripe: [], pale };
+}
