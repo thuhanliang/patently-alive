@@ -494,7 +494,8 @@ export class CutoutPuppet {
     const pin = (child: string, parent: string, socket: P, rLap: number): void => {
       const c = this.part(child);
       const par = this.part(parent);
-      if (c.pivotEstimated) return;
+      // 代码剪的零件转轴不是估的：颈节、腰片是能动的关节，要铆钉（审核 r2 第 1 条）；角、蹄不是关节，不钉。
+      if (c.pivotEstimated && !NECKS.includes(child) && child !== WAIST) return;
       const onChild = c.z > par.z;
       const top = onChild ? child : parent;
       const list = rivets.get(top) ?? [];

@@ -569,29 +569,42 @@ export class PaperTheatre {
     const picks = floraFor(fl);
     const byId = new Map(floraSpecies.map((sp) => [sp.id, sp]));
     // 每排：基线的高度、每米多少像素（远小近大）、几株、横向的范围、明暗（远的暗一点、蓝一点）。
+    // 三排共用一个透视比例（审核 r2）：离台口越远每米的像素越少；整排用同一个比例，树种之间的高矮保留。
+    // 远排的树长在后面的陆地（中排后面的一道土坡）上，不长在海上；近排的根在台口前沿的草皮上。
     const rows = [
-      { row: 'far', c: this.floraFar, y: 412, k: 24, max: 150, n: 7, shade: 0.8, shadow: 2 },
-      { row: 'mid', c: this.floraMid, y: 446, k: 100, max: 240, n: 6, shade: 0.9, shadow: 5 },
-      { row: 'near', c: this.floraNear, y: 615, k: 200, max: 210, n: 6, shade: 1, shadow: 8 },
+      { row: 'far', c: this.floraFar, y: 418, k: 30, max: 170, n: 6, shade: 0.82, shadow: 2, x0: 60, x1: 1400 },
+      { row: 'mid', c: this.floraMid, y: 440, k: 85, max: 230, n: 6, shade: 0.92, shadow: 5, x0: 60, x1: 1400 },
+      { row: 'near', c: this.floraNear, y: 476, k: 160, max: 200, n: 5, shade: 1, shadow: 8, x0: 60, x1: 1400 },
     ] as const;
+    // 株数跟着生物量走：草本少了近排就稀，灌丛少了中排、远排就稀（空出来的是裸地）。
+    const amount = { far: Math.min(1, fl.woody * 1.4), mid: Math.min(1, 0.25 + fl.woody), near: Math.min(1, 0.15 + fl.herb) };
     rows.forEach((r, ri) => {
-      const chosen = pickPlants(picks, r.row, r.n, fl.seed * 7 + ri);
-      // 近排的植物要避开台中间（动物在那儿），远排、中排铺满。
-      chosen.forEach((p, i) => {
-        const sp = byId.get(p.id);
-        if (!sp) return;
-        const t = (i + 0.5) / chosen.length;
-        const x = r.row === 'near' ? (i % 2 === 0 ? 70 + t * 260 : 1130 + t * 260) : 60 + t * 1340 + (((fl.seed * 31 + i * 17) % 60) - 30);
+      const n = fl.terrain === 'coast' && r.row === 'far' ? (fl.seed % 3 === 0 ? 2 : 0) : Math.round(r.n * amount[r.row]);
+      const chosen = pickPlants(picks, r.row, n, fl.seed * 7 + ri);
+      // 一整排用同一个比例：按这一排最高的那株定。
+      const cuts = chosen.map((p, i) => {
+        const sp = byId.get(p.id)!;
         const flower = sp.flowerMonths.includes(fl.month) ? 1 : 0;
         const fruit = sp.fruitMonths.includes(fl.month) ? 1 : 0;
-        const cut = cutPlant({ ...sp.look, height: sp.look.height * p.height }, fl.seed * 13 + ri * 101 + i, flower, fruit);
-        // 每排有个最高的像素：太高的（远处的大树、近处的高丛）按比例缩，不挡住天和台中间。
-        const kk = Math.min(r.k, r.max / Math.max(0.05, cut.height));
-        const v = plantView(cut, kk, r.shade, r.shadow);
-        v.position.set(x, r.y + (i % 3) * 4);
-        if ((fl.seed + i) % 2) v.scale.x = -1;
-        r.c.addChild(v);
+        return { p, cut: cutPlant({ ...sp.look, height: sp.look.height * p.height }, fl.seed * 13 + ri * 101 + i, flower, fruit) };
       });
+      const tallest = Math.max(0.1, ...cuts.map((c) => c.cut.height));
+      const kk = Math.min(r.k, r.max / tallest);
+      // 成丛：先撒两三个丛心，每株落在某个丛心附近；近排避开台中间（动物在那儿）。
+      let sd = (fl.seed * 2654435761 + ri * 97) >>> 0 || 1;
+      const rnd = (): number => ((sd = (Math.imul(sd, 1103515245) + 12345) >>> 0) / 0x1_0000_0000);
+      const centers = [0, 1, 2].map(() => {
+        let x = r.x0 + rnd() * (r.x1 - r.x0);
+        if (r.row === 'near' && x > 420 && x < 1060) x = x < 740 ? 280 + rnd() * 120 : 1080 + rnd() * 200;
+        return x;
+      });
+      const placed = cuts.map((c, i) => ({ ...c, x: centers[i % 3]! + (rnd() - 0.5) * 160, y: r.y + rnd() * 14 }));
+      placed.sort((a, b) => a.y - b.y);
+      for (const it of placed) {
+        const v = plantView(it.cut, kk, r.shade, r.shadow);
+        v.position.set(it.x, it.y);
+        r.c.addChild(v);
+      }
     });
   }
 
