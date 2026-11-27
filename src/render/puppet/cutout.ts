@@ -173,6 +173,15 @@ export class Cutout {
     if (!this.flat) for (const [x, y, r] of rivets) drawRivet(piece.rivets, x, y, r, this.detail);
   }
 
+  /** 一片零件换固定的颜色（角：额角象牙色、鼻角深灰褐）；null 回到毛色。下一次 setShape 生效。 */
+  setPartDye(id: string, dye: Dye | null): void {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+    piece.part = { ...piece.part };
+    if (dye) piece.part.dye = dye;
+    else delete piece.part.dye;
+  }
+
   /** 换一套颜色；下一次 setShape 生效。 */
   setDye(dye: Dye): void {
     this.dye = dye;

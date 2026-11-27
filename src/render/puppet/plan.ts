@@ -173,7 +173,8 @@ export function bodyPlan(
     neckK: x2('neck.length'),
     neckWK: x2('neck.width'),
     headR,
-    snout: headR * (SNOUT[parts.mouth.id] ?? 0.7) * x2('snout.length'),
+    // 大型兽的脸相对更长（颅面异速，Cardini & Polly 2013，未核对）：吻长的零点随体重变长，4 千克（猫）不变。
+    snout: headR * (SNOUT[parts.mouth.id] ?? 0.7) * x2('snout.length') * Math.pow(Math.max(1, M / 4), 0.06),
     snoutK: x2('snout.length'),
     snoutDepth: x2('snout.depth'),
     snoutTip: f('snout.tip'),

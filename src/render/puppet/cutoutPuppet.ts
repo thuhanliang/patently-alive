@@ -8,7 +8,7 @@ import { pendulumOmega, springStep, type Spring } from './gait';
 import { TailChain, idleSwish } from './tail';
 import { LEGS, isHind, type BodyPlan, type LegKey } from './plan';
 import { legJoints, standPose, type Pose, type Vec } from './pose';
-import { KERATIN, extraPart, hornShape, neckShape } from './extras';
+import { KERATIN, RHINO_HORN, extraPart, hornShape, neckShape } from './extras';
 
 /**
  * 用成品图切出来的零件（cutout.ts）拼出任意一具身体，演设计台的动作：和 Puppet 一样吃 BodyPlan 和每帧的 Pose。
@@ -92,6 +92,8 @@ export class CutoutPuppet {
   private lastHead = 0;
   /** 代码剪的颈片：多出来的长度（像素，负的是颈比成品图短，头往肩那边挪）。 */
   private neckExt = 0;
+  /** 颈片分几节（0 = 没有颈片）。 */
+  private neckSegs = 0;
   /** 角：每只角在头片上的插口和朝向（头片的零件坐标）。 */
   private horns: { id: string; at: P; angle: number }[] = [];
   private time = 0;
@@ -307,14 +309,21 @@ export class CutoutPuppet {
     const neckM = plan.neckLen * (1 - 1 / plan.neckK);
     this.neckExt = neckM / this.s;
     const headLap = this.part(rig.head).lapR * kh;
-    const hasNeck = this.neckExt > headLap * 0.15;
-    this.cut.setVisible(NECK, hasNeck);
-    if (hasNeck) {
+    // 颈分节（审核 r1）：每翻一倍多一节，最多 4 节，节与节之间一颗铆钉（每个能动的关节一颗铆钉）。
+    this.neckSegs = this.neckExt > headLap * 0.15 ? Math.max(1, Math.min(NECKS.length, 1 + Math.floor(Math.log2(Math.max(1, plan.neckK)) * 1.3))) : 0;
+    NECKS.forEach((id, i) => this.cut.setVisible(id, i < this.neckSegs));
+    if (this.neckSegs > 0) {
       // 颈根要接得住胸：至少有颈的一般粗细的一半（plan.neckW 是全宽），颈越长根部越粗（长颈鹿的颈根几乎和胸一样深）。
       const wb = Math.max(headLap * 1.08, (plan.neckW / plan.neckWK / 2 / this.s) * 1.25) * plan.neckWK * (1 + 0.18 * Math.log2(Math.max(1, plan.neckK)));
       const wt = headLap * 0.86 * plan.neckWK;
-      shapes.set(NECK, neckShape(this.neckExt, wb, wt, headLap * 2.2));
-      fitted.set(NECK, { sockets: { end: [this.neckExt, 0] } });
+      const n = this.neckSegs;
+      const seg = this.neckExt / n;
+      for (let i = 0; i < n; i++) {
+        const w0 = wb + ((wt - wb) * i) / n;
+        const w1 = wb + ((wt - wb) * (i + 1)) / n;
+        shapes.set(NECKS[i]!, neckShape(seg, w0, w1, headLap * 2.2));
+        fitted.set(NECKS[i]!, { sockets: { end: [seg, 0] } });
+      }
     }
     // 角：沿头顶的轮廓，从额（耳前）到鼻（吻上）。
     this.horns = [];
@@ -334,7 +343,9 @@ export class CutoutPuppet {
       const noseL = rot(noseW, -head.angle);
       void nose;
       const lenPx = plan.horn.len / this.s;
-      const w0 = Math.max(headLap * 0.12, Math.min(headLap * 0.4, lenPx * 0.16));
+      // 鼻角（犀牛）：中线上前后排成一列，基部宽（约为角长的一半）、深灰褐、没有环纹；额角（牛羊）左右一对，象牙色带环纹，卷角根部粗。
+      const nasal = plan.horn.pos > 0.6;
+      const w0 = nasal ? lenPx * 0.25 : Math.max(headLap * 0.12, Math.min(headLap * (0.4 + 0.5 * plan.horn.curve), lenPx * (0.16 + 0.1 * plan.horn.curve)));
       const spot = (t: number): P => {
         const q: P = [ear[0] + (noseL[0] - ear[0]) * t, ear[1] + (noseL[1] - ear[1]) * t];
         const axis = sub(noseL, ear);
@@ -359,19 +370,28 @@ export class CutoutPuppet {
         const pair = i < 2 ? 0 : 1;
         const t = Math.max(0.05, 0.2 + 0.7 * plan.horn.pos - pair * 0.2);
         let at = spot(t);
-        // 远侧的角在近侧的后面一点（侧面看两只角前后叠着）。
-        if (i % 2 === 1) at = [at[0] + back[0] * w0 * 0.9, at[1] + back[1] * w0 * 0.9];
+        let k = 1;
+        if (nasal && i > 0) {
+          // 鼻角的第二只（以及第三、四只）：在第一只后面、小一号。
+          k = Math.pow(0.6, i);
+          const headLen = Math.hypot(noseL[0] - ear[0], noseL[1] - ear[1]);
+          at = spot(Math.max(0.05, t - 0.35 * i * (headLen > 0 ? 1 : 0)));
+        } else if (i % 2 === 1) {
+          // 额角的远侧那只：在近侧的后面一点（侧面看左右两只前后叠着）。
+          at = [at[0] + back[0] * w0 * 0.9, at[1] + back[1] * w0 * 0.9];
+        }
         const tilt = 0.7 - 1.0 * plan.horn.pos;
         const d: P = [up[0] + back[0] * tilt, up[1] + back[1] * tilt];
         const angle = Math.atan2(d[1], d[0]);
         // 弯的方向：往后卷（大角羊）。hornShape 往零件的 −y 一侧弯；那一侧不是“后”就镜像。
         const side: P = [Math.sin(angle), -Math.cos(angle)];
         const mirror = side[0] * back[0] + side[1] * back[1] < 0;
-        const sh = hornShape(lenPx * (i % 2 === 1 ? 0.96 : 1), w0, plan.horn.curve);
+        const sh = hornShape(lenPx * k * (!nasal && i % 2 === 1 ? 0.96 : 1), w0 * (nasal ? k : 1), plan.horn.curve, !nasal);
         const flip = (q: number[]): number[] => q.map((v, j) => (j % 2 === 1 && mirror ? -v : v));
         shapes.set(id, { outline: flip(sh.outline), stripe: sh.stripe.map(flip), pale: sh.pale.map(flip) });
         fitted.set(id, { sockets: {} });
-        this.cut.setShade(id, i % 2 === 1 ? FAR_SHADE * 0.95 : 1);
+        this.cut.setPartDye(id, nasal ? RHINO_HORN : KERATIN);
+        this.cut.setShade(id, !nasal && i % 2 === 1 ? FAR_SHADE * 0.95 : 1);
         this.horns.push({ id, at, angle });
       });
     }
@@ -439,9 +459,10 @@ export class CutoutPuppet {
       pin(ps[1], ps[0], so(ps[0], 'end'), lapW(near[1], plan.legW / ref.legW));
       pin(ps[2], ps[1], so(ps[1], 'end'), lapW(near[2], plan.legW / ref.legW));
     }
-    if (hasNeck) {
-      pin(NECK, rig.chest, so(rig.chest, 'head'), lapW(rig.head, kh) * 1.05);
-      pin(rig.head, NECK, so(NECK, 'end'), lapW(rig.head, kh));
+    if (this.neckSegs > 0) {
+      pin(NECKS[0]!, rig.chest, so(rig.chest, 'head'), lapW(rig.head, kh) * 1.05);
+      for (let i = 1; i < this.neckSegs; i++) pin(NECKS[i]!, NECKS[i - 1]!, so(NECKS[i - 1]!, 'end'), lapW(rig.head, kh));
+      pin(rig.head, NECKS[this.neckSegs - 1]!, so(NECKS[this.neckSegs - 1]!, 'end'), lapW(rig.head, kh));
     } else pin(rig.head, rig.chest, so(rig.chest, 'head'), lapW(rig.head, kh));
     pin(rig.jaw, rig.head, so(rig.head, rig.jaw), lapW(rig.jaw, kh));
     if (plan.earOn) for (const e of rig.ears) pin(e, rig.head, so(rig.head, e), lapW(e, kh));
@@ -645,14 +666,22 @@ export class CutoutPuppet {
     const lift = plan.neckRaise * 0.75 * Math.min(1, Math.max(0, (pose.neck + 0.1) / 0.6));
     const axisA = angleOf(sub(headRest, shoulderAt)) + aNeck;
     let headAt = headV;
-    if (this.cut.part(NECK) && this.neckExt > 0 && this.fitted.has(NECK)) {
-      const dirA = axisA - 0.12 - lift;
-      this.cut.place(NECK, ...headV, dirA);
-      headAt = add(headV, rot([this.neckExt, 0], dirA));
+    if (this.neckSegs > 0) {
+      // 每节方向略有不同，颈是一道往前凹的弧（不是一根直板）；低头时弧跟着颈一起转。
+      const n = this.neckSegs;
+      const seg = this.neckExt / n;
+      let p = headV;
+      for (let i = 0; i < n; i++) {
+        const a = axisA - 0.12 - lift + 0.1 * (i - (n - 1) / 2);
+        this.cut.place(NECKS[i]!, ...p, a);
+        p = add(p, rot([seg, 0], a));
+      }
+      headAt = p;
     } else if (this.neckExt < 0) {
       headAt = add(headV, rot([this.neckExt, 0], axisA));
     }
-    const aHead = -(pose.neck + pose.head - this.rest.neck - this.rest.head) - lift * 0.55;
+    // 抬颈时头反过来转，视线保持大致水平（长颈鹿的头和颈约成直角）：颈片比原来的颈多抬了多少，头就往回转多少。
+    const aHead = -(pose.neck + pose.head - this.rest.neck - this.rest.head) + (this.neckSegs > 0 ? lift + 0.12 : 0) * 0.95;
     const rHead = this.part(rig.head).angle + aHead;
     this.cut.place(rig.head, ...headAt, rHead);
     for (const h of this.horns) this.cut.place(h.id, ...at(headAt, rHead, h.at), rHead + h.angle);
@@ -738,7 +767,7 @@ export class CutoutPuppet {
 }
 
 /** 代码剪的零件的 id（不和成品图的零件重名）。 */
-const NECK = 'xNeck';
+const NECKS = ['xNeck0', 'xNeck1', 'xNeck2', 'xNeck3'];
 const HORN_NEAR = 'xHornNear';
 const HORN_FAR = 'xHornFar';
 const HORN_NEAR2 = 'xHornNear2';
@@ -749,16 +778,16 @@ const HORN_FAR2 = 'xHornFar2';
  * 前后：颈片在胸片前、近侧前腿后；远侧的角在头后，近侧的角在头前、近侧耳后。
  */
 function withExtras(raw: CutData): CutData {
-  if (raw.parts.some((p) => p.id === NECK)) return raw;
+  if (raw.parts.some((p) => p.id === NECKS[0])) return raw;
   const { rig } = raw;
   const z = (id: string): number => raw.parts.find((p) => p.id === id)!.z;
   const headPiv = raw.parts.find((p) => p.id === rig.head)!.pivot;
   const extras = [
-    extraPart(NECK, rig.chest, z(rig.chest) + 0.5, headPiv),
+    ...NECKS.map((id, i) => extraPart(id, i === 0 ? rig.chest : NECKS[i - 1]!, z(rig.chest) + 0.5 + 0.01 * i, headPiv)),
     extraPart(HORN_FAR, rig.head, z(rig.head) - 0.6, headPiv, KERATIN),
     extraPart(HORN_FAR2, rig.head, z(rig.head) - 0.7, headPiv, KERATIN),
-    extraPart(HORN_NEAR, rig.head, z(rig.head) + 0.5, headPiv, KERATIN),
-    extraPart(HORN_NEAR2, rig.head, z(rig.head) + 0.4, headPiv, KERATIN),
+    extraPart(HORN_NEAR, rig.head, Math.max(...rig.ears.map(z)) + 0.5, headPiv, KERATIN),
+    extraPart(HORN_NEAR2, rig.head, Math.max(...rig.ears.map(z)) + 0.4, headPiv, KERATIN),
   ];
   return { ...raw, parts: [...raw.parts, ...extras] };
 }
