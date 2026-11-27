@@ -35,10 +35,10 @@ export interface FloraLook {
   leaf: string;
   leafDark: string;
   stem: string;
-  flower?: string;
-  fruit?: string;
+  flower?: string | undefined;
+  fruit?: string | undefined;
   /** 叶（或叶丛）的数量感：0–1。 */
-  density?: number;
+  density?: number | undefined;
 }
 
 export type Form =
@@ -191,9 +191,9 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
         const k = 18;
         for (let i = 0; i < k; i++) {
           const a = (i / k) * Math.PI * 2;
-          const len = H * (0.16 + r() * 0.05);
+          const len = H * (0.22 + r() * 0.06);
           // 下面一圈的老叶往下垂（真的朱蕉枝梢下面挂着一圈枯叶，这里用深一档的叶）。
-          (Math.cos(a) < -0.3 ? back : front).push(strap(x, y, a, len, H * 0.018, Math.cos(a) < 0 ? 0.3 : 0, 0.02, 5));
+          (Math.cos(a) < -0.3 ? back : front).push(strap(x, y, a, len, H * 0.022, Math.cos(a) < 0 ? 0.5 : 0.15 * Math.sign(Math.sin(a)), 0.02, 5));
         }
         if (flower > 0) flw.push(lumpy(x + H * 0.08, y + H * 0.08, H * 0.08, H * 0.12, 5, 0.25, r));
       }
@@ -206,12 +206,12 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       stem.push(limb([[0, 0], [W * 0.03, H * 0.2], [-W * 0.02, H * 0.35]], H * 0.12, H * 0.08));
       for (let i = 0; i < n; i++) {
         const t = n === 1 ? 0 : i / (n - 1) - 0.5;
-        stem.push(limb([[-W * 0.02, H * 0.35], [t * W * 0.25, H * 0.48], [t * W * 0.42, crownY]], H * 0.06, H * 0.03));
+        stem.push(limb([[-W * 0.02, H * 0.35], [t * W * 0.25, H * 0.48], [t * W * 0.42, crownY + H * 0.12]], H * 0.06, H * 0.03));
       }
       for (let i = 0; i < 5; i++) {
         const t = i / 4 - 0.5;
         const cx = t * W * 0.7;
-        const cy = crownY + H * (0.15 + 0.2 * (1 - Math.abs(t) * 1.5));
+        const cy = crownY + H * (0.06 + 0.16 * (1 - Math.abs(t) * 1.5));
         (i % 2 ? back : front).push(lumpy(cx, cy, W * 0.2, H * 0.2, 6, 0.18, r, 0.4));
         if (flower > 0) for (let j = 0; j < 4; j++) flw.push(lumpy(cx + (r() - 0.5) * W * 0.25, cy + H * (0.05 + r() * 0.12), W * 0.05, H * 0.035, 4, 0.3, r));
         if (fruit > 0) for (let j = 0; j < 3; j++) frt.push(circle(cx + (r() - 0.5) * W * 0.3, cy + (r() - 0.6) * H * 0.15, H * 0.02, 8));
@@ -219,14 +219,19 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       break;
     }
     case 'fineShrub': {
-      // 细叶灌木：很多根细枝往上散开，冠是蓬松的小团；春天开满白色的小花。
-      const n = 5 + Math.round(d * 4);
+      // 细叶灌木（麦卢卡、卡努卡）：几根细而扭的干从基部分开往上斜，顶上是一片连在一起、蓬松细碎的冠；春天开满白色的小花。
+      const n = 3 + Math.round(d * 2);
+      const crown = H * 0.68;
       for (let i = 0; i < n; i++) {
-        const t = i / (n - 1) - 0.5;
-        const top: [number, number] = [t * W * 0.8, H * (0.6 + 0.3 * (1 - Math.abs(t)))];
-        stem.push(limb([[t * W * 0.1, 0], [t * W * 0.4, top[1] * 0.5], top], H * 0.025, H * 0.01));
-        (i % 2 ? back : front).push(lumpy(top[0], top[1], W * 0.17, H * 0.17, 7, 0.22, r));
-        if (flower > 0) for (let j = 0; j < 5; j++) flw.push(circle(top[0] + (r() - 0.5) * W * 0.25, top[1] + (r() - 0.5) * H * 0.22, H * 0.018, 5));
+        const t = n === 1 ? 0 : i / (n - 1) - 0.5;
+        stem.push(limb([[t * W * 0.06, 0], [t * W * 0.18 + (r() - 0.5) * W * 0.05, H * 0.35], [t * W * 0.4, crown]], H * 0.035, H * 0.015));
+      }
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6 - 0.5;
+        const cx = t * W * 0.75;
+        const cy = crown + H * (0.04 + 0.14 * (1 - Math.abs(t) * 1.6)) + (r() - 0.5) * H * 0.05;
+        (i % 2 ? back : front).push(lumpy(cx, cy, W * 0.16, H * 0.13, 9, 0.16, r, 0.3));
+        if (flower > 0) for (let j = 0; j < 6; j++) flw.push(circle(cx + (r() - 0.5) * W * 0.22, cy + (r() - 0.4) * H * 0.18, H * 0.014, 5));
       }
       break;
     }
@@ -279,26 +284,30 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       break;
     }
     case 'bracken': {
-      // 蕨：一片片三角形的大叶，叶柄长，叶面是层层的小羽片（用锯齿边表示）。
+      // 蕨：几片大叶从地下的根茎冒出来，叶柄直立，叶片往一边弯下去；叶片两侧一对对羽片，越往梢越短（整片是三角形）。
       for (let i = 0; i < 4; i++) {
-        const x = (r() - 0.5) * W * 0.6;
-        const top = H * (0.7 + r() * 0.3);
-        stem.push(limb([[x, 0], [x, top * 0.45]], H * 0.02, H * 0.015));
-        const fr: Pts = [];
-        const steps = 10;
-        for (let k = 0; k <= steps; k++) {
+        const x = (r() - 0.5) * W * 0.5;
+        const lean = (i % 2 ? 1 : -1) * (0.5 + r() * 0.4);
+        const L = H * (0.85 + r() * 0.2);
+        const stalk = L * 0.35;
+        stem.push(limb([[x, 0], [x + lean * 0.03 * H, stalk]], H * 0.022, H * 0.016));
+        const sheet = i % 2 ? back : front;
+        const steps = 9;
+        let px = x + lean * 0.03 * H;
+        let py = stalk;
+        let a = lean * 0.4;
+        for (let k = 0; k < steps; k++) {
           const t = k / steps;
-          const y = top * (0.45 + 0.55 * t);
-          const half = W * 0.35 * (1 - t) * (k % 2 ? 1 : 0.8);
-          fr.push(x + half, y);
+          const seg = ((L - stalk) / steps) * 1.1;
+          const nx = px + Math.sin(a) * seg;
+          const ny = py + Math.cos(a) * seg;
+          stem.push(limb([[px, py], [nx, ny]], H * 0.014, H * 0.01));
+          const pl = W * 0.32 * (1 - t) + W * 0.04;
+          for (const side of [-1, 1]) sheet.push(strap(px, py, a + side * 1.25, pl, pl * 0.32, -side * 0.3 + lean * 0.3, 0.1, 5));
+          px = nx;
+          py = ny;
+          a += lean * 0.22;
         }
-        for (let k = steps; k >= 0; k--) {
-          const t = k / steps;
-          const y = top * (0.45 + 0.55 * t);
-          const half = W * 0.35 * (1 - t) * (k % 2 ? 1 : 0.8);
-          fr.push(x - half, y);
-        }
-        (i % 2 ? back : front).push(fr);
       }
       break;
     }
@@ -317,16 +326,25 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       break;
     }
     case 'palm': {
-      // 尼考棕：光滑的灰绿色细干，有一圈圈叶痕；叶鞘包成一节鼓起的绿色"冠茎"，上面几片硬挺、斜向上的羽状叶。
-      const top = H * 0.72;
-      stem.push(limb([[0, 0], [0, top]], H * 0.06, H * 0.05));
-      back.push(limb([[0, top], [0, top + H * 0.1]], H * 0.075, H * 0.06));
+      // 尼考棕：光滑的灰绿色细干；叶鞘包成一节鼓起的、更亮的"冠茎"；上面几片很长、硬挺、斜向上的羽状叶，羽片排成锯齿边；
+      // 冠茎下面挂着一串串红果。
+      const top = H * 0.62;
+      stem.push(limb([[0, 0], [0, top]], H * 0.055, H * 0.045));
+      back.push(limb([[0, top - H * 0.01], [0, top + H * 0.12]], H * 0.085, H * 0.07));
       for (let i = 0; i < 7; i++) {
         const t = i / 6 - 0.5;
-        const len = H * 0.38;
-        front.push(strap(0, top + H * 0.09, t * 1.8, len, H * 0.1, t * 0.5, 0, 8));
+        const a0 = t * 1.9;
+        const L = H * 0.42;
+        stem.push(limb([[0, top + H * 0.11], [Math.sin(a0) * L * 0.5, top + H * 0.11 + Math.cos(a0) * L * 0.5]], H * 0.012, H * 0.008));
+        for (let k = 1; k <= 8; k++) {
+          const u = k / 9;
+          const a = a0 + t * 0.9 * u;
+          const px = Math.sin(a0) * L * u;
+          const py = top + H * 0.11 + Math.cos(a0) * L * u - L * 0.25 * u * u * Math.abs(t);
+          for (const side of [-1, 1]) front.push(strap(px, py, a + side * 0.9, L * 0.22 * (1 - u * 0.5), L * 0.035, side * 0.2, 0, 4));
+        }
       }
-      if (flower > 0 || fruit > 0) frt.push(lumpy(0, top - H * 0.02, H * 0.06, H * 0.04, 5, 0.3, r));
+      if (flower > 0 || fruit > 0) for (let k = 0; k < 4; k++) frt.push(circle((k - 1.5) * H * 0.025, top - H * (0.03 + (k % 2) * 0.025), H * 0.02, 8));
       break;
     }
     case 'vineMat': {
@@ -372,13 +390,15 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       break;
     }
     case 'megaherb': {
-      // 巨型草本：几片又大又圆、皱的叶，从地面摊开，像一把把绿伞；Stilbocarpa 夏天开一团团奶油色的花。
-      for (let i = 0; i < 6; i++) {
-        const t = i / 5 - 0.5;
-        stem.push(limb([[t * W * 0.1, 0], [t * W * 0.5, H * (0.45 + 0.3 * (1 - Math.abs(t)))]], H * 0.05, H * 0.04));
-        (i % 2 ? back : front).push(lumpy(t * W * 0.55, H * (0.5 + 0.3 * (1 - Math.abs(t))), W * 0.2, H * 0.17, 7, 0.12, r));
+      // 巨型草本（麦夸里卷心菜）：叶柄短而粗，又大又圆、有点皱的叶一层层摊在地面上方，像一丛绿伞；夏天中间冒出一团团奶油色的花。
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6 - 0.5;
+        const cx = t * W * 0.7;
+        const cy = H * (0.3 + 0.35 * (1 - Math.abs(t) * 1.6));
+        stem.push(limb([[t * W * 0.1, 0], [cx, cy - H * 0.1]], H * 0.06, H * 0.05));
+        (i % 2 ? back : front).push(lumpy(cx, cy, W * 0.2, H * 0.2, 9, 0.1, r, 0.5));
       }
-      if (flower > 0) for (let k = 0; k < 3; k++) flw.push(lumpy((r() - 0.5) * W * 0.4, H * (0.85 + r() * 0.15), H * 0.09, H * 0.07, 5, 0.3, r));
+      if (flower > 0) for (let k = 0; k < 3; k++) flw.push(lumpy((k - 1) * W * 0.15, H * (0.82 + r() * 0.12), H * 0.1, H * 0.08, 6, 0.25, r));
       break;
     }
   }

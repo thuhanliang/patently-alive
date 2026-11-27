@@ -186,3 +186,9 @@ export function formValue(form: Readonly<Record<string, number>> | undefined, id
   const v = form?.[id] ?? p.default;
   return Math.min(p.max, Math.max(p.min, p.kind === 'N' ? Math.round(v) : v));
 }
+
+import { FloraFileSchema, type FloraSpecies } from './schema/flora';
+import floraJson from './plants/flora.json';
+export { type FloraSpecies };
+/** 岛上的植物图鉴（只决定画面，src/data/plants/flora.json）。 */
+export const floraSpecies: readonly FloraSpecies[] = FloraFileSchema.parse(floraJson).species;

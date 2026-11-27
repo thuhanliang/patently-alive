@@ -1,0 +1,691 @@
+{
+  "说明": "岛上的植物图鉴（2026-11-27 起，只决定画面，推演里的草本和灌丛的多少不变）：真实的新西兰离岸岛屿和亚南极岛屿植物。月份按游戏的季节算（0 = 春季第一个月 = 南半球的 9 月）。zone 是它在岛上长的地带，见 docs/research/flora.md。依据在每一种的 source（多数是 NZPCN 的物种页）；没查到的标【未核对】。",
+  "species": [
+    {
+      "id": "spinifex",
+      "name": "鬣刺",
+      "maori": "kōwhangatara",
+      "latin": "Spinifex sericeus",
+      "zone": [
+        "dune"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "spinifex",
+        "height": 0.4,
+        "aspect": 2.2,
+        "leaf": "#a9b49a",
+        "leafDark": "#8f9a80",
+        "stem": "#8f9a80",
+        "flower": "#c8c7ad"
+      },
+      "flowerMonths": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/spinifex-sericeus/ ：前沙丘最前沿；雌雄异株，雌花头是带长硬苞片的刺球，成熟后整个脱落在沙面上滚；兔子啃食但最不爱吃（DOC casn213）"
+    },
+    {
+      "id": "pingao",
+      "name": "金沙莎",
+      "maori": "pīngao",
+      "latin": "Ficinia spiralis",
+      "zone": [
+        "dune"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "sedge",
+        "height": 0.7,
+        "aspect": 1.1,
+        "leaf": "#d29a3c",
+        "leafDark": "#b07a2a",
+        "stem": "#b07a2a",
+        "flower": "#6b4a2a"
+      },
+      "flowerMonths": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        5,
+        6
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/ficinia-spiralis/ ：前沙丘积沙坡面，新鲜黄绿、干了金色；兔子吃幼苗，几乎阻断种子更新（DOC casn213）"
+    },
+    {
+      "id": "wiwi",
+      "name": "海滨莎",
+      "maori": "wīwī",
+      "latin": "Ficinia nodosa",
+      "zone": [
+        "coastRock",
+        "wetland"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "sedge",
+        "height": 0.8,
+        "aspect": 0.9,
+        "leaf": "#6f7d4e",
+        "leafDark": "#59663e",
+        "stem": "#59663e",
+        "flower": "#6b5236",
+        "density": 0.8
+      },
+      "flowerMonths": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/ficinia-nodosa/ ：沙丘、沙滩、河口后缘"
+    },
+    {
+      "id": "harakeke",
+      "name": "新西兰麻",
+      "maori": "harakeke",
+      "latin": "Phormium tenax",
+      "zone": [
+        "wetland",
+        "coastScrub"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "fan",
+        "height": 2.0,
+        "aspect": 1.1,
+        "leaf": "#5f7a4a",
+        "leafDark": "#48603a",
+        "stem": "#6b4a33",
+        "flower": "#8c3b2a",
+        "fruit": "#3d3228"
+      },
+      "flowerMonths": [
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/phormium-tenax/ ：低地湿地和开阔河岸；花期 9–1 月（盛花 10–11 月）暗红，花葶高出叶丛；tūī、bellbird 吸蜜"
+    },
+    {
+      "id": "tikouka",
+      "name": "朱蕉",
+      "maori": "tī kōuka",
+      "latin": "Cordyline australis",
+      "zone": [
+        "wetland",
+        "grassland"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "pompom",
+        "height": 6,
+        "aspect": 0.6,
+        "leaf": "#7d9a5a",
+        "leafDark": "#8a7a55",
+        "stem": "#8a7560",
+        "flower": "#efe6cc",
+        "fruit": "#e8e4dc"
+      },
+      "flowerMonths": [
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/cordyline-australis/ ：分叉的干顶着一簇簇狭长叶；花期 9–1 月白色，果 12–3 月白色；家畜贪吃幼苗；kererū 吃果"
+    },
+    {
+      "id": "pohutukawa",
+      "name": "新西兰圣诞树",
+      "maori": "pōhutukawa",
+      "latin": "Metrosideros excelsa",
+      "zone": [
+        "coastRock",
+        "coastForest"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "canopy",
+        "height": 12,
+        "aspect": 1.4,
+        "leaf": "#4f6b43",
+        "leafDark": "#3e5536",
+        "stem": "#6e5a48",
+        "flower": "#c2362f"
+      },
+      "flowerMonths": [
+        2,
+        3
+      ],
+      "fruitMonths": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/metrosideros-excelsa/ ：海岸林和崖壁，横展伞冠、气生根；花期 11–12 月红色雄蕊；负鼠能把树吃死；Tiritiri Matangi 最早种的就是它"
+    },
+    {
+      "id": "taupata",
+      "name": "镜叶木",
+      "maori": "taupata",
+      "latin": "Coprosma repens",
+      "zone": [
+        "coastRock",
+        "coastScrub"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "broadShrub",
+        "height": 2.5,
+        "aspect": 1.4,
+        "leaf": "#5d8a4a",
+        "leafDark": "#456b38",
+        "stem": "#5b4a3a",
+        "fruit": "#e07a2e"
+      },
+      "flowerMonths": [
+        0,
+        1
+      ],
+      "fruitMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/coprosma-repens/ ：礁柱、海崖、碎石坡，暴露处贴着岩石匍匐；叶面极亮；橙红果；兔子是它的主要啃食者（DOC casn213）"
+    },
+    {
+      "id": "manuka",
+      "name": "麦卢卡",
+      "maori": "mānuka",
+      "latin": "Leptospermum scoparium",
+      "zone": [
+        "grassland",
+        "coastScrub"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "fineShrub",
+        "height": 3,
+        "aspect": 0.8,
+        "leaf": "#6d7f52",
+        "leafDark": "#56663f",
+        "stem": "#6a5444",
+        "flower": "#f6f1e6"
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4
+      ],
+      "fruitMonths": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/leptospermum-scoparium-var-scoparium/ ：先锋，几乎全年开花（白到粉）；蒴果宿存；30–50 年衰老，被 kānuka 取代；幼苗基本不被吃"
+    },
+    {
+      "id": "kanuka",
+      "name": "卡努卡",
+      "maori": "kānuka",
+      "latin": "Kunzea robusta",
+      "zone": [
+        "coastScrub",
+        "coastForest"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "fineShrub",
+        "height": 8,
+        "aspect": 0.6,
+        "leaf": "#74865a",
+        "leafDark": "#5b6a45",
+        "stem": "#7a6450",
+        "flower": "#f8f4ec",
+        "density": 0.8
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4
+      ],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/kunzea-robusta/ ：先锋到早期，比 mānuka 高、活到 150 年，混生时取代 mānuka"
+    },
+    {
+      "id": "rarauhe",
+      "name": "蕨",
+      "maori": "rarauhe",
+      "latin": "Pteridium esculentum",
+      "zone": [
+        "grassland"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "bracken",
+        "height": 1.2,
+        "aspect": 1.2,
+        "leaf": "#7f8f4e",
+        "leafDark": "#66733c",
+        "stem": "#7b6a45"
+      },
+      "flowerMonths": [],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/pteridium-esculentum/ ：演替初期、火烧后最先出现，形成持久易燃的覆盖；会被 mānuka 超过并遮死；对家畜有毒"
+    },
+    {
+      "id": "ponga",
+      "name": "银蕨",
+      "maori": "ponga",
+      "latin": "Cyathea dealbata",
+      "zone": [
+        "coastForest",
+        "coastScrub",
+        "gully"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "treeFern",
+        "height": 6,
+        "aspect": 0.9,
+        "leaf": "#5b7a4a",
+        "leafDark": "#44603a",
+        "stem": "#4e3f33",
+        "flower": "#d9ddd2"
+      },
+      "flowerMonths": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/cyathea-dealbata/ ：海岸和低地偏干的林地与灌丛；叶长约 4 m，叶背白色（用 flower 那一层画，全年都在）"
+    },
+    {
+      "id": "nikau",
+      "name": "尼考棕",
+      "maori": "nīkau",
+      "latin": "Rhopalostylis sapida",
+      "zone": [
+        "gully",
+        "coastForest"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "palm",
+        "height": 8,
+        "aspect": 0.7,
+        "leaf": "#6a8a50",
+        "leafDark": "#7f9a6a",
+        "stem": "#8f9a86",
+        "fruit": "#c4473a"
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "fruitMonths": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        0,
+        1,
+        2
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/rhopalostylis-sapida/ ：较暖地区海岸到低地林；膨大的绿色冠鞘；果红色；kererū 吃果"
+    },
+    {
+      "id": "kawakawa",
+      "name": "卡瓦卡瓦",
+      "maori": "kawakawa",
+      "latin": "Piper excelsum",
+      "zone": [
+        "coastForest",
+        "gully"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "broadShrub",
+        "height": 2.5,
+        "aspect": 1.1,
+        "leaf": "#6f9450",
+        "leafDark": "#567a3c",
+        "stem": "#5b4a3a",
+        "fruit": "#e48a2a"
+      },
+      "flowerMonths": [],
+      "fruitMonths": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/piper-excelsum-subsp-excelsum/ ：海岸林的重要下层；心形叶常有虫孔；橙色穗状果（全年都能结，这里只画夏秋）"
+    },
+    {
+      "id": "karaka",
+      "name": "卡拉卡",
+      "maori": "karaka",
+      "latin": "Corynocarpus laevigatus",
+      "zone": [
+        "coastForest"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "canopy",
+        "height": 12,
+        "aspect": 0.9,
+        "leaf": "#3f6a3c",
+        "leafDark": "#325530",
+        "stem": "#5e5045",
+        "fruit": "#e8902a"
+      },
+      "flowerMonths": [],
+      "fruitMonths": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/corynocarpus-laevigatus/ ：海岸林冠层乔木，厚而亮的深绿叶；果 1–4 月橙色；kererū 整个吞下种子；山羊啃幼苗"
+    },
+    {
+      "id": "pohuehue",
+      "name": "铁丝藤",
+      "maori": "pōhuehue",
+      "latin": "Muehlenbeckia complexa",
+      "zone": [
+        "dune",
+        "coastScrub",
+        "coastRock"
+      ],
+      "stage": "early",
+      "look": {
+        "form": "vineMat",
+        "height": 1.0,
+        "aspect": 2.0,
+        "leaf": "#5e6b3e",
+        "leafDark": "#4b5732",
+        "stem": "#4a3a2e"
+      },
+      "flowerMonths": [],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/muehlenbeckia-complexa-var-complexa/ ：缠结的藤或铺地团；白色肉质果托，壁虎、石龙子吃（花果月份未查到）"
+    },
+    {
+      "id": "raupo",
+      "name": "香蒲",
+      "maori": "raupō",
+      "latin": "Typha orientalis",
+      "zone": [
+        "wetland"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "reed",
+        "height": 2.5,
+        "aspect": 0.5,
+        "leaf": "#8a9a5a",
+        "leafDark": "#728245",
+        "stem": "#7a6a4a",
+        "fruit": "#6b4a2e"
+      },
+      "flowerMonths": [
+        3,
+        4,
+        5
+      ],
+      "fruitMonths": [
+        6,
+        7,
+        8,
+        9
+      ],
+      "source": "https://www.nzpcn.org.nz/flora/species/typha-orientalis/ ：肥沃湿地和塘边，夏绿；褐色\"香肠\"花穗"
+    },
+    {
+      "id": "poa",
+      "name": "银丛草",
+      "maori": "wī",
+      "latin": "Poa cita",
+      "zone": [
+        "grassland"
+      ],
+      "stage": "pioneer",
+      "look": {
+        "form": "tussock",
+        "height": 0.8,
+        "aspect": 1.4,
+        "leaf": "#b6b38c",
+        "leafDark": "#9a976f",
+        "stem": "#9a976f",
+        "flower": "#d8cfa8"
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/poa-cita/ ：草地、放牧地、开阔灌丛和海崖；淡黄绿有光泽的密丛"
+    },
+    {
+      "id": "gorse",
+      "name": "荆豆（外来）",
+      "maori": "kōhi",
+      "latin": "Ulex europaeus",
+      "zone": [
+        "grassland"
+      ],
+      "stage": "early",
+      "introduced": true,
+      "look": {
+        "form": "gorse",
+        "height": 2,
+        "aspect": 1.3,
+        "leaf": "#3f5a35",
+        "leafDark": "#33492b",
+        "stem": "#33492b",
+        "flower": "#e8c33a"
+      },
+      "flowerMonths": [
+        8,
+        9,
+        10,
+        11,
+        0,
+        1,
+        2
+      ],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/ulex-europaeus/ ：引入种，不耐荫，入侵粗放牧场；花期主要 5–11 月；在 Hinewai 是本地阔叶林的保育植物（gorse 下面 5–10 年长成年轻的阔叶林）"
+    },
+    {
+      "id": "pasture",
+      "name": "牧草（外来）",
+      "maori": "",
+      "latin": "Dactylis glomerata 等",
+      "zone": [
+        "grassland"
+      ],
+      "stage": "pioneer",
+      "introduced": true,
+      "look": {
+        "form": "pasture",
+        "height": 0.4,
+        "aspect": 1.6,
+        "leaf": "#8fae5a",
+        "leafDark": "#789546",
+        "stem": "#789546",
+        "flower": "#b9a76a"
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4
+      ],
+      "fruitMonths": [],
+      "source": "https://www.nzpcn.org.nz/flora/species/dactylis-glomerata/ ：引入的牧草（北部岛屿多是 kikuyu）"
+    },
+    {
+      "id": "stilbocarpa",
+      "name": "麦夸里卷心菜",
+      "maori": "",
+      "latin": "Stilbocarpa polaris",
+      "zone": [
+        "subantarctic"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "megaherb",
+        "height": 1.0,
+        "aspect": 1.6,
+        "leaf": "#5f8a46",
+        "leafDark": "#4b7038",
+        "stem": "#6f8a52",
+        "flower": "#efe3c0"
+      },
+      "flowerMonths": [
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "source": "https://en.wikipedia.org/wiki/Stilbocarpa_polaris ：叶近圆肾形，宽 30–45 cm；对兔子非常适口，兔子盛行时只在礁柱上残存；2011 年清除兔子后重新长出来（ACAP 2011）。花期月份【未核对】"
+    },
+    {
+      "id": "poafoliosa",
+      "name": "高丛草",
+      "maori": "",
+      "latin": "Poa foliosa",
+      "zone": [
+        "subantarctic"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "tussock",
+        "height": 1.6,
+        "aspect": 1.1,
+        "leaf": "#8a9a5e",
+        "leafDark": "#6f7f48",
+        "stem": "#6f7f48",
+        "flower": "#c9bf90",
+        "density": 0.9
+      },
+      "flowerMonths": [
+        1,
+        2,
+        3
+      ],
+      "fruitMonths": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "source": "https://en.wikipedia.org/wiki/Poa_foliosa ：高可达 2 m 的密丛，海滩高潮线以上的高丛草地，穴居海燕的生境；兔子的主要食物之一"
+    },
+    {
+      "id": "pleurophyllum",
+      "name": "银叶菊",
+      "maori": "",
+      "latin": "Pleurophyllum hookeri",
+      "zone": [
+        "subantarctic"
+      ],
+      "stage": "late",
+      "look": {
+        "form": "megaherb",
+        "height": 0.7,
+        "aspect": 1.8,
+        "leaf": "#a7b4a2",
+        "leafDark": "#8c9a88",
+        "stem": "#8c9a88",
+        "flower": "#7a2a3a"
+      },
+      "flowerMonths": [
+        2,
+        3,
+        4
+      ],
+      "fruitMonths": [],
+      "source": "https://en.wikipedia.org/wiki/Pleurophyllum_hookeri ：长而如丝的银叶贴地成莲座，深红色纽扣状花。花期月份【未核对】"
+    }
+  ]
+}
