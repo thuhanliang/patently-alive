@@ -1,5 +1,5 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, woodyIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -486,6 +486,9 @@ async function main(): Promise<void> {
   void rigKit.then((k) => theatre.setKit(k));
   // 地图画好以后，空下来再在后台搭剧场。
   window.setTimeout(() => theatre.preload(), 1500);
+  // ?theatre=x,y（开发、截图用）：一进来就走近那一格。
+  const qTheatre = query.get('theatre');
+  if (qTheatre) window.setTimeout(() => openTheatre({ x: Number(qTheatre.split(',')[0]), y: Number(qTheatre.split(',')[1]) }), 2500);
   const openTheatre = (cell: { x: number; y: number }): void => {
     theatreCell = cell;
     castAt = -1;
@@ -540,7 +543,21 @@ async function main(): Promise<void> {
     const ew = c.x < width / 3 ? '西' : c.x > (2 * width) / 3 ? '东' : '';
     const t = terrain[c.y * width + c.x] as keyof typeof TERRAIN_NAMES;
     const cal = calendar(state.tick);
+    // 植物图鉴：这一带的地带、灌丛和草本有多满、湿度（按位置的平滑噪声，只是画面）、月份。
+    const wi = woodyIndex(world);
+    let woody = 0;
+    if (wi >= 0) {
+      const wmax = world.plants[wi]!.maxBiomass;
+      const wood = state.grid.plants[wi]!;
+      for (const i of cells) if (terrain[i] !== TERRAIN.water) woody += Math.min(1, wood[i]! / wmax);
+    }
+    let coastDist = 99;
+    for (const i of cells)
+      if (terrain[i] === TERRAIN.water) coastDist = Math.min(coastDist, Math.max(Math.abs((i % width) - c.x), Math.abs(Math.floor(i / width) - c.y)));
+    const wet = 0.5 + 0.5 * Math.sin(c.x * 0.37 + Math.sin(c.y * 0.23) * 2.1) * Math.cos(c.y * 0.29 - c.x * 0.11);
+    const tName = t === TERRAIN.coast || t === TERRAIN.water ? 'coast' : t === TERRAIN.shrub ? 'shrub' : 'grass';
     return {
+      flora: { terrain: tName, coastDist, woody: land ? woody / land : 0, herb: land ? g / land : 0, wet, seed: c.y * width + c.x + 1, month: Math.floor(cal.dayOfYear / 30) % 12 },
       place: `${scenario?.name ?? '岛'}${ns || ew ? ` · ${ns}${ew}边的${TERRAIN_NAMES[t]}` : ` · 中间的${TERRAIN_NAMES[t]}`}`,
       species: list,
       kits,
