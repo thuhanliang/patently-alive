@@ -199,7 +199,7 @@ export function headShape(f: HeadForm): HeadCut {
   // 色区：下巴、喉、吻的腹侧一条浅色。
   const pale: number[] = [chin[0] - 0.25 * R, chin[1] + 0.05 * R];
   for (let i = 0; i <= N; i++) pale.push(x0 + Ls * (i / N), botAt(i / N) * 0.985 + yMid * 0.015);
-  for (let i = N; i >= 0; i--) pale.push(x0 + Ls * (i / N), botAt(i / N) - (botAt(i / N) - topAt(i / N)) * 0.35);
+  for (let i = N; i >= 0; i--) pale.push(x0 + Ls * (i / N), botAt(i / N) - (botAt(i / N) - topAt(i / N)) * 0.2);
   const stripe: number[][] = [
     // 额上两道短纹（猫、虎都有）。
     [c[0] - 0.1 * R, c[1] - 0.98 * R, c[0] + 0.05 * R, c[1] - 0.99 * R, c[0] + 0.02 * R, c[1] - 0.6 * R],
