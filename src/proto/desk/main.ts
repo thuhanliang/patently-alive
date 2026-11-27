@@ -3,7 +3,7 @@ import { COMMON_GLYPHS, HAND, warm } from '../../render/font';
 import './desk.css';
 import { lifeLines, lifeTally } from './life';
 import { bindButtonTaps, sound } from '../../ui/sound';
-import { designTemplates, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
+import { designTemplates, formParams, formValue, gaitRules, hintTemplates, morphLibrary, partLibrary, plantLibrary, scalingLaws, speciesLibrary, viabilityRules, type Design } from '../../data';
 import { BODY_SYSTEMS, type BodySystem } from '../../data/schema/viability';
 import { compileDesign, makeDesignKit, partsOf, withRelativeLitter, type CompiledDesign, type EnvironmentProfile } from '../../sim';
 import { requestedOf } from '../../sim/body';
@@ -1168,6 +1168,19 @@ async function main(): Promise<void> {
   syncs.push(slider('耳软硬', 0, 1, 0.01, () => design.appearance?.earStiff ?? 1, (v) => setLook('earStiff', v), ends('垂', '立')));
   syncs.push(slider('耳位置', 0, 1, 0.01, () => design.appearance?.earPos ?? 0, (v) => setLook('earPos', v), ends('头顶', '两侧')));
 
+  // 形状（纸偶 v2，form.json）：每个参数一条滑块，两端写着对得上的真实动物。
+  adv.append(el('h3', {}, '形状（只影响画面）'));
+  for (const fp of formParams) {
+    const fmt = (v: number): string =>
+      fp.kind === 'L' ? times(Math.pow(2, v)) : fp.kind === 'N' ? (Math.round(v) === 0 ? '没有' : `${Math.round(v)} 只`) : `${fp.low.split('（')[0]} → ${fp.high.split('（')[0]} ${Math.round(((v - fp.min) / (fp.max - fp.min)) * 100)}%`;
+    syncs.push(
+      slider(fp.name, fp.min, fp.max, fp.kind === 'N' ? 1 : 0.05, () => formValue(design.form, fp.id), (v) => {
+        design.form = { ...design.form, [fp.id]: fp.kind === 'N' ? Math.round(v) : Math.round(v * 100) / 100 };
+        rebuild();
+      }, fmt),
+    );
+  }
+
   adv.append(el('h3', {}, '体重分配（倍数，总量不变）'));
   for (const s of BODY_SYSTEMS) {
     syncs.push(
@@ -1293,6 +1306,8 @@ async function main(): Promise<void> {
     receipt?: boolean;
     parts?: Partial<Design['parts']>;
     allocation?: Partial<Record<BodySystem, number>>;
+    /** 形状参数（纸偶 v2，form.json）；null 清空。 */
+    form?: Record<string, number> | null;
     appearance?: Design['appearance'];
   }
   function set(p: DeskParams): void {
@@ -1305,6 +1320,8 @@ async function main(): Promise<void> {
     if (p.xray !== undefined) xrayOn = p.xray;
     if (p.allocation) design.allocation = { ...design.allocation, ...p.allocation };
     if (p.appearance) design.appearance = { ...design.appearance, ...p.appearance };
+    if (p.form === null) delete design.form;
+    else if (p.form) design.form = { ...design.form, ...p.form };
     if (p.speed !== undefined) chosenRunSpeed = p.speed;
     rebuild();
     if (p.receipt !== undefined) toggleReceipt(p.receipt);
@@ -1360,6 +1377,10 @@ async function main(): Promise<void> {
   if (qLeg !== undefined) initial.leg = qLeg;
   const qTail = num('tail');
   if (qTail !== undefined) initial.tail = qTail;
+  // ?form=neck.length:2,neck.raise:1（开发用）
+  if (q.has('form')) initial.form = Object.fromEntries(q.get('form')!.split(',').map((kv) => [kv.split(':')[0]!, Number(kv.split(':')[1])]));
+  const qEar = q.get('ear');
+  if (qEar) initial.appearance = Object.fromEntries(qEar.split(',').map((kv) => [kv.split(':')[0]!, Number(kv.split(':')[1])]));
   set(initial);
   if (!q.has('mass')) note.textContent = '试试：把体重拖到 200 千克。再按"跑"，拖速度。';
 }

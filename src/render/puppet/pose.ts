@@ -57,7 +57,28 @@ const TAU = Math.PI * 2;
  */
 export function standHeights(plan: BodyPlan): { hipY: number; shoulderY: number } {
   const h = plan.legLen * 0.9;
-  return { hipY: Math.min(h, reachOf(plan, 'nearHind') * 0.85), shoulderY: Math.min(h, reachOf(plan, 'nearFore') * 0.85) };
+  const old = { hipY: Math.min(h, reachOf(plan, 'nearHind') * 0.85), shoulderY: Math.min(h, reachOf(plan, 'nearFore') * 0.85) };
+  // 纸偶 v2（2026-11-27 审核 r1）：大动物的腿更直（接近柱状腿：有效机械利益随体重变大，Biewener 1989，未核对），
+  // 着地方式改了跖骨的角度，站立高度要跟着变：先按着地方式算出踝离地多高，再让上面两节（按体重定伸直的程度）去够。
+  // 体重 4 千克以下、趾行（猫）完全是原来的值；体重越大、着地方式离趾行越远，越按新的算法。
+  const big = Math.min(1, Math.max(0, Math.log(plan.massKg / 4) / Math.log(125)));
+  const w = Math.max(big, Math.abs((plan.stance ?? 0.5) - 0.5) * 2);
+  if (w <= 0) return old;
+  const straight = 0.86 + 0.11 * big;
+  const at = (k: LegKey): number => {
+    const [a, b, c] = isHind(k) ? plan.hindSegs : plan.foreSegs;
+    return c * Math.cos(stanceTilt(plan, isHind(k))) + (a + b) * straight;
+  };
+  return { hipY: old.hipY + (at('nearHind') - old.hipY) * w, shoulderY: old.shoulderY + (at('nearFore') - old.shoulderY) * w };
+}
+
+/** 跖（掌）着地时往后斜多少（弧度，0 竖直）：趾行（stance 0.5，猫、狗）是原来的值；跖行（0）几乎平贴地面；蹄行（1）几乎竖直。 */
+export function stanceTilt(plan: Pick<BodyPlan, 'stance'>, hind: boolean): number {
+  const st = plan.stance ?? 0.5;
+  const flat = hind ? 1.3 : 1.2;
+  const mid = hind ? 0.35 : 0.15;
+  const tip = hind ? 0.1 : 0.05;
+  return st <= 0.5 ? flat + (mid - flat) * (st / 0.5) : mid + (tip - mid) * ((st - 0.5) / 0.5);
 }
 
 function feetAll(f: (k: LegKey) => Vec): Record<LegKey, Vec> {
@@ -239,7 +260,7 @@ export function legJoints(plan: BodyPlan, k: LegKey, root: Vec, foot: Vec, fold 
   const hind = isHind(k);
   const [a, b, c] = hind ? plan.hindSegs : plan.foreSegs;
   const lifted = Math.min(1, foot.y / (0.1 * plan.legLen + 1e-9));
-  const t0 = (hind ? 0.35 : 0.15) + lifted * (hind ? 0.5 : 0.9);
+  const t0 = stanceTilt(plan, hind) + lifted * (hind ? 0.5 : 0.9);
   const tilt = t0 + fold * (Math.PI / 2 - t0);
   const ankle = { x: foot.x - c * Math.sin(tilt), y: foot.y + c * Math.cos(tilt) };
   const knee = solveTwoBone(root, ankle, a, b, hind ? 1 : -1);

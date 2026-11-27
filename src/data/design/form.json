@@ -1,0 +1,20 @@
+{
+  "说明": "纸偶的形状参数（只决定画面）。含义和取值见 src/data/schema/form.ts、docs/research/body-params.md 第三节。L 类是以 2 为底的对数偏离。",
+  "params": [
+    { "id": "body.length", "name": "躯干长短", "region": "body", "kind": "L", "min": -0.7, "max": 1.2, "default": 0, "low": "河马、袋熊", "high": "白鼬、黄鼠狼", "source": "体重不变时躯干拉长就变细（截面按长度的 −1/2 次方缩）。鼬的头体长约为同体重一般兽的 1.5–2 倍【未核对】" },
+    { "id": "body.depth", "name": "胸深", "region": "body", "kind": "L", "min": -0.5, "max": 0.6, "default": 0, "low": "腊肠犬", "high": "灵缇", "source": "只改胸片下沿；臀不变【未核对】" },
+    { "id": "neck.length", "name": "颈长", "region": "neck", "kind": "L", "min": -2, "max": 2.3, "default": 0, "low": "鼹鼠", "high": "长颈鹿", "source": "长颈鹿颈约 1.8 米，同体重的一般兽约 0.4 米，约 2.2 倍的对数【未核对】；哺乳动物几乎都是 7 节颈椎，长颈只是每节更长" },
+    { "id": "neck.width", "name": "颈粗", "region": "neck", "kind": "L", "min": -0.6, "max": 0.8, "default": 0, "low": "羚羊", "high": "野牛", "source": "【未核对】" },
+    { "id": "neck.raise", "name": "颈的姿态", "region": "neck", "kind": "U", "min": 0, "max": 1, "default": 0, "low": "猪（平着往前）", "high": "长颈鹿、骆驼（直立）", "source": "站着时颈抬起的角度，从约 30° 到约 75°【未核对】" },
+    { "id": "head.size", "name": "头的大小", "region": "head", "kind": "L", "min": -0.6, "max": 0.8, "default": 0, "low": "鼬", "high": "河马、鬣狗", "source": "【未核对】" },
+    { "id": "snout.length", "name": "吻长", "region": "snout", "kind": "L", "min": -1.6, "max": 2.2, "default": 0, "low": "波斯猫、猫头鹰", "high": "食蚁兽", "source": "大食蚁兽的吻约为头骨后部的 3–4 倍【未核对】；嘴型部件给出吻长的起点，这里在它上面加减" },
+    { "id": "snout.depth", "name": "吻的粗细", "region": "snout", "kind": "L", "min": -0.8, "max": 0.8, "default": 0, "low": "狐、食蚁兽", "high": "熊、鬣狗", "source": "【未核对】" },
+    { "id": "snout.tip", "name": "吻端圆尖", "region": "snout", "kind": "U", "min": 0, "max": 1, "default": 0.5, "low": "熊、牛（钝圆）", "high": "鼩鼱、狐（尖）", "source": "【未核对】" },
+    { "id": "leg.distal", "name": "远端的腿节", "region": "leg", "kind": "L", "min": -0.8, "max": 1.2, "default": 0, "low": "熊（掌、跖短）", "high": "鹿、马（跖骨、掌骨很长）", "source": "腿的总长不变，只是跖（掌）占的比例变；跑得快的兽跖骨 ÷ 股骨大（Garland & Janis 1993，未核对）" },
+    { "id": "leg.stance", "name": "怎么着地", "region": "leg", "kind": "U", "min": 0, "max": 1, "default": 0.5, "low": "跖行（熊、人：整个脚掌着地）", "high": "蹄行（马、鹿：趾尖着地）", "source": "0.5 是趾行（猫、狗）；蹄行的趾尖包成蹄" },
+    { "id": "horn.count", "name": "角", "region": "horn", "kind": "N", "min": 0, "max": 4, "default": 0, "low": "没有", "high": "四角羚", "source": "侧面看两只角前后叠着" },
+    { "id": "horn.length", "name": "角长", "region": "horn", "kind": "L", "min": -1.5, "max": 1.8, "default": 0, "low": "长颈鹿的短骨角", "high": "水牛、大角羊", "source": "0 = 约头长的一半【未核对】" },
+    { "id": "horn.curve", "name": "角的弯", "region": "horn", "kind": "U", "min": 0, "max": 1, "default": 0.3, "low": "直（羚羊）", "high": "卷一圈（大角羊）", "source": "【未核对】" },
+    { "id": "horn.pos", "name": "角长在哪", "region": "horn", "kind": "P", "min": 0, "max": 1, "default": 0, "low": "额（牛、羊）", "high": "鼻（犀牛）", "source": "" }
+  ]
+}

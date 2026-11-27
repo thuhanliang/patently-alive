@@ -19,6 +19,8 @@ import { DesignSchema, HintTemplatesSchema, PartsFileSchema, TemplatesFileSchema
 import partsJson from './design/parts.json';
 import hintsJson from './design/hints.json';
 import templatesJson from './design/templates.json';
+import { FormFileSchema, type FormParam } from './schema/form';
+import formJson from './design/form.json';
 import { DentitionFileSchema, type Case } from './schema/case';
 import dentitionJson from './cases/dentition.json';
 
@@ -172,3 +174,21 @@ for (const t of designTemplates) {
     if (partLibrary.get(id)?.slot !== slot) throw new Error(`设计模板 ${t.species} 的 ${slot} 槽用了不存在或不属于这个槽的部件：${id}`);
   }
 }
+
+export { type FormParam };
+/** 纸偶的形状参数（只决定画面，src/data/design/form.json）。 */
+export const formParams: readonly FormParam[] = FormFileSchema.parse(formJson).params;
+const FORM_BY_ID = new Map(formParams.map((p) => [p.id, p]));
+/** 设计里一个形状参数的值：不写用默认，超出范围夹回去，不认识的 id 报错。 */
+export function formValue(form: Readonly<Record<string, number>> | undefined, id: string): number {
+  const p = FORM_BY_ID.get(id);
+  if (!p) throw new Error(`没有这个形状参数：${id}`);
+  const v = form?.[id] ?? p.default;
+  return Math.min(p.max, Math.max(p.min, p.kind === 'N' ? Math.round(v) : v));
+}
+
+import { FloraFileSchema, type FloraSpecies } from './schema/flora';
+import floraJson from './plants/flora.json';
+export { type FloraSpecies };
+/** 岛上的植物图鉴（只决定画面，src/data/plants/flora.json）。 */
+export const floraSpecies: readonly FloraSpecies[] = FloraFileSchema.parse(floraJson).species;

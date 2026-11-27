@@ -3,6 +3,7 @@ import type { GaitRules } from '../../data/schema/gait';
 import type { BodySystem, ViabilityRules } from '../../data/schema/viability';
 import { allocateBody, shapeOf } from '../../sim/body';
 import { bodyLengthM, legLengthM } from './gait';
+import { formValue } from '../../data';
 
 /**
  * 纸偶的身材（纯函数，单位米）：从设计算出每一片纸多长多粗。
@@ -55,6 +56,20 @@ export interface BodyPlan {
   earStiff: number;
   /** 耳在头上的位置：0 头顶，1 头的两侧（后方）。 */
   earPos: number;
+  /** 颈的姿态（form 的 neck.raise，0–1）：站着时颈再抬起多少。 */
+  neckRaise: number;
+  /** 颈长、颈粗相对一般样子的倍数（成品图的胸片上画着一般长的颈，多出来的由代码剪的颈片补）。 */
+  neckK: number;
+  neckWK: number;
+  /** 吻长相对嘴型部件的倍数（form 的 snout.length）。 */
+  snoutK: number;
+  /** 吻的粗细（倍数）和吻端圆尖（0 钝 – 1 尖）。 */
+  snoutDepth: number;
+  snoutTip: number;
+  /** 着地方式：0 跖行、0.5 趾行、1 蹄行（form 的 leg.stance）。 */
+  stance: number;
+  /** 角：几只、多长（米）、多弯（0–1）、长在哪（0 额 – 1 鼻）。 */
+  horn: { count: number; len: number; curve: number; pos: number };
   tailLen: number;
   tailW: number;
   tailSegs: number;
@@ -108,37 +123,63 @@ export function bodyPlan(
   const shape = shapeOf(design, viability);
   const B = bodyLengthM(gait, M);
   const L = legLengthM(gait, M, parts.limbs.id, shape.legScale);
+  // 形状参数（form.json，只是画面）。L 类是以 2 为底的对数偏离。
+  const f = (id: string): number => formValue(design.form, id);
+  const x2 = (id: string): number => Math.pow(2, f(id));
+  // 躯干长短：体重不变，拉长就变细（截面 ∝ 长度^−1/2）。
+  const kBody = x2('body.length');
+  const kThin = 1 / Math.sqrt(kBody);
   // 骨头粗细比长度长得快（弹性相似：直径 ∝ 长度^1.5），所以大动物的腿看起来更粗。
   const legW = B * 0.045 * Math.pow(M / 4, 0.08) * Math.sqrt(rel.skeleton);
   const thighW = legW * (1.55 + 0.9 * (rel.muscle - 1));
   const round = 1 + 0.35 * (rel.fat - 1) + 0.15 * (rel.gut - 1);
-  const chestH = B * 0.145 * round;
+  const chestH = B * 0.145 * round * kThin * x2('body.depth');
+  const hindH = B * 0.145 * round * kThin * 0.92;
   const tail = gait.tailLength[parts.tail.id] ?? { length: 0.6, width: 0.06 };
   const tailLen = B * tail.length * shape.tailScale;
-  const headR = B * 0.12 * Math.pow(M / 4, -0.05);
+  const headR = B * 0.12 * Math.pow(M / 4, -0.05) * x2('head.size');
   // 前后腿的比例：腿型部件自带（跳跃后腿的后腿长、前腿短），总长不变的意思是两边按 √比例 分摊。
   const ls = gait.limbShape[parts.limbs.id];
   const hf = Math.sqrt(ls?.hindFore ?? 1);
   const hp = ls?.hindSegs ?? HIND_SEGS;
   const hk = (HIND_SEGS[0] + HIND_SEGS[1] + HIND_SEGS[2]) / (hp[0] + hp[1] + hp[2]);
+  // 远端的腿节：跖（掌）变长或变短，三节的总长不变（腿长是推演的量，不能被画面改掉）。
+  const kd = x2('leg.distal');
+  const distal = (seg: [number, number, number]): [number, number, number] => {
+    const sum = seg[0] + seg[1] + seg[2];
+    const d = [seg[0], seg[1], seg[2] * kd];
+    const k = sum / (d[0]! + d[1]! + d[2]!);
+    return [d[0]! * k, d[1]! * k, d[2]! * k];
+  };
+  const torso = 0.54 * B * kBody;
+  const hornCount = f('horn.count');
   return {
     massKg: M,
     bird,
-    bodyLen: B,
+    bodyLen: B + torso - 0.54 * B,
     legLen: L,
-    hindSegs: [hp[0] * hk * hf * L, hp[1] * hk * hf * L, hp[2] * hk * hf * L],
-    foreSegs: [(0.44 * L) / hf, (0.47 * L) / hf, (0.22 * L) / hf],
-    hipX: -0.3 * B,
-    shoulderX: 0.24 * B,
+    hindSegs: distal([hp[0] * hk * hf * L, hp[1] * hk * hf * L, hp[2] * hk * hf * L]),
+    foreSegs: distal([(0.44 * L) / hf, (0.47 * L) / hf, (0.22 * L) / hf]),
+    hipX: -0.3 * B * kBody,
+    shoulderX: 0.24 * B * kBody,
     chestH,
-    hindH: chestH * 0.92,
-    belly: chestH * 0.35 * (BELLY[parts.digestion.id] ?? 1) * (0.7 + 0.3 * rel.gut) * (0.6 + 0.4 * rel.fat),
+    hindH,
+    belly: B * 0.145 * round * kThin * 0.35 * (BELLY[parts.digestion.id] ?? 1) * (0.7 + 0.3 * rel.gut) * (0.6 + 0.4 * rel.fat),
     legW,
     thighW,
-    neckLen: B * 0.2,
-    neckW: chestH * 0.9,
+    neckLen: B * 0.2 * x2('neck.length'),
+    neckW: B * 0.145 * round * 0.9 * kThin * x2('neck.width'),
+    neckRaise: f('neck.raise'),
+    neckK: x2('neck.length'),
+    neckWK: x2('neck.width'),
     headR,
-    snout: headR * (SNOUT[parts.mouth.id] ?? 0.7),
+    // 大型兽的脸相对更长（颅面异速，Cardini & Polly 2013，未核对）：吻长的零点随体重变长，4 千克（猫）不变。
+    snout: headR * (SNOUT[parts.mouth.id] ?? 0.7) * x2('snout.length') * Math.pow(Math.max(1, M / 4), 0.06),
+    snoutK: x2('snout.length'),
+    snoutDepth: x2('snout.depth'),
+    snoutTip: f('snout.tip'),
+    stance: f('leg.stance'),
+    horn: { count: hornCount, len: hornCount > 0 ? headR * 1.1 * x2('horn.length') : 0, curve: f('horn.curve'), pos: f('horn.pos') },
     earH: headR * 0.7 * (design.appearance?.earLen ?? 1),
     earW: design.appearance?.earWide ?? 1,
     earOn: (design.appearance?.earLen ?? 1) > EAR_ABSENT,

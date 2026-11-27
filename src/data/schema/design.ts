@@ -171,6 +171,11 @@ export const DesignSchema = z.object({
    * - earPos 耳在头上的位置，0 头顶、1 头的两侧，不写就是 0。
    */
   appearance: AppearanceSchema.partial().optional(),
+  /**
+   * 形状（2026-11-27，纸偶 v2）：颈、吻、躯干、腿的远端、角……只影响画面，推演不读。
+   * 参数的定义和范围在 src/data/design/form.json（载入时校验 id 和范围）。不写就是一般的样子，老设计不受影响。
+   */
+  form: z.record(z.string(), z.number().finite()).optional(),
 });
 
 export type Design = z.infer<typeof DesignSchema>;
