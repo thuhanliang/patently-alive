@@ -10,7 +10,8 @@
 | `puppet-neck.png`<br>`puppet-snout.png`<br>`puppet-horn.png`<br>`puppet-body.png`<br>`puppet-leg.png`<br>`puppet-ear.png`<br>`puppet-tail.png` | 一个部位一张。同一个部位按参数取几档，每档上面是拼好的样子，下面是炸开的零件，可以看出每片零件的形状怎么随参数变 |
 | `plants-spring.png`<br>`plants-summer.png`<br>`plants-autumn.png`<br>`plants-winter.png` | 22 种植物在不同月份（开花、结果不同） |
 | `plants-variants.png` | 每种植物四株：前两株不开花，后两株开花或结果 |
-| `theatre-*.png` | 植物摆进纸剧场的样子：草地、海岸、鸟岛灌丛 |
+| `theatre-*.png`、`theatre-zones.png` | 植物摆进纸剧场的样子：草地、海岸、鸟岛灌丛 |
+| `parts-topology.png` + `part-topology.md` | **零件拓扑**：每类零件几个控制量 → 典型形态（头 7 种、颈、大腿、小腿、尾节、胸片各 3 种）。请按这套拓扑设计每类零件的画法和变体 |
 
 ## 纸偶：现在是怎么做的
 
@@ -28,6 +29,9 @@
   - 代码剪的零件比较死板：颈是直直的带子，角是一根弯的条。
 
 ## 纸偶：想请 Lovart 设计的
+
+**优先看 `parts-topology.png` 和 `part-topology.md`**（用户 2026-11-27：极端参数下的喜感没问题，重点是零件的拓扑抽象——每个零件不多的控制点就能调出典型形态）。
+
 
 **每个零件的"基础拓扑"和几档变体**，同一套画法、同一组颜色区（主色、条纹、浅色三档）：
 

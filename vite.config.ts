@@ -6,7 +6,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // 游戏本体，加上 M0 的剪纸风格 demo（独立页面，只读推演）和 M1 的设计台玩具（独立页面）。
-      input: { main: 'index.html', paper: 'paper.html', desk: 'desk.html', diorama: 'diorama.html', island3d: 'island3d.html', studio: 'studio.html', van: 'van.html', lab: 'lab.html', flora: 'flora.html', atlas: 'atlas.html' },
+      input: { main: 'index.html', paper: 'paper.html', desk: 'desk.html', diorama: 'diorama.html', island3d: 'island3d.html', studio: 'studio.html', van: 'van.html', lab: 'lab.html', flora: 'flora.html', atlas: 'atlas.html', parts: 'parts.html' },
     },
   },
   test: {

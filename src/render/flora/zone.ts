@@ -40,8 +40,10 @@ export function floraFor(site: FloraSite): FloraPick[] {
   const add = (id: string, row: Row, weight: number): void => {
     if (weight <= 0.02) return;
     // 被啃：适口的种按草本剩多少打折，矮也矮一截。
-    const graze = PALATABLE.has(id) ? 0.25 + 0.75 * site.herb : 1;
-    out.push({ id, row, weight: weight * graze, height: PALATABLE.has(id) ? 0.45 + 0.55 * site.herb : 1 });
+    // 林下草本少是被遮荫，不是被啃：按扣掉遮荫后的潜在值算（审核 r2）。
+    const eaten = Math.min(1, site.herb / Math.max(0.2, 1 - 0.7 * site.woody));
+    const graze = PALATABLE.has(id) ? 0.25 + 0.75 * eaten : 1;
+    out.push({ id, row, weight: weight * graze, height: PALATABLE.has(id) ? 0.45 + 0.55 * eaten : 1 });
   };
   const { woody, wet } = site;
   if (site.subantarctic) {
@@ -79,12 +81,14 @@ export function floraFor(site: FloraSite): FloraPick[] {
       add('kawakawa', 'mid', 0.6);
     }
   }
-  // 草地层：放牧留下的牧草、银丛草；灌丛满了草就少。
+  // 草地层：放牧留下的牧草、银丛草；灌丛满了草就少。蕨和荆豆不长在积水的地方（审核 r2）。
+  const dry = wet < 0.6 ? 1 : 0;
   add('pasture', 'near', (1 - woody) * 1.0);
   add('poa', 'near', (1 - woody) * 0.6);
-  add('rarauhe', 'mid', woody < 0.5 ? 0.6 : 0.2);
+  // 被啃的地方，不适口的"增加者"（蕨、麦卢卡）份量上升（啃食改变群落组成）。
+  add('rarauhe', 'mid', dry * (woody < 0.5 ? 0.6 : 0.2) * (1.6 - site.herb));
   // 演替：灌丛越满，越往后面的阶段走。
-  add('gorse', 'mid', woody > 0.15 && woody < 0.6 ? 0.5 : 0);
+  add('gorse', 'mid', dry * (woody > 0.15 && woody < 0.6 ? 0.5 : 0));
   add('manuka', 'mid', woody > 0.2 ? 0.9 * (1 - Math.max(0, woody - 0.75) * 2) : 0);
   add('kanuka', 'far', woody > 0.5 ? woody : 0);
   if (woody > 0.8) {
@@ -92,7 +96,8 @@ export function floraFor(site: FloraSite): FloraPick[] {
     add('kawakawa', 'mid', 0.4);
   }
   if (nearCoast) {
-    add('pohutukawa', 'far', 0.6);
+    // 开阔的牧场里不会冒出大树：要有一点灌丛（或者以后的"种植"事件）。
+    add('pohutukawa', 'far', woody > 0.3 ? 0.6 : 0);
     add('taupata', 'mid', 0.4);
     add('harakeke', 'mid', 0.3);
   }
