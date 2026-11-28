@@ -54,7 +54,10 @@ export function showOffice(el: HTMLElement, scenarios: readonly Scenario[], open
   sign.append(h1, sub);
   const desk = document.createElement('div');
   desk.className = 'office-desk';
+  // 委托的顺序（2026-11-28，C 段）：办完一份（拿到过回信），下一封信才寄到。?all=1 全部打开（开发用）。
+  const all = new URLSearchParams(location.search).has('all');
   scenarios.forEach((s, i) => {
+    const unlocked = all || i === 0 || records[scenarios[i - 1]!.id] !== undefined;
     const letter = document.createElement('button');
     letter.className = 'envelope';
     letter.style.setProperty('--tilt', `${i % 2 === 0 ? -1.6 : 1.3}deg`);
@@ -75,13 +78,18 @@ export function showOffice(el: HTMLElement, scenarios: readonly Scenario[], open
       const b = document.createElement('b');
       b.textContent = `${RECORD_TEXT[r.reply] ?? '上次办过'}${r.count > 0 ? `（${r.count} 只）` : ''}`;
       rec.append(b);
-    } else rec.textContent = i === 0 ? '第一份委托，从这里开始' : s.goal.establish ? '' : '大一些的委托：兽医的工具都在这里';
+    } else rec.textContent = !unlocked ? `还没寄到：先办完「${scenarios[i - 1]!.name}」` : i === 0 ? '第一份委托，从这里开始' : s.toolbox?.includes('deworm') ? '草上有虫：兽医要上场了' : s.goal.establish ? '' : '大一些的委托：兽医的工具都在这里';
     const go = document.createElement('span');
     go.className = 'open';
     go.textContent = '拆开 →';
     letter.append(svgEl(postageStamp(s.goal.establish ? 'island' : 'bird')), to, from, excerpt, rec, go);
     letter.addEventListener('pointerenter', () => sound.play('paper'));
-    letter.addEventListener('click', () => open(s.id));
+    if (unlocked) letter.addEventListener('click', () => open(s.id));
+    else {
+      letter.disabled = true;
+      letter.classList.add('sealed');
+      go.textContent = '未寄到';
+    }
     desk.append(letter);
   });
   const foot = document.createElement('div');
