@@ -40,6 +40,37 @@ export type IslandTerrain = z.infer<typeof IslandTerrainSchema>;
  * 一片世界的环境参数。阶段 0 只有草原：地图尺寸、肥力分布、植被生长、天气。
  * 生物量单位：克干物质 / 平方米（g/m²）；速率单位：每天。
  */
+/**
+ * 一种寄生虫（先只有肠道线虫这一类：虫卵随粪便排出，在草上孵成幼虫，吃草的动物吃进去被感染）。
+ * 宿主由性状推出（铁律 5）：食谱里植物占到 hostMinPlantDiet 以上的就会吃进幼虫。
+ */
+export const PathogenSchema = z.strictObject({
+  id: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  name: z.string(),
+  kind: z.literal('nematode'),
+  hostMinPlantDiet: z.number().min(0).max(1),
+  /** 草地上的幼虫量（0 = 没有，1 = 很重的污染）每天随感染的宿主增加多少：每平方米多少只感染的宿主 × 这个数。 */
+  shedPerHostDensity: z.number().positive(),
+  /** 幼虫在草上能活多少天（平均）。 */
+  larvaeDays: z.number().positive(),
+  /** 每天被感染的概率 = 1 − exp(−infectRate × 幼虫量 × 食谱里植物的比例)。 */
+  infectRate: z.number().positive(),
+  /** 感染以后每天自己清掉（免疫）的概率。 */
+  clearPerDay: z.number().min(0).max(1),
+  /** 感染的成体每天额外的死亡概率（营养被抢、贫血）。 */
+  deathPerDay: z.number().min(0).max(1),
+  /** 感染的动物体况评分平均低多少分。 */
+  bcsPenalty: z.number().min(0),
+  /** 粪检：感染的动物每克粪便的虫卵数（EPG）的平均值，和聚集程度（负二项分布的 k，越小越不均）。 */
+  epgMean: z.number().positive(),
+  epgK: z.number().positive(),
+  /** 开局：草地上的幼虫量（0–1，只在草地格），各物种的感染率。 */
+  larvae: z.number().min(0).max(1),
+  prevalence: z.record(z.string(), z.number().min(0).max(1)),
+  source: z.string(),
+});
+export type Pathogen = z.infer<typeof PathogenSchema>;
+
 export const WorldParamsSchema = z.object({
   name: z.string(),
   /** 地图宽、高（格）。代码上不限制尺寸。 */
@@ -111,6 +142,11 @@ export const WorldParamsSchema = z.object({
    * 不写就没有；没有在水边觅食的物种时引擎不算这一项。
    */
   shore: z.strictObject({ aquaticPerM2: z.number().min(0) }).optional(),
+  /**
+   * 岛上的寄生虫（2026-11-28，B 段：兽医从推演里长出来）。见 src/sim/parasite.ts 和 docs/MODEL.md 五之十八。
+   * 不写就没有寄生虫，推演和以前完全一样（不多抽一个随机数）。
+   */
+  pathogens: z.array(PathogenSchema).optional(),
   /** 这片世界里的预设物种（物种数据文件的 id）。 */
   species: z.array(z.string()).min(1),
   /** 开局只在主岛上的物种（离岸小岛上没有）。没有海岛地形时不起作用。 */

@@ -28,10 +28,14 @@ const FOLDER = `<svg viewBox="0 0 46 38"><path d="M4 9 h13 l4 4 h21 v20 h-38 z" 
 /** 设计台：一把三角尺和一支圆规。 */
 const DESK = `<svg viewBox="0 0 46 38"><path d="M5 33 l18 -26 v26 z" fill="${KRAFT}" stroke="${KRAFT_EDGE}" stroke-width="1.2"/><path d="M11 30 l8 -11 v11 z" fill="#2a1f14" opacity=".18"/><path d="M33 6 l-7 27 M33 6 l7 27" stroke="#8e7a5e" stroke-width="2.4" stroke-linecap="round"/><circle cx="33" cy="6" r="3" fill="#c9a24a" stroke="#8a6a24"/></svg>`;
 
+/** 驱虫：一块牛皮纸色的药饵块，上面一颗蓝图蓝的药片（干预用蓝图蓝）。 */
+const PILL = `<svg viewBox="0 0 46 38"><rect x="6" y="14" width="26" height="16" rx="3" fill="${KRAFT}" stroke="${KRAFT_EDGE}" stroke-width="1.2"/><circle cx="12" cy="20" r="1.3" fill="#8e7a5e"/><circle cx="20" cy="25" r="1.3" fill="#8e7a5e"/><circle cx="26" cy="19" r="1.3" fill="#8e7a5e"/><rect x="26" y="6" width="14" height="8" rx="4" transform="rotate(25 33 10)" fill="#2f5d8a"/></svg>`;
+
 const ICONS: Record<FieldKind | 'archive' | 'desk', string> = {
   trap: '<img src="ui/cage.webp" alt="">',
   cull: TORCH,
   sample: '<img src="ui/ring.webp" alt="">',
+  deworm: PILL,
   necropsy: LENS,
   fence: '<img src="ui/fence.webp" alt="">',
   archive: FOLDER,
@@ -41,6 +45,7 @@ const TITLES: Record<FieldKind, string> = {
   trap: '布笼子：放几晚，抓到哪些就移除',
   cull: '今晚在一片地上搜捕某一种动物',
   sample: '抓一只做体检、采样，检查后放生',
+  deworm: '在一片地上撒驱虫药饵：那一带吃草的动物肠里的线虫大多被打掉（草上的幼虫还在）',
   necropsy: '找新鲜尸体带回来做尸检',
   fence: '架防兔网或防捕食者围栏：点起点、终点',
 };
@@ -76,11 +81,11 @@ export function bindDock(
     for (const [, b] of toolButtons) b.classList.remove('active');
     handlers.stop();
   };
-  const toolButtons = (['trap', 'cull', 'sample', 'necropsy', 'fence'] as const).filter((k) => !toolbox || toolbox.includes(k)).map(
+  const toolButtons = (['trap', 'cull', 'sample', 'deworm', 'necropsy', 'fence'] as const).filter((k) => !toolbox || toolbox.includes(k)).map(
     (k) =>
       [
         k,
-        make(k, k === 'cull' ? '搜捕' : k === 'necropsy' ? '尸检' : k === 'sample' ? '采样' : FIELD_KIND_NAMES[k], TITLES[k], () => {
+        make(k, k === 'cull' ? '搜捕' : k === 'necropsy' ? '尸检' : k === 'sample' ? '采样' : k === 'deworm' ? '驱虫' : FIELD_KIND_NAMES[k], TITLES[k], () => {
           if (kind === k) {
             close();
             return;

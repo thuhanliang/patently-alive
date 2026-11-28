@@ -56,7 +56,7 @@ describe('死因账本', () => {
     expect(causeName(CAUSE.fracture, ['甲'])).toBe('承重骨折');
     expect(causeName(CAUSE.dystocia, ['甲'])).toBe('难产');
     const seen = new Set<number>();
-    for (const c of [CAUSE.starvation, CAUSE.other, CAUSE.removed, CAUSE.malnutrition, CAUSE.fracture, CAUSE.dystocia, CAUSE.predation(0), CAUSE.nest(0), CAUSE.predation(1), CAUSE.nest(1)]) seen.add(c);
+    for (const c of [CAUSE.starvation, CAUSE.other, CAUSE.removed, CAUSE.malnutrition, CAUSE.fracture, CAUSE.dystocia, CAUSE.parasite, CAUSE.predation(0), CAUSE.nest(0), CAUSE.predation(1), CAUSE.nest(1)]) seen.add(c);
     expect([...seen].sort((a, b) => a - b)).toEqual([...Array(causeCount(2)).keys()]);
   });
 

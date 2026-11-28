@@ -516,6 +516,11 @@ export class Session {
         if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
         return this.landProblem(op.x, op.y);
       }
+      case 'deworm': {
+        if (!this.config.tools?.deworm) return '这份委托没有驱虫药';
+        if (!this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
+        return this.landProblem(op.x, op.y);
+      }
       case 'necropsy': {
         if (!this.config.tools) return '这片世界没有兽医工具';
         if (op.species !== null && !this.hasSpecies(op.species)) return `这片世界里没有物种「${op.species}」`;
@@ -621,6 +626,9 @@ export class Session {
         return;
       case 'sample':
         this.simulation.sample(this.speciesIndex(op.species), op.x, op.y);
+        return;
+      case 'deworm':
+        this.simulation.deworm(this.speciesIndex(op.species), op.x, op.y);
         return;
       case 'necropsy':
         this.simulation.necropsy(op.species === null ? -1 : this.speciesIndex(op.species), op.x, op.y);

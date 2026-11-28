@@ -1,3 +1,5 @@
+import { isHost, type ParasiteState } from './parasite';
+import type { Pathogen } from '../data/schema/world';
 import { detExp, detLog } from './detmath';
 import type { Individuals } from './individuals';
 import { CAUSE, RECENT_HALF_LIFE_DAYS, type DeathLedger } from './ledger';
@@ -58,11 +60,18 @@ export interface Exam {
   massKg: number;
   /** 体况评分 1–5，半分一档。 */
   bcs: number;
+  /**
+   * 粪检（2026-11-28，寄生虫）：McMaster 法数出来的每克粪便虫卵数（EPG，50 的倍数），和这只真的有没有感染。
+   * 世界里没有寄生虫、或者不是宿主（不吃草）、或者是幼体时没有这一项。
+   */
+  fecal?: { epg: number; infected: boolean; pathogen: string };
   stomach: Stomach;
 }
 
 /** 体检用到的推演状态。 */
 export interface ExamContext {
+  /** 寄生虫（没有就不做粪检，也不多抽随机数）。 */
+  parasites?: { states: readonly ParasiteState[]; pathogens: readonly Pathogen[] };
   species: readonly DerivedSpecies[];
   populations: readonly Population[];
   individuals: Individuals;
@@ -156,8 +165,21 @@ export function examine(subject: Subject, ctx: ExamContext): Exam {
   const sp = ctx.species[s]!;
   const growth = juvenile ? Math.min(1, BIRTH_MASS_FRACTION + (1 - BIRTH_MASS_FRACTION) * (ageDays / grownDays(sp))) : 1;
   const massKg = Math.max(0, sp.params.bodyMassKg * growth * massFactor(nutrition) * (1 + MASS_NOISE * standardNormal(rng)));
-  const bcs = scoreBcs(nutrition, rng);
-  return { species: s, x, y, female, juvenile, ageDays, massKg, bcs, stomach: stomachOf(s, c, nutrition, ctx) };
+  let bcs = scoreBcs(nutrition, rng);
+  // 粪检：按所在区块的感染率抽这一只有没有虫；有虫的体况差一些，虫卵数按负二项分布（少数个体排出大部分虫卵）。
+  let fecal: Exam['fecal'];
+  const par = ctx.parasites;
+  if (par && !juvenile) {
+    const pg = par.pathogens.find((p) => isHost(p, sp));
+    const st = pg ? par.states.find((x) => x.id === pg.id) : undefined;
+    if (pg && st) {
+      const p = st.prevalence[s]?.[ctx.blockOf[c]!] ?? 0;
+      const infected = rng.nextFloat() < p;
+      if (infected) bcs = Math.max(1, Math.round((bcs - pg.bcsPenalty * (0.5 + rng.nextFloat())) * 2) / 2);
+      fecal = { epg: infected ? mcMaster(rng, pg.epgMean * gammaUnit(rng, pg.epgK)) : 0, infected, pathogen: pg.id };
+    }
+  }
+  return { species: s, x, y, female, juvenile, ageDays, massKg, bcs, stomach: stomachOf(s, c, nutrition, ctx), ...(fecal ? { fecal } : {}) };
 }
 
 /** 平均一只动物在死因账本"近期"里的权重相当于多少天的死亡（半衰期 h 天的指数衰减，总权重 ≈ h / ln 2）。 */
@@ -255,4 +277,43 @@ export function blockCounter(
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** 均值 1、形状 k 的伽马分布（Marsaglia–Tsang；k < 1 时用 k + 1 再乘 U^(1/k)）。负二项 = 伽马混合的泊松。 */
+export function gammaUnit(rng: Rng, k: number): number {
+  const kk = k < 1 ? k + 1 : k;
+  const d = kk - 1 / 3;
+  const cc = 1 / Math.sqrt(9 * d);
+  let v = 0;
+  for (let guard = 0; guard < 64; guard++) {
+    const x = standardNormal(rng);
+    v = 1 + cc * x;
+    if (v <= 0) continue;
+    v = v * v * v;
+    const u = rng.nextFloat();
+    if (u < 1 - 0.0331 * x * x * x * x || detLog(Math.max(1e-12, u)) < 0.5 * x * x + d * (1 - v + detLog(v))) break;
+  }
+  let g = d * v;
+  if (k < 1) g *= detExp(detLog(Math.max(1e-12, rng.nextFloat())) / k);
+  return g / k;
+}
+
+/**
+ * McMaster 虫卵计数：粪便按 1:15 稀释，数两个计数室（共 0.3 毫升），数到的虫卵 × 50 就是每克粪便的虫卵数（EPG）。
+ * 所以 EPG 是 50 的倍数，低于 50 的数不出来（漏检）。真实的每克虫卵数是 epg，数到的个数服从泊松分布。
+ */
+export function mcMaster(rng: Rng, epg: number): number {
+  const lam = Math.max(0, epg / 50);
+  let n: number;
+  if (lam < 30) {
+    // 泊松：逆变换。
+    const L = detExp(-lam);
+    let p = rng.nextFloat();
+    n = 0;
+    while (p > L && n < 200) {
+      p *= rng.nextFloat();
+      n++;
+    }
+  } else n = Math.max(0, Math.round(lam + Math.sqrt(lam) * standardNormal(rng)));
+  return n * 50;
 }

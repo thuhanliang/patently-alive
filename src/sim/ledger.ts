@@ -19,7 +19,7 @@ import { detPow } from './detmath';
  */
 
 /** 和物种无关的死因有几种（捕食、巢失败从这之后按物种排）。 */
-const FIXED_CAUSES = 6;
+const FIXED_CAUSES = 7;
 
 export const CAUSE = {
   starvation: 0,
@@ -28,6 +28,8 @@ export const CAUSE = {
   malnutrition: 3,
   fracture: 4,
   dystocia: 5,
+  /** 寄生虫（2026-11-28，parasite.ts）。 */
+  parasite: 6,
   predation: (predator: number): number => FIXED_CAUSES + 2 * predator,
   nest: (predator: number): number => FIXED_CAUSES + 1 + 2 * predator,
 } as const;
@@ -160,6 +162,7 @@ export type DecodedCause =
   | { kind: 'malnutrition' }
   | { kind: 'fracture' }
   | { kind: 'dystocia' }
+  | { kind: 'parasite' }
   | { kind: 'predation'; predator: number }
   | { kind: 'nest'; predator: number };
 
@@ -171,6 +174,7 @@ export function decodeCause(cause: number, species: number): DecodedCause {
   if (cause === CAUSE.malnutrition) return { kind: 'malnutrition' };
   if (cause === CAUSE.fracture) return { kind: 'fracture' };
   if (cause === CAUSE.dystocia) return { kind: 'dystocia' };
+  if (cause === CAUSE.parasite) return { kind: 'parasite' };
   const predator = Math.floor((cause - FIXED_CAUSES) / 2);
   if (!Number.isInteger(cause) || predator < 0 || predator >= species) throw new RangeError(`没有这种死因：${cause}`);
   return (cause - FIXED_CAUSES) % 2 === 0 ? { kind: 'predation', predator } : { kind: 'nest', predator };
@@ -192,6 +196,8 @@ export function causeName(cause: number, names: readonly string[]): string {
       return '承重骨折';
     case 'dystocia':
       return '难产';
+    case 'parasite':
+      return '寄生虫';
     case 'predation':
       return `被${names[d.predator]}捕食`;
     case 'nest':
@@ -200,7 +206,7 @@ export function causeName(cause: number, names: readonly string[]): string {
 }
 
 /** 死亡热力图和警报地点按什么死因筛选（人为移除一律不算）。 */
-export type DeathFilter = 'all' | 'predation' | 'nest' | 'starvation' | 'other' | 'malnutrition' | 'fracture' | 'dystocia';
+export type DeathFilter = 'all' | 'predation' | 'nest' | 'starvation' | 'other' | 'malnutrition' | 'fracture' | 'dystocia' | 'parasite';
 
 /** 物种 s 每个区块近期死了多少（按死因筛选；人为移除不算）。热力图和警报地点共用这一个定义（铁律 4）。 */
 export function deathsByBlock(l: DeathLedger, s: number, filter: DeathFilter): Float64Array {

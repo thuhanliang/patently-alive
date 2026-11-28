@@ -57,6 +57,8 @@ export interface SampleSummary {
   female: Proportion;
   juvenile: Proportion;
   thin: Proportion;
+  /** 粪检阳性的比例（感染率的估计；n 是做了粪检的只数）。 */
+  fecalPositive: Proportion;
   /** 成体的平均体重（千克）。 */
   adultMassKg: MeanEstimate;
   /** 胃里有某物种残骸的比例（按物种下标；没见过的物种不列）。 */
@@ -78,6 +80,8 @@ export function summarize(records: readonly Capture[], s: number, sinceDay = -In
     female: wilson(count((r) => r.female), n),
     juvenile: wilson(count((r) => r.juvenile), n),
     thin: wilson(count((r) => r.bcs <= THIN_BCS), n),
+    // 粪检阳性（数到虫卵）的比例：感染率的估计（会漏掉虫卵很少的，所以偏低）。只算做了粪检的。
+    fecalPositive: wilson(count((r) => (r.fecal?.epg ?? 0) > 0), mine.filter((r) => r.fecal).length),
     adultMassKg: meanCi(mine.filter((r) => !r.juvenile).map((r) => r.massKg)),
     stomachPrey: preys.map((prey) => ({
       prey,

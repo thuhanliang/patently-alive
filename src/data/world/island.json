@@ -3,29 +3,115 @@
   "width": 128,
   "height": 128,
   "cellSizeM": 50,
-  "fertility": { "min": 0.35, "max": 1, "patchSize": 20 },
+  "fertility": {
+    "min": 0.35,
+    "max": 1,
+    "patchSize": 20
+  },
   "terrain": {
     "kind": "island",
     "mainRadius": 0.72,
     "coastRoughness": 0.28,
     "coastPatchSize": 14,
-    "islets": { "count": 3, "minRadius": 7, "maxRadius": 10, "minGapCells": 10 },
+    "islets": {
+      "count": 3,
+      "minRadius": 7,
+      "maxRadius": 10,
+      "minGapCells": 10
+    },
     "shrubFraction": 0.35,
     "shrubPatchSize": 12,
-    "fertilityBy": { "coast": 0.35, "grass": 1, "shrub": 0.8 }
+    "fertilityBy": {
+      "coast": 0.35,
+      "grass": 1,
+      "shrub": 0.8
+    }
   },
   "season": {
-    "growthByMonth": [0.6, 1.0, 1.0, 0.75, 0.45, 0.4, 0.5, 0.45, 0.25, 0.0, 0.0, 0.15],
-    "decayByMonth": [0.002, 0.002, 0.003, 0.005, 0.007, 0.007, 0.008, 0.012, 0.015, 0.01, 0.008, 0.004]
+    "growthByMonth": [
+      0.6,
+      1.0,
+      1.0,
+      0.75,
+      0.45,
+      0.4,
+      0.5,
+      0.45,
+      0.25,
+      0.0,
+      0.0,
+      0.15
+    ],
+    "decayByMonth": [
+      0.002,
+      0.002,
+      0.003,
+      0.005,
+      0.007,
+      0.007,
+      0.008,
+      0.012,
+      0.015,
+      0.01,
+      0.008,
+      0.004
+    ]
   },
   "grazingDamage": true,
   "plants": [
-    { "type": "herb", "maxBiomass": 450, "floorBiomass": 8, "initialFraction": 0.35, "growthRate": 0.08 },
-    { "type": "shrub", "maxBiomass": 300, "initialFraction": 0.8, "growthRate": 0.002, "floorFraction": 0.05 }
+    {
+      "type": "herb",
+      "maxBiomass": 450,
+      "floorBiomass": 8,
+      "initialFraction": 0.35,
+      "growthRate": 0.08
+    },
+    {
+      "type": "shrub",
+      "maxBiomass": 300,
+      "initialFraction": 0.8,
+      "growthRate": 0.002,
+      "floorFraction": 0.05
+    }
   ],
-  "weather": { "persistence": 0.85, "min": 0.4, "max": 1.6 },
-  "shore": { "aquaticPerM2": 0.022 },
-  "species": ["dotterel", "rat", "rabbit", "cat"],
-  "mainIslandOnly": ["rabbit", "cat"],
-  "source": "地形为手调值：主岛约 4.6 公里宽（50 米一格），三座离岸小岛与主岛隔 500 米以上的水。草本植被参数沿用温带草原（【未核对】）。灌丛（这里指能被啃的嫩枝、幼苗和草丛底部，不是整株木材）为假设值：长满时约 300 克/平方米，长得慢（被啃掉后要好几年才长回来），见 docs/MODEL.md。水边的食物（shore，2026-10-22）为校准值【未核对】：设得兰的海岸水獭大约每公里海岸一只（Kruuk 2006, Otters: ecology, behaviour and conservation），一只 8 千克的水獭每天约吃 1.1 千克鱼蟹（推演里的吃肉系数 230·M^0.75）；海岸格宽 50 米，一公里海岸约 20 格，所以每平方米海岸格每天 0.022 克。主岛约 530 个海岸格，大约养得起二十几只。"
+  "weather": {
+    "persistence": 0.85,
+    "min": 0.4,
+    "max": 1.6
+  },
+  "shore": {
+    "aquaticPerM2": 0.022
+  },
+  "species": [
+    "dotterel",
+    "rat",
+    "rabbit",
+    "cat"
+  ],
+  "mainIslandOnly": [
+    "rabbit",
+    "cat"
+  ],
+  "source": "地形为手调值：主岛约 4.6 公里宽（50 米一格），三座离岸小岛与主岛隔 500 米以上的水。草本植被参数沿用温带草原（【未核对】）。灌丛（这里指能被啃的嫩枝、幼苗和草丛底部，不是整株木材）为假设值：长满时约 300 克/平方米，长得慢（被啃掉后要好几年才长回来），见 docs/MODEL.md。水边的食物（shore，2026-10-22）为校准值【未核对】：设得兰的海岸水獭大约每公里海岸一只（Kruuk 2006, Otters: ecology, behaviour and conservation），一只 8 千克的水獭每天约吃 1.1 千克鱼蟹（推演里的吃肉系数 230·M^0.75）；海岸格宽 50 米，一公里海岸约 20 格，所以每平方米海岸格每天 0.022 克。主岛约 530 个海岸格，大约养得起二十几只。 寄生虫（2026-11-28）：岛上的兔子带着肠道线虫，开局感染率约三成【未核对】。",
+  "pathogens": [
+    {
+      "id": "gutworm",
+      "name": "肠道线虫",
+      "kind": "nematode",
+      "hostMinPlantDiet": 0.3,
+      "shedPerHostDensity": 80,
+      "larvaeDays": 40,
+      "infectRate": 0.035,
+      "clearPerDay": 0.016,
+      "deathPerDay": 0.001,
+      "bcsPenalty": 0.8,
+      "epgMean": 600,
+      "epgK": 0.6,
+      "larvae": 0.1,
+      "prevalence": {
+        "rabbit": 0.3
+      },
+      "source": "按毛圆线虫类（兔的 Trichostrongylus retortaeformis、羊的 Teladorsagia、捻转血矛线虫 Haemonchus contortus）的生活史简化：虫卵随粪便排出，在草上孵成幼虫，吃草时吃进。幼虫在草上能活几周到几个月；感染以后部分个体会慢慢产生免疫把虫清掉；感染重的消瘦、贫血、死亡率上升；虫卵数（EPG）在宿主之间高度聚集（负二项分布 k < 1），少数个体排出大部分虫卵。各数值是让推演在一两年内出现可见的密度制约的校准值【未核对】，见 docs/MODEL.md 五之十八。"
+    }
+  ]
 }

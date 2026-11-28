@@ -112,11 +112,26 @@ export const IntroductionSchema = z.object({
   source: z.string(),
 });
 
+/**
+ * 驱虫（2026-11-28）：一支队伍在一处撒一天药饵（混了伊维菌素之类驱虫药的饲料块）。
+ * 吃到药饵的动物肠里的线虫被打掉；草上的幼虫不受影响，所以过一阵会再感染。
+ */
+export const DewormSchema = z.object({
+  name: z.string(),
+  radiusCells: z.number().int().min(1),
+  /** 范围里感染率降到 (1 − efficacy) 倍（吃到药饵的比例 × 药效）。 */
+  efficacy: z.number().min(0).max(1),
+  cost: z.number().int().min(0),
+  source: z.string(),
+});
+
 export const ToolsSchema = z.object({
   traps: z.array(TrapTypeSchema).min(1),
   cull: CullSchema,
   sample: SampleSchema,
   necropsy: NecropsySchema,
+  /** 没有时不能驱虫。 */
+  deworm: DewormSchema.optional(),
   fences: z.array(FenceTypeSchema).min(1),
   /** 没有时不能引种。 */
   introduction: IntroductionSchema.optional(),

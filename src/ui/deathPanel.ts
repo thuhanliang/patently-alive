@@ -91,6 +91,8 @@ export class DeathPanel {
         return '#8a7a66';
       case 'dystocia':
         return '#a98a74';
+      case 'parasite':
+        return '#9a8a5a';
       case 'other':
         return '#bdb19c';
     }

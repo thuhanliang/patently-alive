@@ -190,6 +190,7 @@ export class FieldLog {
       ['体重', `${massText(c.massKg)}（同种成体典型 ${massText(sp.params.bodyMassKg)}）`],
       ['体况评分', bcsText(c.bcs)],
       ['胃内容物', stomachText(c, this.species)],
+      ...(c.fecal ? ([['粪检（McMaster）', fecalText(c.fecal.epg)]] as [string, string][]) : []),
       ['来源', how],
       ['地点', `(${c.x}, ${c.y})`],
       ['日期', date(c.day)],
@@ -223,6 +224,7 @@ export class FieldLog {
       `偏瘦（体况 ≤ ${THIN_BCS}）${pct(sum.thin)}`,
       `幼体 ${pct(sum.juvenile)}　雌性 ${pct(sum.female)}`,
     ];
+    if (sum.fecalPositive.n > 0) lines.push(`粪检数到线虫卵 ${pct(sum.fecalPositive)}（做了 ${sum.fecalPositive.n} 份粪检；虫卵太少的数不出来，实际感染的更多）`);
     if (sum.adultMassKg.n > 0) {
       const m = sum.adultMassKg;
       lines.push(`成体平均体重 ${massText(m.mean)}（${massText(Math.max(0, m.lo))} – ${massText(m.hi)}）`);
@@ -264,4 +266,11 @@ function date(day: number): string {
 /** 一条捕获记录的键：推演在 Worker 里，每帧送来的是新拷贝，按这几样认出是同一条。 */
 function captureKey(c: Capture | undefined): string {
   return c ? `c${c.day}-${c.job}-${c.trap}-${c.species}-${c.x},${c.y}-${c.ageDays}-${c.massKg}` : '';
+}
+
+/** 粪检的说法：每克粪便的虫卵数（McMaster 法，50 的倍数；0 是没数到，不一定没虫）。 */
+export function fecalText(epg: number): string {
+  if (epg === 0) return '没数到虫卵（低于 50 个/克时数不出来）';
+  const word = epg < 300 ? '轻度' : epg < 1000 ? '中度' : '重度';
+  return `每克粪便 ${epg.toLocaleString('zh-CN')} 个线虫卵（${word}）`;
 }

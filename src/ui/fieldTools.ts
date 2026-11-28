@@ -25,8 +25,8 @@ export interface FieldToolsHandle {
 }
 
 /** 工具的大类（下方工具栏一类一个图标）。 */
-export type FieldKind = 'trap' | 'cull' | 'sample' | 'necropsy' | 'fence';
-export const FIELD_KIND_NAMES: Record<FieldKind, string> = { trap: '陷阱', cull: '夜间搜捕', sample: '体检采样', necropsy: '找尸体', fence: '围栏' };
+export type FieldKind = 'trap' | 'cull' | 'sample' | 'deworm' | 'necropsy' | 'fence';
+export const FIELD_KIND_NAMES: Record<FieldKind, string> = { trap: '陷阱', cull: '夜间搜捕', sample: '体检采样', deworm: '驱虫', necropsy: '找尸体', fence: '围栏' };
 
 interface Point {
   x: number;
@@ -49,6 +49,7 @@ export function bindFieldTools(
     ...tools.traps.map((t): [string, string] => [t.name, `trap:${t.id}`]),
     [tools.cull.name, 'cull'],
     [tools.sample.name, 'sample'],
+    ...(tools.deworm ? ([[tools.deworm.name, 'deworm']] as [string, string][]) : []),
     [tools.necropsy.name, 'necropsy'],
     ...tools.fences.map((f): [string, string] => [f.name, `fence:${f.id}`]),
   ];
@@ -76,7 +77,8 @@ export function bindFieldTools(
   const sampleTarget = document.createElement('select');
   const sampleRow = document.createElement('div');
   sampleRow.className = 'bar';
-  sampleRow.append(text('抓：'), sampleTarget, text('检查后放生'));
+  const sampleVerb = text('检查后放生');
+  sampleRow.append(text('抓：'), sampleTarget, sampleVerb);
 
   // 找尸体：要哪个物种的（默认不限）。
   const carcass = document.createElement('select');
@@ -116,6 +118,7 @@ export function bindFieldTools(
       return { type: 'trap', trap: id!, x, y, nights: n, remove };
     }
     if (kind === 'sample') return { type: 'sample', species: sampleTarget.value, x, y };
+    if (kind === 'deworm') return { type: 'deworm', species: sampleTarget.value, x, y };
     if (kind === 'necropsy') return { type: 'necropsy', species: carcass.value === '' ? null : carcass.value, x, y };
     return { type: 'cull', species: target.value, x, y };
   };
@@ -126,7 +129,8 @@ export function bindFieldTools(
     removeRow.style.display = kind === 'trap' ? '' : 'none';
     targetRow.style.display = kind === 'cull' ? '' : 'none';
     carcassRow.style.display = kind === 'necropsy' ? '' : 'none';
-    sampleRow.style.display = kind === 'sample' ? '' : 'none';
+    sampleRow.style.display = kind === 'sample' || kind === 'deworm' ? '' : 'none';
+    sampleVerb.textContent = kind === 'deworm' ? '给它们撒驱虫药饵' : '检查后放生';
     if (kind === 'fence') {
       // 围栏按长度计价，画之前只能报单价。
       const f = tools.fences.find((t) => `fence:${t.id}` === tool.value)!;

@@ -22,6 +22,8 @@ export function causeText(cause: number, names: readonly string[]): string {
       return '骨折';
     case 'dystocia':
       return '难产';
+    case 'parasite':
+      return '寄生虫';
     case 'predation':
       return `被${names[d.predator]}吃掉`;
     case 'nest':
@@ -40,6 +42,8 @@ export function causeWhy(cause: number, names: readonly string[]): string {
       return '骨头撑不住它的体重';
     case 'dystocia':
       return '崽太大，生不下来';
+    case 'parasite':
+      return '肠子里的虫太多，吃进去的被虫抢走了';
     default:
       return '';
   }

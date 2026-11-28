@@ -802,6 +802,8 @@ function placedText(op: Op, nameOf: (id: string) => string): string {
       return `今晚在 (${op.x}, ${op.y}) 一带搜捕`;
     case 'sample':
       return `今天在 (${op.x}, ${op.y}) 一带抓${nameOf(op.species)}做体检，傍晚有结果`;
+    case 'deworm':
+      return `今天在 (${op.x}, ${op.y}) 一带给${nameOf(op.species)}撒驱虫药饵`;
     case 'necropsy':
       return `今天在 (${op.x}, ${op.y}) 一带找尸体，傍晚带回来`;
     case 'fence':
