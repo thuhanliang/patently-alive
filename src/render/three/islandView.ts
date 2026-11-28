@@ -286,6 +286,12 @@ export class IslandView {
     return { obj, plane };
   }
 
+  /** 一种动物的样子（成品图里的整只剪纸），给诊台用；没有就是 null。 */
+  speciesImage(id: string): string | null {
+    const tex = this.P7?.tex[P7_ROW[puppetKindOf(id)] ?? -1]?.[0];
+    return tex ? (imageOf(tex) as HTMLCanvasElement).toDataURL() : null;
+  }
+
   // ---- 和 PaperView 一样的接口（游戏本体用到的），纸雕岛上暂时没有的先空着 ----
   get isLive(): boolean {
     return true;

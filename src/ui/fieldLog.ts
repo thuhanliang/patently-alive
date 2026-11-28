@@ -95,6 +95,11 @@ export class FieldLog {
       return;
     }
     this.lastDay = day;
+    // 新抓回来的（采样带回来的，不是第一次画）：交给诊台。
+    if (this.drawn && lastCapture !== this.lastCapture) {
+      const newest = caps[caps.length - 1];
+      if (newest && newest.trap < 0) this.onSampled?.(newest);
+    }
     this.drawn = true;
     this.lastCapture = lastCapture;
     this.lastSearch = lastSearch;
@@ -179,7 +184,16 @@ export class FieldLog {
     this.card.style.display = '';
   }
 
+  /** 诊台（2026-11-28）：有了就在诊台上查，没有就用原来的检查卡。 */
+  examTable: { show(c: Capture): void } | null = null;
+  /** 新抓回来的（采样，不含陷阱）：外面拿去打开诊台。 */
+  onSampled: ((c: Capture) => void) | null = null;
+
   private open(c: Capture, key: string): void {
+    if (this.examTable) {
+      this.examTable.show(c);
+      return;
+    }
     if (!this.toggle(key)) return;
     const sp = this.species[c.species]!;
     const how = c.trap >= 0 ? `${this.tools?.traps[c.trap]?.name ?? '陷阱'}（#${c.job}）` : `体检采样（#${c.job}）`;

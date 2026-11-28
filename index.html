@@ -129,6 +129,31 @@
 
       /* 检查卡、尸检报告：笔记本右边的一张卡纸，顶上一条牛皮纸边。 */
       #exam-card { position: fixed; left: 486px; top: 120px; max-width: 360px; min-width: 260px; padding: 8px 12px; font-size: 12px; z-index: 4; border-top: 6px solid var(--kraft); }
+      /* 诊台（2026-11-28）：抓回来的一只躺在垫子上，一样一样地查。 */
+      #exam-card.exam-table { left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: min(760px, 94vw); width: min(760px, 94vw); min-width: 0; padding: 14px 18px 16px; font-size: 14px; z-index: 20; max-height: 92vh; overflow: auto; }
+      .et-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+      .et-head b { font-size: 18px; }
+      .et-head span { color: var(--ink-soft); font-size: 12px; flex: 1; }
+      .et-close { font-size: 13px; }
+      .et-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+      @media (max-width: 640px) { .et-body { grid-template-columns: 1fr; } }
+      .et-mat { position: relative; aspect-ratio: 4 / 3; border-radius: 10px; background: repeating-linear-gradient(0deg, #d8e3d2 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, #d8e3d2 0 1px, transparent 1px 24px), #e9f0e4; box-shadow: inset 0 0 0 3px #b8c8b0; }
+      .et-animal { position: absolute; inset: 12% 8% 14% 8%; background: center / contain no-repeat; filter: drop-shadow(3px 5px 0 #0003); }
+      .et-animal.et-silhouette { background: radial-gradient(ellipse 40% 22% at 50% 55%, #b0805c 98%, transparent 100%); }
+      .et-spot { position: absolute; transform: translate(-50%, -50%); font-size: 12px; padding: 3px 9px; border-radius: 12px; border: 1.5px solid var(--blueprint); color: var(--blueprint); background: #fbf6ea; box-shadow: 1px 2px 0 #0002; cursor: pointer; white-space: nowrap; }
+      .et-spot.done { background: var(--blueprint); color: #fbf6ea; }
+      .et-chart { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0; align-content: start; }
+      .et-chart dt { color: var(--ink-soft); }
+      .et-chart dd { margin: 0; }
+      .et-empty { grid-column: 1 / -1; color: var(--ink-soft); margin: 0; }
+      .et-famacha { display: inline-flex; gap: 2px; vertical-align: middle; }
+      .et-famacha i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; outline: 1px solid #0002; }
+      .et-famacha i.on { outline: 2px solid var(--ink); }
+      .et-slide { margin-top: 12px; }
+      .et-slide canvas { border-radius: 6px; box-shadow: 1px 2px 0 #0002; cursor: pointer; max-width: 100%; height: auto !important; }
+      .et-slide p { margin: 4px 0 0; color: var(--ink-soft); font-size: 12px; }
+      .et-dx { margin-top: 12px; padding: 8px 12px; background: #f3ead6; border-left: 4px solid var(--kraft); border-radius: 4px; }
+      .et-dx p { margin: 4px 0 0; }
       #exam-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 0; }
       #exam-card dt { color: var(--ink-soft); }
       #exam-card dd { margin: 0; }

@@ -64,7 +64,7 @@ export interface Exam {
    * 粪检（2026-11-28，寄生虫）：McMaster 法数出来的每克粪便虫卵数（EPG，50 的倍数），和这只真的有没有感染。
    * 世界里没有寄生虫、或者不是宿主（不吃草）、或者是幼体时没有这一项。
    */
-  fecal?: { epg: number; infected: boolean; pathogen: string };
+  fecal?: { epg: number; infected: boolean; pathogen: string; famacha: number };
   stomach: Stomach;
 }
 
@@ -176,7 +176,10 @@ export function examine(subject: Subject, ctx: ExamContext): Exam {
       const p = st.prevalence[s]?.[ctx.blockOf[c]!] ?? 0;
       const infected = rng.nextFloat() < p;
       if (infected) bcs = Math.max(1, Math.round((bcs - pg.bcsPenalty * (0.5 + rng.nextFloat())) * 2) / 2);
-      fecal = { epg: infected ? mcMaster(rng, pg.epgMean * gammaUnit(rng, pg.epgK)) : 0, infected, pathogen: pg.id };
+      const epg = infected ? mcMaster(rng, pg.epgMean * gammaUnit(rng, pg.epgK)) : 0;
+      // 眼睑黏膜的颜色（FAMACHA 1–5：1 鲜红，5 几乎白）：吸血的线虫越多越贫血。没虫的 1–2。
+      const famacha = Math.min(5, Math.max(1, Math.round(1 + (infected ? 4 * Math.min(1, epg / 2500) : 0) + 0.6 * standardNormal(rng) * 0.5 + 0.3)));
+      fecal = { epg, infected, pathogen: pg.id, famacha };
     }
   }
   return { species: s, x, y, female, juvenile, ageDays, massKg, bcs, stomach: stomachOf(s, c, nutrition, ctx), ...(fecal ? { fecal } : {}) };
