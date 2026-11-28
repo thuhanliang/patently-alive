@@ -11,6 +11,7 @@ import type { RigKit } from '../puppet/actor';
 import { Island3D } from './island3d';
 import { levelTop } from './relief';
 import { Puppet3D } from './puppet3d';
+import { Markers3D } from './markers3d';
 
 /**
  * 游戏里的岛（2026-11-28，整体回顾 A 段）：纸雕岛（和车里托盘上的是同一座）就是地图。
@@ -38,6 +39,9 @@ export class IslandView {
   private readonly tagEls = new Map<object, HTMLElement>();
   private readonly ray = new Raycaster();
   private species: readonly DerivedSpecies[] = [];
+  private readonly markers: Markers3D;
+  private fenceStart: { x: number; y: number } | null = null;
+  private time = 0;
   private vegAt = -1;
   private vegSig = '';
   private readonly W: number;
@@ -56,6 +60,8 @@ export class IslandView {
     const veg = vegetationOf(state);
     this.isl = new Island3D(host, { width: g.width, height: g.height, terrain: g.terrain, herb: veg.herb, shrub: veg.shrub, seed: state.config.seed, month: Math.floor(state.tick / 24 / 30) % 12 });
     this.isl.scene.add(this.actorRoot);
+    this.markers = new Markers3D(this.isl.field, g.width, g.height, state.config.tools ?? null);
+    this.isl.scene.add(this.markers.root);
     this.live = new LiveLayer(P7, null as unknown as GaitRules, PX, 7);
     this.tagLayer = document.createElement('div');
     this.tagLayer.className = 'island-tags';
@@ -152,6 +158,9 @@ export class IslandView {
     this.live.update(state, dt);
     this.syncActors();
     this.refreshVegetation(state);
+    this.time += dt;
+    this.markers.update(state, this.fenceStart);
+    this.markers.wave(this.time);
   }
 
   /** 植被变了一成以上（或者过了一季）就重撒植物。 */
@@ -190,7 +199,9 @@ export class IslandView {
       const wx = a.x / PX - this.W / 2;
       const wz = a.y / PX - this.H / 2;
       const L = Math.max(0, this.isl.field.levelAt(wx, wz));
-      const lenCells = (a.id.startsWith('d_') ? MINE_CELLS : OTHER_CELLS) * (0.45 + 0.55 * a.grow) * (0.6 + 0.4 * a.pop);
+      // 拉远时演员跟着放大一点（像地图上的棋子），推近时就是本来的大小。
+      const far = Math.max(1, this.isl.camera.position.distanceTo(new Vector3(wx, 0, wz)) / 14);
+      const lenCells = (a.id.startsWith('d_') ? MINE_CELLS : OTHER_CELLS) * (0.45 + 0.55 * a.grow) * (0.6 + 0.4 * a.pop) * Math.min(3, far);
       it.obj.position.set(wx, levelTop(L) + a.hop * lenCells, wz);
       it.obj.rotation.order = 'YXZ';
       it.obj.rotation.y = camYaw;
@@ -253,7 +264,7 @@ export class IslandView {
   private makeActor(a: LiveActorView): { obj: Group; p3?: Puppet3D; plane?: Mesh } {
     const obj = new Group();
     if (a.rig) {
-      const p3 = new Puppet3D(a.rig.rig.cutout, a.rig.rig.metersPerPx);
+      const p3 = new Puppet3D(a.rig.rig.cutout, a.rig.rig.metersPerPx, true);
       obj.add(p3.root);
       return { obj, p3 };
     }
@@ -275,6 +286,12 @@ export class IslandView {
     return { obj, plane };
   }
 
+  /** 一种动物的样子（成品图里的整只剪纸），给诊台用；没有就是 null。 */
+  speciesImage(id: string): string | null {
+    const tex = this.P7?.tex[P7_ROW[puppetKindOf(id)] ?? -1]?.[0];
+    return tex ? (imageOf(tex) as HTMLCanvasElement).toDataURL() : null;
+  }
+
   // ---- 和 PaperView 一样的接口（游戏本体用到的），纸雕岛上暂时没有的先空着 ----
   get isLive(): boolean {
     return true;
@@ -291,10 +308,14 @@ export class IslandView {
   setPortrait(_id: string, _url: string): Promise<void> {
     return Promise.resolve();
   }
-  setAlertAt(_at: { x: number; y: number } | null): void {}
+  setAlertAt(at: { x: number; y: number } | null): void {
+    this.markers.setAlert(at);
+  }
   setLayer(_layer: unknown): void {}
   setCases(_cases: readonly unknown[]): void {}
-  setFenceStart(_p: unknown): void {}
+  setFenceStart(p: { x: number; y: number } | null): void {
+    this.fenceStart = p;
+  }
   repaintSoon(): void {
     this.vegAt = -1;
   }

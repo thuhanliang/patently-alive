@@ -84,7 +84,7 @@ export const ScenarioSchema = z.object({
    * 这份委托的工具箱：下方工具栏放哪几类兽医工具（不写就是全部）。委托一份份解锁工具箱。
    * 现在只管界面上放不放（2026-11-10）；操作接口还没有按它拒绝。
    */
-  toolbox: z.array(z.enum(['trap', 'cull', 'sample', 'necropsy', 'fence'])).optional(),
+  toolbox: z.array(z.enum(['trap', 'cull', 'sample', 'deworm', 'necropsy', 'fence'])).optional(),
   /** 个案动物（2026-10-22）：情景里单独记着的几只（见 schema/case.ts）。不写就没有。 */
   cases: z.array(CaseSchema).optional(),
 });

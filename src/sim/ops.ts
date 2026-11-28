@@ -62,6 +62,8 @@ export const OpSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rescue'), case: z.string() }),
   /** 体检采样：在一处抓一种动物，检查完放生。占一支兽医队一天。 */
   z.object({ type: z.literal('sample'), species: z.string(), x: z.number().int(), y: z.number().int() }),
+  /** 驱虫（2026-11-28，寄生虫）：在一处撒一天驱虫药饵，那一带这种动物的线虫感染率大降；草上的幼虫还在，会再感染。 */
+  z.object({ type: z.literal('deworm'), species: z.string(), x: z.number().int(), y: z.number().int() }),
   /** 找尸体做尸检：在一处搜一天；species 为 null 时什么物种的都要。 */
   z.object({ type: z.literal('necropsy'), species: z.string().nullable(), x: z.number().int(), y: z.number().int() }),
   /** 架一段直围栏：端点在格子的角上。工期按长度算，完工后才挡得住动物。 */
@@ -211,6 +213,8 @@ export function costOf(op: Op, tools: Tools | undefined, cellSizeM: number, rule
       return tools ? { budget: tools.sample.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
     case 'necropsy':
       return tools ? { budget: tools.necropsy.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
+    case 'deworm':
+      return tools?.deworm ? { budget: tools.deworm.cost, staff: 1, days: 1, satisfaction: 0 } : FREE;
     case 'introduce': {
       const t = tools?.introduction;
       if (!t) return FREE;

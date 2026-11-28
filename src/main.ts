@@ -1,3 +1,4 @@
+import { ExamTable } from './ui/examTable';
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
 import { coatFor } from './render/puppet/coats';
 import { checksum, calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, woodyIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
@@ -160,6 +161,14 @@ async function main(): Promise<void> {
   const hud = new Hud(el('ribbon'), el('hud'));
   const deaths = new DeathPanel(el('deaths'), names, session.species.map((s) => colorOf(s.params).chart));
   const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
+  // 诊台（2026-11-28）：抓回来的一只在诊台上一样一样地查（体况、眼睑、粪检……）。
+  const examTable = new ExamTable(el('exam-card'), session.species, (id) => portraits.get(id) ?? island?.speciesImage(id) ?? null);
+  captures.examTable = examTable;
+  captures.onSampled = (c) => {
+    if (examTable.isOpen) return;
+    examTable.show(c);
+    sound.play('flip');
+  };
   const alertBanner = new AlertBanner(el('alert'), names, (at) =>
     island ? island.focus({ x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }, true) : view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
   );
@@ -350,6 +359,7 @@ async function main(): Promise<void> {
     deaths.reset();
     alertBanner.names = names;
     captures.setSpecies(session.species);
+    examTable.setSpecies(session.species);
     if (cards) cards.speciesIds = list.map((s) => s.id);
     history.setSpecies(names);
     chart.colors = session.species.map((s) => colorOf(s.params).chart);
@@ -648,6 +658,7 @@ async function main(): Promise<void> {
       void submit(op).then((ok) => {
         if (!ok) return;
         status.textContent = placedText(op, (id) => session.species.find((x) => x.params.id === id)?.params.name ?? id);
+        if (op.type === 'sample') pendingSample = { day: session.sim.day, species: op.species, captures: session.sim.state.captures.length };
         field.stop();
       });
       return;
@@ -727,9 +738,16 @@ async function main(): Promise<void> {
   // ?perf=1：在状态栏显示主线程每帧花在脚本上的时间（不含 GPU），检查性能用。
   const perf = new URLSearchParams(location.search).get('perf') === '1' ? { sum: 0, worst: 0, n: 0, since: performance.now() } : null;
 
+  /** 刚派出去的采样：第二天还没有带回来的，告诉玩家没抓到（不然像什么都没发生）。 */
+  let pendingSample: { day: number; species: string; captures: number } | null = null;
   view.ticker.add(() => {
     const frameStart = perf ? performance.now() : 0;
     const state = session.sim.state;
+    if (pendingSample && session.sim.day >= pendingSample.day + 2) {
+      const got = state.captures.length !== pendingSample.captures;
+      if (!got) status.textContent = `采样空手而归：那一带没抓到${session.species.find((x) => x.params.id === pendingSample!.species)?.params.name ?? ''}。换个它们多的地方再试。`;
+      pendingSample = null;
+    }
     syncFocus();
     // 新的季度结算：弹出结算单（Worker 结算后已经停下等着）。
     if (cards && session.quarters.length > shownQuarters) {
@@ -802,6 +820,8 @@ function placedText(op: Op, nameOf: (id: string) => string): string {
       return `今晚在 (${op.x}, ${op.y}) 一带搜捕`;
     case 'sample':
       return `今天在 (${op.x}, ${op.y}) 一带抓${nameOf(op.species)}做体检，傍晚有结果`;
+    case 'deworm':
+      return `今天在 (${op.x}, ${op.y}) 一带给${nameOf(op.species)}撒驱虫药饵`;
     case 'necropsy':
       return `今天在 (${op.x}, ${op.y}) 一带找尸体，傍晚带回来`;
     case 'fence':

@@ -1,3 +1,4 @@
+import { createParasites, deworm as dewormArea, growParasites, parasiteDaily, type ParasiteState } from './parasite';
 import { SimConfigSchema, type SimConfig } from './config';
 import { Rng, type RngState } from './rng';
 import { cloneData } from './data';
@@ -85,6 +86,8 @@ export interface SimState {
   fences: Fence[];
   /** 各物种各格最近一次每日结算吃饱的程度（占日需求的比例）；体检看体况用。开局当作吃饱。 */
   fedLast: Float64Array[];
+  /** 寄生虫（parasite.ts）：世界没写寄生虫时没有这一项，推演和以前完全一样。 */
+  parasites?: ParasiteState[];
   /** 每 CENSUS_DAYS 天记一次各物种总数（第 0 天开局时记第一次），留开局那次和最近几次，一共 CENSUS_KEEP 次；警报看趋势用。 */
   census: { day: number; totals: number[] }[];
 }
@@ -131,7 +134,14 @@ export function createInitialState(config: SimConfig): SimState {
     fences: [],
     fedLast: populations.map(() => new Float64Array(grid.width * grid.height).fill(1)),
     census: [{ day: 0, totals: populations.map(populationTotal) }],
+    ...withParasites(parsed.world, derived, populations, grid),
   };
+}
+
+function withParasites(world: SimConfig['world'], derived: DerivedSpecies[], populations: Population[], grid: Grid): { parasites?: ParasiteState[] } {
+  const { blockOf, cellsIn } = crowdingBlocks(grid.width, grid.height, grid.terrain);
+  const ps = createParasites(world, derived, populations, grid.terrain, blockOf, cellsIn.length);
+  return ps ? { parasites: ps } : {};
 }
 
 /**
@@ -265,6 +275,7 @@ export class Sim {
     this.s.fedLast.push(new Float64Array(cells).fill(1));
     // 以前的普查里它是 0 只。
     for (const c of this.s.census) c.totals.push(0);
+    growParasites(this.s.parasites, this.blocks.cellsIn.length);
     this.rebuildBarriers();
     return this.derived.length - 1;
   }
@@ -324,6 +335,15 @@ export class Sim {
     const id = this.s.nextJobId++;
     this.s.jobs.push({ kind: 'cull', id, x, y, nightsLeft: 1, species });
     return id;
+  }
+
+  /** 驱虫：在 (x, y) 一带给物种 species 撒药饵，立即生效。只该由统一操作接口调用。 */
+  deworm(species: number, x: number, y: number): void {
+    const d = this.s.config.tools?.deworm;
+    if (!d) throw new RangeError('这片世界没有驱虫药');
+    if (!this.derived[species]) throw new RangeError(`没有这个物种：${species}`);
+    this.checkLand(x, y);
+    dewormArea(this.s.parasites, species, x, y, d.radiusCells, d.efficacy, this.s.grid.width, this.s.grid.height, this.blocks.blockOf);
   }
 
   /** 体检采样：在 (x, y) 一带抓物种 species 检查后放生。只该由统一操作接口调用。 */
@@ -466,6 +486,7 @@ export class Sim {
       blockCells: this.blocks.cellsIn,
       fences: this.s.fences,
       removedIndividuals,
+      ...(this.s.parasites && this.s.config.world.pathogens ? { parasites: { states: this.s.parasites, pathogens: this.s.config.world.pathogens } } : {}),
     });
     compact(this.s.individuals, removedIndividuals);
     if (this.s.fences.length !== this.barrierCount) this.rebuildBarriers();
@@ -529,6 +550,19 @@ export class Sim {
     // 今天收拢回来的动物并回格子计数（格子模型今天没有再算它们一遍）。
     this.s.populations.forEach((p, s) => mergeInto(p, this.s.emigrants[s]!));
     absorbImmigrants(this.s.individuals, this.derived, this.s.populations, this.s.grid, this.s.focus, this.rng, day, this.s.fedLast);
+    // 寄生虫：在当天的计数都并回来之后算（额外的死亡记进今天的账）。
+    if (this.s.parasites)
+      parasiteDaily(this.s.parasites, {
+        world,
+        species: this.derived,
+        populations: this.s.populations,
+        blockOf: this.blocks.blockOf,
+        cellsIn: this.blocks.cellsIn,
+        cellAreaM2: cellArea(this.s.config),
+        rng: this.rng,
+        ledger: this.s.deaths,
+        stats: acc,
+      });
     // 夜里兽医队的活（陷阱、搜捕）：在当天的计数都并回来之后做，哪些动物在格子里、哪些展开成个体都抓得到。
     if (this.s.jobs.length > 0) this.runJobs();
 

@@ -139,6 +139,8 @@ function causeLabel(cause: number, names: readonly string[]): string {
       return '骨折';
     case 'dystocia':
       return '难产';
+    case 'parasite':
+      return '虫病';
     case 'predation':
       return `被${names[d.predator]}吃掉`;
     case 'nest':

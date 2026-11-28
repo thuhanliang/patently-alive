@@ -1,3 +1,5 @@
+import type { ParasiteState } from './parasite';
+import type { Pathogen } from '../data/schema/world';
 import type { CullParams, NecropsyParams, SampleParams, TrapType } from '../data/schema/tools';
 import { blockCounter, cellNutrition, examine, scoreBcs, type Exam, type ExamContext, type Subject } from './exam';
 import type { Fence } from './fence';
@@ -145,6 +147,8 @@ export interface JobContext {
   fences: Fence[];
   /** 被移除的个体在这里标记，调用方负责压缩。 */
   removedIndividuals: Uint8Array;
+  /** 寄生虫（体检时做粪检）。 */
+  parasites?: { states: readonly ParasiteState[]; pathogens: readonly Pathogen[] };
 }
 
 /** 动物会在多大范围内碰上陷阱（格）：每天走的距离的一半（走不动的设计按缩短后的算），夹在 1 到 MAX_CATCHMENT_CELLS 之间。 */
@@ -286,6 +290,7 @@ function examContext(ctx: JobContext): ExamContext {
     day: ctx.day,
     rng: ctx.rng,
     countInBlock: blockCounter(ctx.populations, ctx.individuals, ctx.blockOf, ctx.grid.width),
+    ...(ctx.parasites ? { parasites: ctx.parasites } : {}),
   };
   examContexts.set(ctx, ec);
   return ec;

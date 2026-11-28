@@ -42,7 +42,7 @@ export interface NecropsyFindings {
 }
 
 /** 身体撑不住的死因（阶段 3.5）：没有咬痕，所见和结论各有一句。 */
-export type BodyKind = 'malnutrition' | 'fracture' | 'dystocia';
+export type BodyKind = 'malnutrition' | 'fracture' | 'dystocia' | 'parasite';
 
 export function teethOf(sp: DerivedSpecies): Teeth {
   return sp.carnivore ? 'canine' : 'incisor';
@@ -57,7 +57,7 @@ export function necropsyFindings(carcass: Carcass, species: readonly DerivedSpec
   const decomposition: Decomposition = carcass.daysDead === 0 ? 'fresh' : carcass.daysDead <= 2 ? 'early' : 'advanced';
   const base = { species: carcass.species, decomposition, bcs: carcass.bcs };
   const d = decodeCause(carcass.cause, species.length);
-  if (d.kind === 'starvation' || d.kind === 'malnutrition' || d.kind === 'fracture' || d.kind === 'dystocia') return { ...base, kind: d.kind, bite: null, predator: -1 };
+  if (d.kind === 'starvation' || d.kind === 'malnutrition' || d.kind === 'fracture' || d.kind === 'dystocia' || d.kind === 'parasite') return { ...base, kind: d.kind, bite: null, predator: -1 };
   if (d.kind === 'other' || d.kind === 'removed') return { ...base, kind: 'other', bite: null, predator: -1 };
   const pred = species[d.predator]!;
   const teeth = teethOf(pred);

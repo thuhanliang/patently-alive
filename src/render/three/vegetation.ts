@@ -4,7 +4,7 @@ import { buildFlora } from './flora';
 import { plantMesh, type PlantSpot } from './plants';
 import { fbm, levelTop, noise2, type ReliefField } from './relief';
 import { floraSpecies, type FloraSpecies } from '../../data';
-import { cutPlant } from '../flora/shapes';
+import { cutPlant, simplifyPlant } from '../flora/shapes';
 import { floraFor, pickPlants, type Row } from '../flora/zone';
 import { mergeSheets } from './flora';
 import { Color } from 'three';
@@ -161,7 +161,8 @@ function buildFloraVegetation(f: ReliefField, inp: IslandInput): Group {
     const flower = sp.flowerMonths.includes(month) ? 1 : 0;
     const fruit = sp.fruitMonths.includes(month) ? 1 : 0;
     v = [1, 2].map((k) => {
-      const cut = cutPlant(sp.look, seed * 31 + k * 977 + sp.id.length, flower, fruit);
+      // 岛上远看：叶片留一半、轮廓隔点取，三角形少很多（图鉴页和近景用完整的）。
+      const cut = simplifyPlant(cutPlant(sp.look, seed * 31 + k * 977 + sp.id.length, flower, fruit), 0.5, 2);
       const h = Math.max(0.05, cut.height);
       return cut.sheets.map((sh, i) => ({ geom: mergeSheets(sh.polys.map((p) => p.map((x) => x / h)), PAPER_T, i * PAPER_T * 1.05), color: new Color(sh.color).getHex() }));
     });
@@ -176,6 +177,10 @@ function buildFloraVegetation(f: ReliefField, inp: IslandInput): Group {
     for (const [dx, dz] of [[margin, 0], [-margin, 0], [0, margin], [0, -margin]] as const) if (f.levelAt(x + dx, z + dz) !== L) return null;
     return levelTop(L);
   };
+  // 总株数有上限：大岛（鸟岛 128×128）每格少撒一些，不然几万株、几千万个三角形。
+  let land = 0;
+  for (let i = 0; i < W * H; i++) if (terrain[i] !== TERRAIN.water) land++;
+  const budget = Math.min(1, 9000 / Math.max(1, land * 4));
   const ROWS: Array<[Row, number]> = [
     ['near', 4],
     ['mid', 2],
@@ -198,7 +203,7 @@ function buildFloraVegetation(f: ReliefField, inp: IslandInput): Group {
       for (const [row, base] of ROWS) {
         // 株数跟着生物量走：近排看草本，中排、远排看灌丛。
         const amount = row === 'near' ? 0.2 + herb : row === 'mid' ? 0.3 + woody : woody > 0.5 ? woody : 0;
-        let n = Math.floor(base * amount + rnd());
+        let n = Math.floor(base * amount * budget + rnd());
         if (row === 'far' && rnd() > 0.35) n = 0;
         for (const p of pickPlants(picks, row, n, i * 3 + (row === 'near' ? 0 : row === 'mid' ? 1 : 2))) {
           const sp = byId.get(p.id);

@@ -40,7 +40,8 @@
     "predation_canine": "颈背部见成对穿刺伤，两孔间距约 {size} 毫米，周围皮下出血，提示生前受伤；尸体部分被食。",
     "predation_incisor": "体表多处细小成对齿痕，宽约 {size} 毫米，创缘不齐；尸体被啃食。",
     "nest_canine": "巢被扒散，{remains}上见成对穿刺孔，间距约 {size} 毫米。",
-    "nest_incisor": "{remains}边缘不规则，见细小成对齿痕，宽约 {size} 毫米，内容物被吃空。"
+    "nest_incisor": "{remains}边缘不规则，见细小成对齿痕，宽约 {size} 毫米，内容物被吃空。",
+    "parasite": "小肠和皱胃里成团的细小线虫，肠黏膜充血；黏膜、眼睑苍白（贫血）；皮下脂肪耗尽。"
   },
   "remains": {
     "egg": "蛋壳碎片",
@@ -53,7 +54,8 @@
     "fracture": "承重骨折：骨骼不足以承受自身体重。",
     "dystocia": "难产致死：幼崽（蛋）相对母体过大。",
     "predation": "被捕食。{teeth}；{size_match}。",
-    "nest": "巢被捕食。{teeth}；{size_match}。"
+    "nest": "巢被捕食。{teeth}；{size_match}。",
+    "parasite": "寄生虫致死：肠道线虫太多，吃进去的营养被虫抢走，还在失血。"
   },
   "teeth": {
     "canine": "咬痕符合食肉动物的犬齿",

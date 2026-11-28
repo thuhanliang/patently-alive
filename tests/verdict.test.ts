@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { scenarioLibrary } from '../src/data';
-import type { SpeciesQuarter } from '../src/sim';
+import { CAUSE, type SpeciesQuarter } from '../src/sim';
 import { guideText } from '../src/ui/guide';
 import { mainCause, oneLine, replyKeyOf, wishesOf } from '../src/ui/verdict';
 
@@ -24,8 +24,8 @@ describe('验收单的一句话', () => {
     expect(oneLine(q({ start: 14, end: 12, births: 2, deaths: [[1, 4]] }), names)).toContain('补不上老死病死的');
   });
   it('被吃掉的写出是谁吃的', () => {
-    const birds = q({ id: 'dotterel', start: 87, end: 49, births: 27, deaths: [[8, 60], [1, 5]] });
-    expect(mainCause(birds)).toBe(8);
+    const birds = q({ id: 'dotterel', start: 87, end: 49, births: 27, deaths: [[CAUSE.predation(1), 60], [1, 5]] });
+    expect(mainCause(birds)).toBe(CAUSE.predation(1));
     expect(oneLine(birds, names)).toContain('被圆圆吃掉');
   });
 });

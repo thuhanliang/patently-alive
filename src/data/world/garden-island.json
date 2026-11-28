@@ -86,5 +86,24 @@
     "dotterel"
   ],
   "mainIslandOnly": [],
-  "source": "第一份委托用的小岛（2026-11-10）：和小鸟岛同样的规则和植被参数，48×48 格（2.4 公里见方），开局只有双斑鸻，没有任何哺乳动物。"
+  "source": "第一份委托用的小岛（2026-11-10）：和小鸟岛同样的规则和植被参数，48×48 格（2.4 公里见方），开局只有双斑鸻，没有任何哺乳动物。 寄生虫（2026-11-28）：花园岛以前放过羊，牧场上留着肠道线虫的幼虫（larvae 0.15），没有宿主时几个月内慢慢消失。",
+  "pathogens": [
+    {
+      "id": "gutworm",
+      "name": "肠道线虫",
+      "kind": "nematode",
+      "hostMinPlantDiet": 0.3,
+      "shedPerHostDensity": 80,
+      "larvaeDays": 40,
+      "infectRate": 0.035,
+      "clearPerDay": 0.016,
+      "deathPerDay": 0.001,
+      "bcsPenalty": 0.8,
+      "epgMean": 600,
+      "epgK": 0.6,
+      "larvae": 0.15,
+      "prevalence": {},
+      "source": "按毛圆线虫类（兔的 Trichostrongylus retortaeformis、羊的 Teladorsagia、捻转血矛线虫 Haemonchus contortus）的生活史简化：虫卵随粪便排出，在草上孵成幼虫，吃草时吃进。幼虫在草上能活几周到几个月；感染以后部分个体会慢慢产生免疫把虫清掉；感染重的消瘦、贫血、死亡率上升；虫卵数（EPG）在宿主之间高度聚集（负二项分布 k < 1），少数个体排出大部分虫卵。各数值是让推演在一两年内出现可见的密度制约的校准值【未核对】，见 docs/MODEL.md 五之十八。"
+    }
+  ]
 }

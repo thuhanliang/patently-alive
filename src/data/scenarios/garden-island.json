@@ -81,6 +81,7 @@
   },
   "toolbox": [
     "sample",
+    "deworm",
     "necropsy"
   ]
 }

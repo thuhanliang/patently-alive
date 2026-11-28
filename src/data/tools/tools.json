@@ -5,7 +5,11 @@
       "name": "猫笼（肉饵）",
       "minMassKg": 0.5,
       "maxMassKg": 8,
-      "bait": { "plant": 0.05, "vertebrate": 1, "invertebrate": 0.2 },
+      "bait": {
+        "plant": 0.05,
+        "vertebrate": 1,
+        "invertebrate": 0.2
+      },
       "cages": 10,
       "setupCost": 2000,
       "nightlyCost": 300,
@@ -16,7 +20,11 @@
       "name": "鼠笼网（花生酱饵）",
       "minMassKg": 0.02,
       "maxMassKg": 1,
-      "bait": { "plant": 1, "vertebrate": 0.1, "invertebrate": 0.3 },
+      "bait": {
+        "plant": 1,
+        "vertebrate": 0.1,
+        "invertebrate": 0.3
+      },
       "cages": 50,
       "spreadCells": 5,
       "setupCost": 2000,
@@ -35,10 +43,10 @@
   "sample": {
     "name": "体检采样",
     "radiusCells": 4,
-    "success": 0.15,
+    "success": 0.5,
     "maxAnimals": 10,
     "cost": 1500,
-    "source": "一支队伍一天在约 400 米范围内用网、手捕或短时活捕笼抓指定物种，现场称重、评体况、估年龄，用催吐或粪便看胃内容物，检查完原地放生。抓到的概率、价格为假设值（见 docs/MODEL.md）。"
+    "source": "一支队伍一天在约 400 米范围内用网、手捕或短时活捕笼抓指定物种，现场称重、评体况、估年龄，用催吐或粪便看胃内容物，检查完原地放生。抓到的概率（2026-11-28 从 0.15 提到 0.5：一支队伍找一整天，附近有的话多半抓得到一两只；不然采样经常空手而归）、价格为假设值（见 docs/MODEL.md）。"
   },
   "necropsy": {
     "name": "找尸体做尸检",
@@ -76,5 +84,12 @@
     "days": 5,
     "maxAnimals": 200,
     "source": "一批动物的许可、运输和检疫场地算固定费用，每只另有购买或繁育的费用，体重越大运输和圈养越贵；一支队伍检疫、放归要忙几天。新西兰的离岸岛迁地保护常见一批几十只。价格为假设值（见 docs/MODEL.md）。"
+  },
+  "deworm": {
+    "name": "驱虫药饵",
+    "radiusCells": 4,
+    "efficacy": 0.8,
+    "cost": 2500,
+    "source": "一支队伍一天在约 400 米范围里撒混了驱虫药（伊维菌素类）的饲料块。野生动物不会个个吃到，吃到的那些肠里的线虫大多被打掉；草上的幼虫不受影响，过一阵会再感染——所以只治不改（不降低密度、不换草场）是治标。覆盖率和价格为假设值【未核对】。"
   }
 }

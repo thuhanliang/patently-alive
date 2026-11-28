@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type Design, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, scenarioLibrary, speciesFor, tools, viabilityRules, worldFor } from '../src/data';
-import { Session, checksum, deserialize, serialize, TICKS_PER_DAY, QUARTER_DAYS, cellIndex, compileDesign, designDataOf, makeDesignKit, scenarioRules, type SpeciesQuarter } from '../src/sim';
+import { CAUSE, Session, checksum, deserialize, serialize, TICKS_PER_DAY, QUARTER_DAYS, cellIndex, compileDesign, designDataOf, makeDesignKit, scenarioRules, type SpeciesQuarter } from '../src/sim';
 
 /**
  * "立足"型的委托（花园岛，2026-11-10）：考核的是事务所投放的设计物种住没住下来；每季结算带各物种的账目（验收单）。
@@ -76,8 +76,8 @@ describe('立足型委托', () => {
     const mine = all.filter((x) => x.id === 'd_test');
     const birds = all.filter((x) => x.id === 'dotterel');
     const sum = (rows: SpeciesQuarter[], cause: number): number => rows.reduce((a, x) => a + (x.deaths.find(([c]) => c === cause)?.[1] ?? 0), 0);
-    // 死因 0 = 饿死；6 + 2×1 = 被 1 号物种（投放的设计）捕食。
-    expect(sum(mine, 0)).toBeGreaterThan(5);
-    expect(sum(birds, 8)).toBeGreaterThan(10);
+    // 死因 0 = 饿死；CAUSE.predation(1) = 被 1 号物种（投放的设计）捕食。
+    expect(sum(mine, CAUSE.starvation)).toBeGreaterThan(5);
+    expect(sum(birds, CAUSE.predation(1))).toBeGreaterThan(10);
   });
 });
