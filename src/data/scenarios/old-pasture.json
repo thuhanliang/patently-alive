@@ -1,0 +1,88 @@
+{
+  "id": "old-pasture",
+  "name": "老牧场",
+  "world": "old-pasture",
+  "seed": 11,
+  "history": {
+    "title": "档案馆历史卡 · 圣基尔达的索艾羊",
+    "paragraphs": [
+      "苏格兰外海的圣基尔达群岛上，有一群没人管的索艾羊，从 1930 年代起就自生自灭。",
+      "羊多的年份过后，常常是一个大量死亡的冬天：草不够吃，肠道线虫又最多。死掉的羊里，虫多的瘦得最厉害。",
+      "研究者给一部分羊喂了驱虫药，这些羊熬过冬天的明显更多。可是只要羊还那么多，草上的幼虫就还在，第二年照样感染。",
+      "密度、食物、寄生虫，三样缠在一起：哪一样都不是单独起作用的。"
+    ],
+    "source": "Gulland, F. M. D. (1992). The role of nematode parasites in Soay sheep mortality during a population crash. Parasitology 105: 493–503；Clutton-Brock, T. H. & Pemberton, J. M. (eds.) (2004). Soay Sheep: Dynamics and Selection in an Island Population. Cambridge University Press。"
+  },
+  "client": {
+    "name": "海鸟保护协会 · 岛屿管理员",
+    "letter": [
+      "事务所的各位：",
+      "这座岛放了一百多年的羊，去年羊群撤走了。没了羊，草一年就长得老高，在草地上做窝的鸻找不到地方下蛋了。",
+      "我们想要一种吃草的动物，替羊把草啃短，但别把岛啃秃，也别伤着鸟。三年以后它们得还在。",
+      "提醒一句：最后那几年羊总是闹虫，冬天一死就是一半。兽医说那是草上的虫。"
+    ],
+    "replies": {
+      "success": [
+        "各位：",
+        "今天傍晚我数了数，它们都在。草地还是绿的，鸟也还在海边跑。",
+        "这正是我想要的岛。谢谢你们。"
+      ],
+      "gone": [
+        "各位：",
+        "我已经很久没有在草地上看见它们了。",
+        "岛上又安静下来了。也许它们不适合这里，也许是这里不适合它们。你们比我懂。"
+      ],
+      "few": [
+        "各位：",
+        "它们还在，可是太少了，我常常好几天一只也看不见。",
+        "我担心再过一个冬天，就一只都不剩了。"
+      ],
+      "swarm": [
+        "各位：",
+        "它们太多了。走到哪儿都是，夜里吵得我睡不着。",
+        "我要的是傍晚能看见几只，不是这个。"
+      ],
+      "natives": [
+        "各位：",
+        "海边的小鸟越来越少了。我在礁石上捡到过它们的羽毛。",
+        "我说过别伤着那些鸟的。"
+      ],
+      "habitat": [
+        "各位：",
+        "它们活得不错，可是岛秃了。灌丛只剩下枝条，风一吹全是土。",
+        "这不是我买下的那座岛了。"
+      ]
+    }
+  },
+  "sentiment": {
+    "dotterel": 5
+  },
+  "goal": {
+    "target": "designs",
+    "establish": {
+      "settle": 30,
+      "ceiling": 600
+    },
+    "recovery": 1,
+    "native": [
+      "dotterel"
+    ],
+    "years": 3,
+    "quarterlyBudget": 5000
+  },
+  "introduction": {
+    "allowed": false,
+    "banned": [],
+    "designs": true
+  },
+  "resources": {
+    "budget": 120000,
+    "staff": 2,
+    "satisfaction": 60
+  },
+  "toolbox": [
+    "sample",
+    "deworm",
+    "necropsy"
+  ]
+}

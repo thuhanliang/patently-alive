@@ -1,0 +1,109 @@
+{
+  "name": "老牧场",
+  "width": 48,
+  "height": 48,
+  "cellSizeM": 50,
+  "fertility": {
+    "min": 0.35,
+    "max": 1,
+    "patchSize": 10
+  },
+  "terrain": {
+    "kind": "island",
+    "mainRadius": 0.72,
+    "coastRoughness": 0.28,
+    "coastPatchSize": 8,
+    "islets": {
+      "count": 1,
+      "minRadius": 3,
+      "maxRadius": 4,
+      "minGapCells": 5
+    },
+    "shrubFraction": 0.15,
+    "shrubPatchSize": 8,
+    "fertilityBy": {
+      "coast": 0.35,
+      "grass": 1,
+      "shrub": 0.8
+    }
+  },
+  "season": {
+    "growthByMonth": [
+      0.6,
+      1.0,
+      1.0,
+      0.75,
+      0.45,
+      0.4,
+      0.5,
+      0.45,
+      0.25,
+      0.0,
+      0.0,
+      0.15
+    ],
+    "decayByMonth": [
+      0.002,
+      0.002,
+      0.003,
+      0.005,
+      0.007,
+      0.007,
+      0.008,
+      0.012,
+      0.015,
+      0.01,
+      0.008,
+      0.004
+    ]
+  },
+  "grazingDamage": true,
+  "plants": [
+    {
+      "type": "herb",
+      "maxBiomass": 450,
+      "floorBiomass": 8,
+      "initialFraction": 0.35,
+      "growthRate": 0.08
+    },
+    {
+      "type": "shrub",
+      "maxBiomass": 300,
+      "initialFraction": 0.8,
+      "growthRate": 0.002,
+      "floorFraction": 0.05
+    }
+  ],
+  "weather": {
+    "persistence": 0.85,
+    "min": 0.4,
+    "max": 1.6
+  },
+  "shore": {
+    "aquaticPerM2": 0.022
+  },
+  "species": [
+    "dotterel"
+  ],
+  "mainIslandOnly": [],
+  "source": "老牧场（2026-11-28，第三份委托）：和花园岛同样的规则和植被参数，48×48 格。放了一百多年的羊，灌丛少（shrubFraction 0.15），草地上留着很多肠道线虫的幼虫（larvae 0.45）【未核对】。开局只有双斑鸻（不是线虫的宿主）。",
+  "pathogens": [
+    {
+      "id": "gutworm",
+      "name": "肠道线虫",
+      "kind": "nematode",
+      "hostMinPlantDiet": 0.3,
+      "shedPerHostDensity": 300,
+      "larvaeDays": 90,
+      "infectRate": 0.06,
+      "clearPerDay": 0.016,
+      "deathPerDay": 0.002,
+      "bcsPenalty": 0.8,
+      "epgMean": 600,
+      "epgK": 0.6,
+      "larvae": 0.45,
+      "prevalence": {},
+      "source": "按毛圆线虫类（兔的 Trichostrongylus retortaeformis、羊的 Teladorsagia、捻转血矛线虫 Haemonchus contortus）的生活史简化：虫卵随粪便排出，在草上孵成幼虫，吃草时吃进。幼虫在草上能活几周到几个月；感染以后部分个体会慢慢产生免疫把虫清掉；感染重的消瘦、贫血、死亡率上升；虫卵数（EPG）在宿主之间高度聚集（负二项分布 k < 1），少数个体排出大部分虫卵。各数值是让推演在一两年内出现可见的密度制约的校准值【未核对】，见 docs/MODEL.md 五之十八。 老牧场（第三份委托）：多年放羊的湿冷牧场，幼虫在草上能活三个月（larvaeDays 90），排卵按 300 校准，让兔子大小的动物在每公顷不到一只的密度下也能流行【未核对】。"
+    }
+  ]
+}

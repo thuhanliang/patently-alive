@@ -18,7 +18,7 @@ import { TERRAIN } from './terrain';
  *
  * 按拥挤区块（8×8 格）记：每个区块草上的幼虫量（0–1 的污染指数），每个物种在每个区块的成体感染率。
  * 简化（写进 MODEL.md）：
- * - 只有成体会被感染（幼体还在吃奶或刚断奶）；新长成的成体是干净的，按区块里成体数的增加摊薄感染率；
+ * - 成体和出了窝的幼体会被感染（窝里的还在吃奶）；新出窝的是干净的，按区块里只数的增加摊薄感染率；
  * - 别的死因（被吃、饿死）对感染的和没感染的一视同仁，所以不改感染率；
  * - 动物在区块之间走动时不带走感染率（区块是 400 米见方，比一般小兽的家域大）；
  * - 展开成个体的动物不单独记感染（体检时按所在区块的感染率抽）。
@@ -29,7 +29,7 @@ export interface ParasiteState {
   larvae: Float64Array;
   /** 各物种（和 populations 同序）在各区块的成体感染率（0–1）。 */
   prevalence: Float64Array[];
-  /** 昨天结束时各物种各区块的成体数（算新成体摊薄用）。 */
+  /** 昨天结束时各物种各区块会被感染的只数（成体和出了窝的幼体；算新来的摊薄用）。 */
   adultsYesterday: Float64Array[];
 }
 
@@ -37,9 +37,14 @@ export function isHost(pathogen: Pathogen, sp: DerivedSpecies): boolean {
   return sp.params.diet.plant >= pathogen.hostMinPlantDiet;
 }
 
-function adultsByBlock(pop: Population, blockOf: Int32Array, blocks: number): Float64Array {
+/** 会被感染的：成体和出了窝、自己吃草的幼体（窝里的还在吃奶）。 */
+function hostsByBlock(pop: Population, nestStages: number, blockOf: Int32Array, blocks: number): Float64Array {
   const out = new Float64Array(blocks);
-  for (let c = 0; c < pop.adults.length; c++) out[blockOf[c]!] = out[blockOf[c]!]! + pop.adults[c]!;
+  for (let c = 0; c < pop.adults.length; c++) {
+    let n = pop.adults[c]!;
+    for (let k = nestStages; k < pop.juveniles.length; k++) n += pop.juveniles[k]![c]!;
+    out[blockOf[c]!] = out[blockOf[c]!]! + n;
+  }
   return out;
 }
 
@@ -67,7 +72,7 @@ export function createParasites(
       id: pg.id,
       larvae,
       prevalence: species.map((sp) => new Float64Array(blocks).fill(isHost(pg, sp) ? (pg.prevalence[sp.params.id] ?? 0) : 0)),
-      adultsYesterday: populations.map((p) => adultsByBlock(p, blockOf, blocks)),
+      adultsYesterday: populations.map((p, i) => hostsByBlock(p, species[i]!.nestStages, blockOf, blocks)),
     };
   });
 }
@@ -104,7 +109,7 @@ export function parasiteDaily(ps: ParasiteState[], ctx: ParasiteContext): void {
     ctx.species.forEach((sp, s) => {
       const prev = st.prevalence[s]!;
       const pop = ctx.populations[s]!;
-      const now = adultsByBlock(pop, ctx.blockOf, blocks);
+      const now = hostsByBlock(pop, sp.nestStages, ctx.blockOf, blocks);
       const yest = st.adultsYesterday[s]!;
       if (!isHost(pg, sp)) {
         st.adultsYesterday[s] = now;
@@ -114,18 +119,22 @@ export function parasiteDaily(ps: ParasiteState[], ctx: ParasiteContext): void {
       for (let b = 0; b < blocks; b++) if (now[b]! > yest[b]! && now[b]! > 0) prev[b] = (prev[b]! * yest[b]!) / now[b]!;
       // 2. 额外的死亡：每格先抽有几只感染的，再抽其中几只今天死。
       const died = new Float64Array(blocks);
-      for (let c = 0; c < pop.adults.length; c++) {
-        const n = pop.adults[c]!;
-        if (n === 0) continue;
-        const b = ctx.blockOf[c]!;
-        if (prev[b]! <= 0) continue;
+      const kill = (arr: Int32Array, c: number, b: number): void => {
+        const n = arr[c]!;
+        if (n === 0) return;
         const inf = binomial(ctx.rng, n, prev[b]!);
         const d = inf > 0 ? binomial(ctx.rng, inf, pg.deathPerDay) : 0;
-        if (d === 0) continue;
-        pop.adults[c] = n - d;
+        if (d === 0) return;
+        arr[c] = n - d;
         died[b] = died[b]! + d;
         recordDeaths(ctx.ledger, s, CAUSE.parasite, b, d);
         ctx.stats[s]!.deathsOther += d;
+      };
+      for (let c = 0; c < pop.adults.length; c++) {
+        const b = ctx.blockOf[c]!;
+        if (prev[b]! <= 0) continue;
+        kill(pop.adults, c, b);
+        for (let k = sp.nestStages; k < pop.juveniles.length; k++) kill(pop.juveniles[k]!, c, b);
       }
       for (let b = 0; b < blocks; b++) {
         const N = now[b]!;
