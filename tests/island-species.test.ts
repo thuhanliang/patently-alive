@@ -128,7 +128,8 @@ describe('灌丛与掩护', () => {
   });
 
   it('兔子多的地方，几年下来灌丛（掩护）明显变薄', () => {
-    const small: WorldParams = { ...island, width: 48, height: 48, species: ['rabbit'], mainIslandOnly: [] };
+    // 只看啃食本身：关掉寄生虫（兔子带虫会少一成左右，见 parasite.test.ts）。
+    const small: WorldParams = { ...island, width: 48, height: 48, species: ['rabbit'], mainIslandOnly: [], pathogens: [] };
     const sim = Sim.create({ seed: 2, world: small, species: speciesFor(small) });
     const shrubSum = (): number => {
       let s = 0;

@@ -84,7 +84,7 @@ const WATCH_SPEED = 5;
 const FAST_SPEED = 60;
 
 /** 事务所桌上摆的委托，按这个顺序。 */
-const OFFICE_SCENARIOS = ['garden-island', 'bird-island'];
+const OFFICE_SCENARIOS = ['garden-island', 'old-pasture', 'bird-island'];
 
 async function main(): Promise<void> {
   bindButtonTaps();
