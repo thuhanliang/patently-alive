@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   // 相对路径，方便以后直接部署到 GitHub Pages 的子路径下。
   base: './',
+  // 开发服务器用 6173（5173 在用户的机器上被占用了）；npm run dev:lan 再加上 --host 0.0.0.0 给局域网访问。
+  server: { port: 6173, strictPort: true },
   build: {
     rollupOptions: {
       // 游戏本体，加上 M0 的剪纸风格 demo（独立页面，只读推演）和 M1 的设计台玩具（独立页面）。
