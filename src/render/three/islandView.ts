@@ -79,7 +79,7 @@ export class IslandView {
       ticker.deltaMS = Math.min(100, t - last);
       last = t;
       for (const fn of fns) fn();
-      const draw = !fpsCap || t - drawnAt >= 1000 / fpsCap;
+      const draw = !this.hidden && (!fpsCap || t - drawnAt >= 1000 / fpsCap);
       if (draw) drawnAt = t;
       this.isl.update(ticker.deltaMS / 1000, draw);
       requestAnimationFrame(loop);
@@ -302,7 +302,10 @@ export class IslandView {
   get deathLegendMax(): number {
     return 0;
   }
+  /** 整屏被盖住（设计台、档案馆）：不画岛，省下显卡给上面那一层。 */
+  private hidden = false;
   setHidden(hidden: boolean): void {
+    this.hidden = hidden;
     this.canvas.style.visibility = hidden ? 'hidden' : 'visible';
   }
   setPortrait(_id: string, _url: string): Promise<void> {
