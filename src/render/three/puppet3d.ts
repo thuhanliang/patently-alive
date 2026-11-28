@@ -35,6 +35,8 @@ export class Puppet3D {
   constructor(
     private readonly cut: Cutout,
     metersPerPx: number,
+    /** 远看（岛上的演员）：不做铆钉，绘制次数少一大半。 */
+    private readonly lite = false,
   ) {
     this.inner.scale.set(metersPerPx, -metersPerPx, metersPerPx);
     this.root.add(this.inner);
@@ -84,7 +86,7 @@ export class Puppet3D {
       m.position.z = THICK + LIFT;
     });
     // 铆钉。
-    const spots = this.cut.rivetsOf(id);
+    const spots = this.lite ? [] : this.cut.rivetsOf(id);
     while (p.rivets.length < spots.length) {
       const r = new Mesh(rivetGeom, brass);
       r.rotation.x = Math.PI / 2;

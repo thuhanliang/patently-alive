@@ -416,3 +416,24 @@ export function cutPlant(look: FloraLook, seed: number, flower = 0, fruit = 0): 
       }
   return { sheets: sheets.filter((s) => s.polys.length > 0), width: maxX * 2, height: maxY };
 }
+
+/**
+ * 简化一株（远看的纸雕岛用）：多边形隔点取（step），叶片多的那一层只留一部分（keep）。
+ * 形状的大轮廓不变，三角形少很多。
+ */
+export function simplifyPlant(cut: PlantCut, keep: number, step: number): PlantCut {
+  const sheets = cut.sheets.map((sh) => {
+    const many = sh.polys.length > 6;
+    const polys = sh.polys
+      .filter((_, i) => !many || (i * keep) % 1 < keep || i === 0)
+      .map((p) => {
+        const n = p.length / 2;
+        if (n <= 8 || step <= 1) return p;
+        const out: number[] = [];
+        for (let i = 0; i < n; i += step) out.push(p[i * 2]!, p[i * 2 + 1]!);
+        return out;
+      });
+    return { ...sh, polys };
+  });
+  return { ...cut, sheets };
+}
