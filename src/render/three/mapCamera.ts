@@ -160,6 +160,18 @@ export class MapCamera {
   }
 
   /** 设定看哪儿（立刻到位）。 */
+  /** 慢慢移过去（只改目标，镜头自己追）。 */
+  glide(x: number, z: number, dist?: number): void {
+    this.goal.x = x;
+    this.goal.z = z;
+    if (dist !== undefined) this.goal.dist = MathUtils.clamp(dist, this.bounds.minDist, this.bounds.maxDist);
+  }
+
+  /** 镜头绕竖轴转了多少（弧度）。 */
+  get yawNow(): number {
+    return this.yaw;
+  }
+
   set(x: number, z: number, dist: number, yaw = 0, tiltAdd = 0): void {
     this.goal.tiltAdd = this.tiltAdd = tiltAdd;
     this.goal.x = this.target.x = x;

@@ -75,6 +75,8 @@ export class Island3D {
   private readonly water: ReliefLayer[] = [];
   private readonly foam: Mesh;
   private time = 0;
+  private veg: Group;
+  private inp: IslandInput;
   /** 搭场景花了多久（毫秒），给调试看。 */
   readonly buildMs: number;
 
@@ -132,7 +134,9 @@ export class Island3D {
     deep.receiveShadow = true;
     this.scene.add(deep);
 
-    this.scene.add(buildVegetation(this.field, inp));
+    this.veg = buildVegetation(this.field, inp);
+    this.scene.add(this.veg);
+    this.inp = inp;
     this.farIslands(inp.seed, Math.max(inp.width, inp.height));
     paperGlobals.uCloudAmt.value = 0.2;
 
@@ -217,9 +221,19 @@ export class Island3D {
     this.scene.add(g);
   }
 
+  /** 植被变了（推演里的草本、灌丛）：植物整组重撒。 */
+  setVegetation(herb: ArrayLike<number>, shrub: ArrayLike<number>, month?: number): void {
+    this.inp = { ...this.inp, herb, shrub, ...(month !== undefined ? { month } : {}) };
+    this.scene.remove(this.veg);
+    this.veg.traverse((o) => (o as Mesh).geometry?.dispose());
+    this.veg = buildVegetation(this.field, this.inp);
+    this.scene.add(this.veg);
+  }
+
   /** 调试开关（截图脚本用）。 */
   debug(k: string, v: unknown): void {
     if (k === 'shadows') this.sun.castShadow = !!v;
+    if (k === 'veg') this.veg.visible = !!v;
     if (k === 'clouds') paperGlobals.uCloudAmt.value = v ? 0.2 : 0;
   }
 
