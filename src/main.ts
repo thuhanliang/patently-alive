@@ -1,5 +1,6 @@
 import { type Design, type SpeciesParams, archiveLibrary, designSlots, designTemplates, hintTemplates, partLibrary, plantLibrary, scalingLaws, viabilityRules, gaitRules, grassland, necropsyTemplates, speciesLibrary, scenarioLibrary, speciesFor, tools as toolData, worldFor, type Scenario, type WorldParams } from './data';
-import { calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, woodyIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
+import { coatFor } from './render/puppet/coats';
+import { checksum, calendar, countAt, QUARTER_DAYS, RECENT_HALF_LIFE_DAYS, compileDesign, nearest, partsOf, traitsOf, costOf, herbIndex, woodyIndex, designDataOf, makeDesignKit, scenarioRules, SANDBOX_RULES, type Rules, focusAround, sameFocus, type FocusRect, type Op } from './sim';
 import { RemoteSession } from './runtime/remote';
 import type { DayRecord } from './runtime/host';
 import { CELL_PX, worldToCell, worldToCorner } from './render/projection';
@@ -145,7 +146,12 @@ async function main(): Promise<void> {
 
   // 剪纸画面（2026-10-22 定下的美术方向）。单独打包，先让状态栏显示出来。
   status.textContent = '画剪纸地图……';
-  const view: PaperView = await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species);
+  // 2026-11-28（整体回顾 A 段）：游戏里的岛就是纸雕岛（three.js，和车里托盘上的同一座），剧场退役。
+  // ?map=paper 还能看原来的剪纸地图和纸剧场（对比用，过渡期以后删）。
+  const use3d = query.get('map') !== 'paper';
+  const island = use3d ? await (await import('./render/three/islandView')).IslandView.mount(el('app'), session.sim.state, session.species) : null;
+  const view: PaperView = island ? (island as unknown as PaperView) : await (await import('./render/paper/view')).PaperView.mount(el('app'), session.sim.state, session.species);
+  if (island) document.body.classList.add('island3d');
   status.textContent = problem;
   /** 这一局现在的物种（id 和名字），按物种下标排。 */
   const speciesList = (): { id: string; name: string }[] => session.species.map((s) => ({ id: s.params.id, name: s.params.name }));
@@ -155,7 +161,7 @@ async function main(): Promise<void> {
   const deaths = new DeathPanel(el('deaths'), names, session.species.map((s) => colorOf(s.params).chart));
   const captures = new FieldLog(el('captures'), el('exam-card'), session.species, toolData, necropsyTemplates);
   const alertBanner = new AlertBanner(el('alert'), names, (at) =>
-    view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
+    island ? island.focus({ x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }, true) : view.camera.preset('region', { x: (at.x + 0.5) * CELL_PX, y: (at.y + 0.5) * CELL_PX }),
   );
   // 委托的卡片：开局读历史卡，每季结算单，结束时总结。卡片开着时推演停着（Worker 结算后也会自己停下等）。
   /** "立足"型的委托（花园岛）：考核的是事务所设计的动物，界面上多一张引导便签。 */
@@ -262,7 +268,7 @@ async function main(): Promise<void> {
       t.blur();
       return;
     }
-    if (theatre.isOpen) {
+    if (theatre?.isOpen) {
       closeTheatre();
     } else if (archive.isOpen || desk.isOpen) {
       archive.close();
@@ -446,7 +452,8 @@ async function main(): Promise<void> {
   };
   /** 纸偶的切图零件（岛上的活图层和纸剧场共用）。 */
   const rigKit = loadRigKit('P11-cat', templatePlan);
-  if (establish) {
+  // 纸雕岛上所有的动物都是演员（自己走动的一小群）；原来的剪纸地图只有"立足"型的小岛这样画。
+  if (establish || island) {
     view.useLive(gaitRules, rigKit, (kind) => sound.play(kind === 'birth' ? 'pop' : 'sigh'));
     sound.ambience(true);
   }
@@ -458,7 +465,9 @@ async function main(): Promise<void> {
   let crankFrom: number | null = null;
   let crankSent = -1;
   let crankAt = 0;
-  const theatre = new PaperTheatre(
+  const theatre = island
+    ? null
+    : new PaperTheatre(
     view.app,
     {
       crank: (speed) => {
@@ -483,13 +492,18 @@ async function main(): Promise<void> {
     gaitRules,
     view.sheets.P7,
   );
-  void rigKit.then((k) => theatre.setKit(k));
+  void rigKit.then((k) => theatre?.setKit(k));
   // 地图画好以后，空下来再在后台搭剧场。
-  window.setTimeout(() => theatre.preload(), 1500);
+  if (theatre) window.setTimeout(() => theatre.preload(), 1500);
   // ?theatre=x,y（开发、截图用）：一进来就走近那一格。
   const qTheatre = query.get('theatre');
   if (qTheatre) window.setTimeout(() => openTheatre({ x: Number(qTheatre.split(',')[0]), y: Number(qTheatre.split(',')[1]) }), 2500);
   const openTheatre = (cell: { x: number; y: number }): void => {
+    if (!theatre) {
+      // 纸雕岛：没有剧场，镜头推近那一格（就在同一座岛上看近处）。
+      island?.focus({ x: (cell.x + 0.5) * CELL_PX, y: (cell.y + 0.5) * CELL_PX }, true);
+      return;
+    }
     theatreCell = cell;
     castAt = -1;
     document.body.classList.add('theatre-on');
@@ -497,7 +511,7 @@ async function main(): Promise<void> {
     void theatre.show();
   };
   const closeTheatre = (): void => {
-    if (!theatre.isOpen) return;
+    if (!theatre?.isOpen) return;
     theatre.close();
     document.body.classList.remove('theatre-on');
     sound.play('paper');
@@ -571,7 +585,7 @@ async function main(): Promise<void> {
   view.canvas.addEventListener(
     'wheel',
     (e) => {
-      if (theatre.isOpen && e.deltaY > 0) closeTheatre();
+      if (theatre?.isOpen && e.deltaY > 0) closeTheatre();
     },
     { capture: true },
   );
@@ -582,10 +596,7 @@ async function main(): Promise<void> {
     ['曲线', el('nb-chart')],
     ['文件', el('nb-file')],
   ]);
-  const viewCard = bindViewCard(el('view-card'), view.camera, view.angles);
-  const syncCamera = bindCameraControls(view.canvas, view.camera, viewCard.presets, (screen) => {
-    if (theatre.isOpen) return;
-    const pos = view.camera.screenToWorld(screen);
+  const onMapTap = (pos: { x: number; y: number }): void => {
     const cell = worldToCell(pos);
     if (!introducing && !field.isPlacing() && !tools.isReleasing()) {
       // 没在放东西时点到个案动物：打开它的卡片。
@@ -620,7 +631,7 @@ async function main(): Promise<void> {
           const compiled = compileDesign(design, kit);
           const spec = { plan: bodyPlan(design, partsOf(design, kit), compiled.bird, viabilityRules, gaitRules), dye: coat, speedFactor: compiled.params.body?.speed ?? 1 };
           view.setRig(species.id, spec);
-          theatre.setRig(species.id, spec);
+          theatre?.setRig(species.id, spec);
         } else if (portrait) void view.setPortrait(species.id, portrait);
         // "立足"型的委托：放出去以后时间自己走起来（一季二十秒上下，够看清岛上在发生什么），不用玩家再找按钮。
         if (establish && session.speed < WATCH_SPEED) void submit({ type: 'setSpeed', speed: WATCH_SPEED });
@@ -646,7 +657,40 @@ async function main(): Promise<void> {
     void submit({ type: 'release', species: id, x: cell.x, y: cell.y, count }).then((ok) => {
       if (ok) status.textContent = `在 (${cell.x}, ${cell.y}) 投放了 ${count} 只`;
     });
-  });
+  };
+  const viewCard = island ? { sync: (): void => {} } : bindViewCard(el('view-card'), view.camera, view.angles);
+  const syncCamera = island
+    ? (): void => {}
+    : bindCameraControls(view.canvas, view.camera, (viewCard as ReturnType<typeof bindViewCard>).presets, (screen) => {
+        if (theatre?.isOpen) return;
+        onMapTap(view.camera.screenToWorld(screen));
+      });
+  if (island) island.onTap = (pos) => onMapTap(pos);
+  // ?demo=<现有技术>（开发、截图用）：跳过来信，把这条现有技术当成设计放 20 只到岛中间。
+  const qDemo = query.get('demo');
+  if (qDemo)
+    window.setTimeout(() => {
+      cards?.close();
+      const tmpl = designTemplates.find((t) => t.species === qDemo)?.design;
+      if (!tmpl) return;
+      const coat = coatFor(qDemo);
+      const { id: _, ...rest } = { ...structuredClone(tmpl), name: '演示', color: `#${coat.main.toString(16).padStart(6, '0')}` as Design['color'] };
+      const design: Design = { ...rest, id: `d_${checksum(rest).toString(36)}` };
+      startIntroducing({ species: compileDesign(design, kit).params, design, count: 20, coat });
+      const g = session.sim.state.grid;
+      let best = { x: g.width >> 1, y: g.height >> 1 };
+      for (let r = 0; r < g.width; r++) {
+        const c = [...Array(8)].map((_, k) => ({ x: best.x + Math.round(Math.cos(k) * r), y: best.y + Math.round(Math.sin(k) * r) })).find((p) => g.terrain[p.y * g.width + p.x] === TERRAIN.grass);
+        if (c) {
+          best = c;
+          break;
+        }
+      }
+      onMapTap({ x: (best.x + 0.5) * CELL_PX, y: (best.y + 0.5) * CELL_PX });
+      island?.focus({ x: (best.x + 0.5) * CELL_PX, y: (best.y + 0.5) * CELL_PX }, true);
+      // 截图要看清演员：时间放慢到 1 倍。
+      window.setTimeout(() => void submit({ type: 'setSpeed', speed: 1 }), 800);
+    }, 4000);
   const layers = bindLayerControls(el('layer-bar'), names, (layer) => view.setLayer(layer));
 
   const syncTime = bindTimeControls(
@@ -705,11 +749,11 @@ async function main(): Promise<void> {
     view.setAlertAt(session.alerts[0]?.at ?? null);
     // 纸剧场开着（或正在淡入淡出）：整个盖住地图的时候不画地图。
     const now = performance.now();
-    if (theatreCell && (now - castAt > 250 || castAt < 0)) {
+    if (theatre && theatreCell && (now - castAt > 250 || castAt < 0)) {
       cast = castOf(theatreCell);
       castAt = now;
     }
-    const mapNeeded = cast ? theatre.update(cast, Math.min(0.1, view.ticker.deltaMS / 1000)) : true;
+    const mapNeeded = cast && theatre ? theatre.update(cast, Math.min(0.1, view.ticker.deltaMS / 1000)) : true;
     view.setHidden(!mapNeeded);
     if (mapNeeded) view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);

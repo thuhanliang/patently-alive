@@ -60,6 +60,8 @@
       #time-bar { padding: 6px 8px; border-radius: 26px; gap: 6px; flex-wrap: nowrap; }
       #time-bar button { width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 13px; }
       #time-bar button.wide { width: auto; border-radius: 18px; padding: 0 10px; }
+      /* 纸雕岛（2026-11-28）：镜头直接在岛上拖、滚、转；原来剪纸地图的视角卡和数据图层先藏起来。 */
+      body.island3d #view-card, body.island3d #layer-bar { display: none !important; }
       #view-card { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 210px; }
       #view-card .row { display: flex; align-items: center; gap: 6px; }
       #view-card .row span:first-child { flex: 0 0 2.5em; color: var(--ink-soft); }

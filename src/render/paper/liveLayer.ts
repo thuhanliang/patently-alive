@@ -31,6 +31,32 @@ export interface RigSpec {
 
 type Doing = 'stand' | 'eat' | 'lie' | 'go';
 
+/** 快照里的一只演员（见 LiveLayer.snapshot）。key 在演员活着时不变，拿来对应别的画面里的那一只。 */
+export interface LiveActorView {
+  key: object;
+  s: number;
+  id: string;
+  x: number;
+  y: number;
+  face: number;
+  len: number;
+  grow: number;
+  alpha: number;
+  pop: number;
+  rig: PuppetActor | null;
+  hop: number;
+  lying: boolean;
+}
+export interface LiveTagView {
+  key: object;
+  x: number;
+  y: number;
+  age: number;
+  life: number;
+  text: string;
+  color: number;
+}
+
 interface Actor {
   s: number;
   box: Container;
@@ -223,7 +249,8 @@ export class LiveLayer {
 
   update(state: Readonly<SimState>, dt: number): void {
     if (!this.bill) return;
-    this.buildsLeft = 1;
+    // 一帧最多新搭一只纸偶；帧很慢的时候（软件渲染、截图）按时间多搭几只，不然半天补不齐。
+    this.buildsLeft = Math.max(1, Math.min(6, Math.round(dt * 20)));
     this.sinceCensus += dt;
     if (this.sinceCensus >= 0.5) {
       this.sinceCensus = 0;
@@ -517,6 +544,36 @@ export class LiveLayer {
       return;
     }
     a.timer = 14;
+  }
+
+  /**
+   * 给别的画面（纸雕岛，2026-11-28）读的快照：演员和纸签都在"剪纸像素"坐标里（一格 = cellPx）。
+   * 用了快照的画面不调 layout，由它自己用 setShown 定演员画多大（走路的快慢按画出来的身长算）。
+   */
+  snapshot(): { actors: LiveActorView[]; tags: LiveTagView[] } {
+    return {
+      actors: this.actors.map((a) => ({
+        key: a,
+        s: a.s,
+        id: this.species[a.s]?.params.id ?? '',
+        x: a.x,
+        y: a.y,
+        face: a.face,
+        len: a.len,
+        grow: a.grow,
+        alpha: a.dying === null ? 1 : Math.max(0, 1 - Math.max(0, a.dying - 0.5) / 0.9),
+        pop: Math.min(1, a.age / 0.35),
+        rig: a.rig,
+        hop: a.rig ? 0 : Math.abs(Math.sin((a.age + a.seed * 9) * 9)) * 0.08 * a.v,
+        lying: a.doing === 'lie',
+      })),
+      tags: this.tags.map((t) => ({ key: t, x: t.x, y: t.y, age: t.age, life: TAG_LIFE, text: (t.box.children[0] as Text).text, color: (t.box.children[0] as Text).style.fill as number })),
+    };
+  }
+
+  /** 每只演员画出来是原来身长的几倍（见 snapshot）。 */
+  setShown(k: (mine: boolean, len: number) => number): void {
+    for (const a of this.actors) a.shown = k(isMine(this.species[a.s]?.params.id ?? ''), a.len);
   }
 
   /** 按镜头摆好：演员不小于 MIN_PX，纸签不随缩放变小。 */
