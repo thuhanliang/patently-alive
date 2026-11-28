@@ -293,8 +293,8 @@ async function main(): Promise<void> {
   const desk = new DeskFrame(
     el('design'),
     kit,
-    establish
-      ? '委托：一种小动物，三年后还在，不泛滥，不伤鸟，不啃秃岛。岛上有草、灌丛和草里的虫子，没有可以抓的小兽。'
+    establish && scenario
+      ? `委托：${scenario.client.letter[2] ?? ''}三年后还在（${scenario.goal.establish!.settle} 只以上），不超过 ${scenario.goal.establish!.ceiling} 只，不伤鸟，不啃秃岛。`
       : scenario
         ? `委托 · ${scenario.client.name}：${scenario.client.letter[1] ?? ''}`
         : '沙盒：随便设计，放上去看看。',
@@ -772,7 +772,8 @@ async function main(): Promise<void> {
       castAt = now;
     }
     const mapNeeded = cast && theatre ? theatre.update(cast, Math.min(0.1, view.ticker.deltaMS / 1000)) : true;
-    view.setHidden(!mapNeeded);
+    // 设计台、档案馆整屏盖住的时候不画岛（纸雕岛很费显卡）。
+    view.setHidden(!mapNeeded || desk.isOpen || archive.isOpen);
     if (mapNeeded) view.draw(state);
     layers.legend(`最深处 ≈ ${view.deathLegendMax.toFixed(1)} 只（近期死亡，${RECENT_HALF_LIFE_DAYS} 天半衰期）`);
     hud.update(session);
